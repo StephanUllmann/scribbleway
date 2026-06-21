@@ -1,0 +1,76 @@
+import QtQuick
+import QtQuick.Shapes
+
+BaseShape {
+    id: root
+    
+    mode: "line"
+    shapeIndex: index
+    isSelected: model.selected
+    isLocked: model.locked
+
+    shapeFromX: model.fromX
+    shapeFromY: model.fromY
+    shapeToX: model.toX
+    shapeToY: model.toY
+
+    onLineGeometryChanged: (nfx, nfy, ntx, nty) => {
+        controller.updateShape(index, { "fromX": nfx, "fromY": nfy, "toX": ntx, "toY": nty });
+    }
+
+    // Geometry math for arrowhead
+    readonly property real lineAngle: Math.atan2(shapeToY - shapeFromY, shapeToX - shapeFromX)
+    readonly property real arrowLength: 10 + model.strokeWidth * 1.5
+    readonly property real arrowHalfAngle: Math.PI / 6 // 30 degrees
+
+    readonly property real arrowLeftX: shapeToX - arrowLength * Math.cos(lineAngle - arrowHalfAngle)
+    readonly property real arrowLeftY: shapeToY - arrowLength * Math.sin(lineAngle - arrowHalfAngle)
+
+    readonly property real arrowRightX: shapeToX - arrowLength * Math.cos(lineAngle + arrowHalfAngle)
+    readonly property real arrowRightY: shapeToY - arrowLength * Math.sin(lineAngle + arrowHalfAngle)
+
+    Shape {
+        anchors.fill: parent
+        opacity: model.opacity
+        preferredRendererType: Shape.CurveRenderer
+
+        // Arrow Stem (Line)
+        ShapePath {
+            strokeColor: model.color
+            strokeWidth: model.strokeWidth
+            fillColor: "transparent"
+
+            startX: root.shapeFromX
+            startY: root.shapeFromY
+
+            PathLine {
+                x: root.shapeToX
+                y: root.shapeToY
+            }
+        }
+
+        // Arrowhead (Solid Triangle)
+        ShapePath {
+            strokeColor: "transparent"
+            fillColor: model.color
+
+            startX: root.shapeToX
+            startY: root.shapeToY
+
+            PathLine {
+                x: root.arrowLeftX
+                y: root.arrowLeftY
+            }
+
+            PathLine {
+                x: root.arrowRightX
+                y: root.arrowRightY
+            }
+
+            PathLine {
+                x: root.shapeToX
+                y: root.shapeToY
+            }
+        }
+    }
+}

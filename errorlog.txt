@@ -1,0 +1,3 @@
+file:///home/stephan/.local/share/plasma/plasmoids/org.kde.scribbleway/contents/ui/main.qml:35:25: Type FullRepresentation unavailable
+
+file:///home/stephan/.local/share/plasma/plasmoids/org.kde.scribbleway/contents/ui/FullRepresentation.qml:603:33: Cannot assign to non-existent property "tooltip"

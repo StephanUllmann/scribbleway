@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=ScribbleWay Daemon
+Comment=Background daemon for screen annotation shortcuts
+Exec=scribbleway-overlay
+Icon=draw-freehand
+Type=Application
+Terminal=false
+Categories=Utility;Qt;KDE;
+X-KDE-StartupNotify=false
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-phase=2

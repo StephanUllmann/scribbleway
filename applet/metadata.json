@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "ScribbleWay Team",
+                "Email": "scribbleway@example.com"
+            }
+        ],
+        "Category": "Utilities",
+        "Description": "Screen Annotation Utility for Wayland (Excalidraw style)",
+        "Icon": "draw-freehand",
+        "Id": "org.kde.scribbleway",
+        "License": "GPL-2.0-or-later",
+        "Name": "ScribbleWay",
+        "Version": "0.1"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

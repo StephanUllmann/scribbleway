@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=ScribbleWay
+Comment=Screen Annotation Utility for Wayland
+Exec=scribbleway-overlay
+Icon=draw-freehand
+Type=Application
+Terminal=false
+Categories=Utility;Qt;KDE;
+X-KDE-StartupNotify=false
+X-KDE-Wayland-Interfaces=zwlr_layer_shell_v1
+X-GNOME-Autostart-enabled=true
