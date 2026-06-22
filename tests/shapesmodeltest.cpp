@@ -1,5 +1,4 @@
 #include <QtTest>
-#include <QSignalSpy>
 #include <QClipboard>
 #include <QGuiApplication>
 #include "shapesmodel.h"

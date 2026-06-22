@@ -4,9 +4,7 @@
 #include <QQuickWindow>
 #include <QAction>
 #include <QKeySequence>
-#include <QMap>
 #include <QScreen>
-#include <QElapsedTimer>
 
 #include <LayerShellQt/Shell>
 #include <LayerShellQt/Window>

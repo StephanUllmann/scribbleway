@@ -1,7 +1,5 @@
 #include "overlaycontroller.h"
 #include <QDebug>
-#include <QDBusArgument>
-#include <QDBusVariant>
 #include <LayerShellQt/Window>
 #include <QScreen>
 #include <QGuiApplication>
@@ -9,25 +7,18 @@
 #include <QClipboard>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonArray>
 #include <QCursor>
 #include <QPointF>
 #include <limits>
 
 #include "../common/dbusutils.h"
-#include <QFontDatabase>
 
 OverlayController::OverlayController(QObject *parent)
     : QObject(parent)
     , m_activeTool(QStringLiteral("freehand"))
     , m_defaultColor(QStringLiteral("#e63946"))
 {
-    const QStringList families = QFontDatabase::families();
-    if (families.contains(QStringLiteral("Cascadia Code"), Qt::CaseInsensitive)) {
-        m_defaultFontFamily = QStringLiteral("Cascadia Code");
-    } else {
-        m_defaultFontFamily = QStringLiteral("monospace");
-    }
+    m_defaultFontFamily = DBusUtils::defaultFontFamily();
     m_shapesModel.setParent(this);
 }
 

@@ -24,10 +24,7 @@ BaseShape {
         text: model.text || "Double click to edit"
         color: model.color
         opacity: model.opacity
-        font.family: {
-            if (model.fontFamily) return model.fontFamily;
-            return Qt.fontFamilies().indexOf("Cascadia Code") !== -1 ? "Cascadia Code" : "monospace";
-        }
+        font.family: model.fontFamily || controller.defaultFontFamily
         font.pixelSize: model.fontSize || 20
         
         // Exclude placeholder text from being opaque

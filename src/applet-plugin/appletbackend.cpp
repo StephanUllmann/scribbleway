@@ -5,11 +5,9 @@
 #include <QDBusServiceWatcher>
 #include <QDBusReply>
 #include <QKeySequence>
-#include <QDebug>
 #include <QGuiApplication>
 #include <QScreen>
-#include <QDBusArgument>
-#include <QDBusVariant>
+#include <QProcess>
 
 #include "../common/dbusutils.h"
 
@@ -23,11 +21,7 @@ AppletBackend::AppletBackend(QObject *parent)
     // Fetch system fonts
     m_systemFonts = QFontDatabase::families();
     
-    if (m_systemFonts.contains(QStringLiteral("Cascadia Code"), Qt::CaseInsensitive)) {
-        m_selectedFontFamily = QStringLiteral("Cascadia Code");
-    } else {
-        m_selectedFontFamily = QStringLiteral("monospace");
-    }
+    m_selectedFontFamily = DBusUtils::defaultFontFamily();
     
     // Watch for the overlay D-Bus service
     auto *watcher = new QDBusServiceWatcher(
@@ -438,3 +432,7 @@ void AppletBackend::onShortcutsChanged(const QVariantList &shortcuts)
     Q_EMIT shortcutsChanged();
 }
 
+void AppletBackend::startDaemon()
+{
+    QProcess::startDetached(QStringLiteral("scribbleway-overlay"));
+}

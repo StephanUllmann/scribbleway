@@ -77,6 +77,7 @@ public:
     Q_INVOKABLE void enterPassthroughMode();
     Q_INVOKABLE void changeShortcut(const QString &actionId, const QString &shortcutString);
     Q_INVOKABLE QString formatKeySequence(int key, int modifiers) const;
+    Q_INVOKABLE void startDaemon();
 
 Q_SIGNALS:
     void overlayConnectedChanged();

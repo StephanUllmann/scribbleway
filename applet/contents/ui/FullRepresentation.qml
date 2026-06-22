@@ -5,7 +5,6 @@ import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components 3.0 as PlasmaComponents
 import org.kde.plasma.extras as PlasmaExtras
-import org.kde.plasma.plasma5support as Plasma5Support
 
 ColumnLayout {
     id: fullRoot
@@ -14,19 +13,6 @@ ColumnLayout {
     implicitHeight: Kirigami.Units.gridUnit * 28
     
     spacing: Kirigami.Units.smallSpacing
-
-    // DBus command runner (using compat DataSource for shell execs if overlay is not running)
-    Plasma5Support.DataSource {
-        id: executableSource
-        engine: "executable"
-        connectedSources: []
-        onNewData: function(source, data) {
-            disconnectSource(source)
-        }
-        function startDaemon() {
-            connectSource("scribbleway-overlay >/dev/null 2>&1 &")
-        }
-    }
 
     ColorDialog {
         id: colorDialog
@@ -98,7 +84,7 @@ ColumnLayout {
             icon.name: "run-build"
             Layout.alignment: Qt.AlignHCenter
             onClicked: {
-                executableSource.startDaemon()
+                root.backend.startDaemon()
             }
         }
         
