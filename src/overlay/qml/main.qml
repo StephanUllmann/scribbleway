@@ -42,7 +42,7 @@ Window {
             let tool = controller.activeTool;
             if (canvasWindow.activeDrawTool !== tool) {
                 if (canvasWindow.isDrawing) {
-                    canvasWindow.finalizeShape();
+                    canvasWindow.abortShape();
                 }
                 canvasWindow.activeDrawTool = tool;
                 canvasWindow.requestInputRegionUpdate();
@@ -51,7 +51,7 @@ Window {
         
         function onStartDrawingGesture(tool) {
             if (canvasWindow.isDrawing) {
-                canvasWindow.finalizeShape();
+                canvasWindow.abortShape();
             }
             if (canvasWindow.activeDrawTool === tool) {
                 canvasWindow.activeDrawTool = "";
@@ -65,7 +65,7 @@ Window {
         function onEnterSelectModeRequested() {
             // Exit any active drawing
             if (canvasWindow.isDrawing) {
-                canvasWindow.finalizeShape();
+                canvasWindow.abortShape();
             }
             canvasWindow.activeDrawTool = "";
             // Update input mask to include all shape bounding boxes
@@ -75,7 +75,7 @@ Window {
         function onEnterPassthroughModeRequested() {
             // Exit any active drawing
             if (canvasWindow.isDrawing) {
-                canvasWindow.finalizeShape();
+                canvasWindow.abortShape();
             }
             canvasWindow.activeDrawTool = "";
             controller.setSelectedIndex(-1);
@@ -92,6 +92,15 @@ Window {
     }
 
 
+
+    // Abort shape without writing to model
+    function abortShape() {
+        if (!isDrawing) return;
+        isDrawing = false;
+        activePoints = [];
+        previewW = 0;
+        previewH = 0;
+    }
 
     // Finalize shape and write to model
     function finalizeShape() {

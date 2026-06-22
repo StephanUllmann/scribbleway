@@ -266,9 +266,11 @@ void OverlayController::updateInputMask(const QVariantList &rects)
         }
     }
     
-    // Safety fallback: if region is empty, set to a 1x1 pixel offscreen so the overlay is fully click-through
+    // Safety fallback: if region is empty, set to a 1x1 pixel so the overlay is fully click-through.
+    // We cannot use off-screen coordinates or a truly empty region because Qt Wayland 
+    // will treat it as "no mask" and block the entire screen.
     if (region.isEmpty()) {
-        region += QRect(-100, -100, 1, 1);
+        region += QRect(0, 0, 1, 1);
     }
     
     if (m_lastInputMask == region) {
