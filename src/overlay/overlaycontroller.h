@@ -69,6 +69,8 @@ public:
     Q_INVOKABLE void beginEdit();
     Q_INVOKABLE void endEdit();
     Q_INVOKABLE QVariantMap getShape(int index) const;
+    Q_INVOKABLE void copySelected();
+    Q_INVOKABLE void pasteFromClipboard(double localX = -1.0, double localY = -1.0);
 
     // DBus-invokable slots (also used in C++)
 public Q_SLOTS:

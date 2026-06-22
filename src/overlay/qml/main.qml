@@ -33,6 +33,7 @@ Window {
     // Text editing index
     property int editingShapeIndex: -1
     property bool isUpdatingInputRegion: false
+    property point lastMousePos: Qt.point(width / 2, height / 2)
 
     // Connections to C++ controller signals
     Connections {
@@ -185,6 +186,17 @@ Window {
     // Recalculate input region when window finishes resizing or shapes count changes
     onWidthChanged: requestInputRegionUpdate()
     onHeightChanged: requestInputRegionUpdate()
+
+    // Mouse hover tracker to capture cursor position under Wayland
+    MouseArea {
+        id: hoverTracker
+        anchors.fill: parent
+        hoverEnabled: true
+        acceptedButtons: Qt.NoButton
+        onPositionChanged: (mouse) => {
+            canvasWindow.lastMousePos = Qt.point(mouse.x, mouse.y)
+        }
+    }
 
     // Shapes Repeater (Renders all shapes)
     Repeater {
@@ -529,6 +541,24 @@ Window {
         onActivated: {
             if (!textEditor.visible) {
                 controller.deleteSelected();
+            }
+        }
+    }
+
+    Shortcut {
+        sequence: StandardKey.Copy
+        onActivated: {
+            if (!textEditor.visible) {
+                controller.copySelected();
+            }
+        }
+    }
+
+    Shortcut {
+        sequence: StandardKey.Paste
+        onActivated: {
+            if (!textEditor.visible) {
+                controller.pasteFromClipboard(canvasWindow.lastMousePos.x, canvasWindow.lastMousePos.y);
             }
         }
     }

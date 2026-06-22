@@ -1,8 +1,12 @@
 #include <QtTest>
 #include <QSignalSpy>
+#include <QClipboard>
+#include <QGuiApplication>
 #include "shapesmodel.h"
 #include "overlaycontroller.h"
 #include <QFontDatabase>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 class ShapesModelTest : public QObject
 {
@@ -17,6 +21,7 @@ private Q_SLOTS:
     void testEditTransaction();
     void testOverlayControllerProperties();
     void testMoveShape();
+    void testOverlayControllerCopyPaste();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -294,6 +299,54 @@ void ShapesModelTest::testMoveShape()
     QCOMPARE(model.shapes().at(0)[QStringLiteral("type")].toString(), QStringLiteral("rectangle"));
     QCOMPARE(model.shapes().at(1)[QStringLiteral("type")].toString(), QStringLiteral("ellipse"));
     QCOMPARE(model.shapes().at(2)[QStringLiteral("type")].toString(), QStringLiteral("line"));
+}
+
+void ShapesModelTest::testOverlayControllerCopyPaste()
+{
+    OverlayController controller;
+
+    // Add a rectangle
+    QVariantMap shape;
+    shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+    shape[QStringLiteral("x")] = 10.0;
+    shape[QStringLiteral("y")] = 20.0;
+    shape[QStringLiteral("width")] = 100.0;
+    shape[QStringLiteral("height")] = 50.0;
+    shape[QStringLiteral("color")] = QStringLiteral("#ff0000");
+
+    controller.addShape(shape); // This also selects it
+    QCOMPARE(controller.selectedIndex(), 0);
+
+    // Copy to clipboard
+    controller.copySelected();
+
+    // Verify clipboard contains the serialized shape
+    QString clipboardText = QGuiApplication::clipboard()->text();
+    QVERIFY(!clipboardText.isEmpty());
+    QJsonDocument doc = QJsonDocument::fromJson(clipboardText.toUtf8());
+    QVERIFY(doc.isObject());
+    QCOMPARE(doc.object().value(QStringLiteral("type")).toString(), QStringLiteral("rectangle"));
+
+    // Deselect shape
+    controller.setSelectedIndex(-1);
+
+    // Paste from clipboard. Pass local coordinates directly to avoid Wayland QCursor limitations.
+    controller.pasteFromClipboard(150.0, 150.0);
+
+    // Verify a new shape was pasted and selected
+    QCOMPARE(controller.shapesModel()->rowCount(), 2);
+    QCOMPARE(controller.selectedIndex(), 1);
+
+    QVariantMap pastedShape = controller.shapesModel()->shapes().at(1);
+    QCOMPARE(pastedShape[QStringLiteral("type")].toString(), QStringLiteral("rectangle"));
+
+    // Center of original shape: 10 + 100/2 = 60, 20 + 50/2 = 45.
+    // Mouse position is at (150, 150), so delta to center is dx = 150 - 60 = 90, dy = 150 - 45 = 105.
+    // New top-left: x = 10 + 90 = 100, y = 20 + 105 = 125.
+    QCOMPARE(pastedShape[QStringLiteral("x")].toDouble(), 100.0);
+    QCOMPARE(pastedShape[QStringLiteral("y")].toDouble(), 125.0);
+    QCOMPARE(pastedShape[QStringLiteral("width")].toDouble(), 100.0);
+    QCOMPARE(pastedShape[QStringLiteral("height")].toDouble(), 50.0);
 }
 
 QTEST_MAIN(ShapesModelTest)
