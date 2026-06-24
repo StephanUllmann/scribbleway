@@ -104,7 +104,7 @@ Item {
 
     // Selection border & handles UI
     Item {
-        visible: isSelected && !isLocked
+        visible: isSelected && !isLocked && !(typeof canvasWindow !== "undefined" && canvasWindow.editingShapeIndex === shapeIndex)
 
         // Thin blue border
         Rectangle {

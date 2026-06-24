@@ -82,6 +82,8 @@ int main(int argc, char *argv[])
                                              QKeySequence(QStringLiteral("Meta+Ctrl+Delete")));
     QAction *actionSelect = setupGlobalAction(QStringLiteral("action_select_mode"), QStringLiteral("Toggle Select Mode"), 
                                               QKeySequence(QStringLiteral("Meta+Shift+S")));
+    QAction *actionActivateSelect = setupGlobalAction(QStringLiteral("action_activate_select_mode"), QStringLiteral("Enter Selection Mode"), 
+                                                      QKeySequence(QStringLiteral("Meta+Shift+X")));
 
     QObject::connect(actionUndo, &QAction::triggered, &controller, &OverlayController::undo);
     QObject::connect(actionClear, &QAction::triggered, &controller, &OverlayController::clear);
@@ -92,6 +94,7 @@ int main(int argc, char *argv[])
             controller.enterSelectMode();
         }
     });
+    QObject::connect(actionActivateSelect, &QAction::triggered, &controller, &OverlayController::enterSelectMode);
 
     // Load QML Engine
     QQmlApplicationEngine engine;
