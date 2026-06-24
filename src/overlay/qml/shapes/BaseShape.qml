@@ -10,10 +10,6 @@ Item {
     property bool isSelected: model.selected
     property bool isLocked: model.locked
 
-    onIsSelectedChanged: {
-        console.log("BaseShape isSelected changed - index:", index, "shapeIndex:", shapeIndex, "isSelected:", isSelected, "coords:", shapeX, shapeY, shapeWidth, shapeHeight)
-    }
-
     // Rect-mode properties
     property real shapeX: 0
     property real shapeY: 0

@@ -130,6 +130,7 @@ Q_SIGNALS:
 private:
     void notifySelectionChanged();
     void notifyShapesChanged();
+    void ensureSelectMode();
 
     QList<ShortcutAction> m_shortcutActions;
 

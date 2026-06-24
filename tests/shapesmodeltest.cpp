@@ -325,7 +325,9 @@ void ShapesModelTest::testOverlayControllerCopyPaste()
     QVERIFY(!clipboardText.isEmpty());
     QJsonDocument doc = QJsonDocument::fromJson(clipboardText.toUtf8());
     QVERIFY(doc.isObject());
-    QCOMPARE(doc.object().value(QStringLiteral("type")).toString(), QStringLiteral("rectangle"));
+    QJsonArray group = doc.object().value(QStringLiteral("scribbleway_group")).toArray();
+    QCOMPARE(group.size(), 1);
+    QCOMPARE(group.at(0).toObject().value(QStringLiteral("type")).toString(), QStringLiteral("rectangle"));
 
     // Deselect shape
     controller.setSelectedIndex(-1);
