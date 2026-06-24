@@ -18,14 +18,11 @@ BaseShape {
         id: textLabel
         x: root.shapeX + 5
         y: root.shapeY + 5
-        text: model.text || "Double click to edit"
+        text: model.text || ""
         color: model.color
         opacity: model.opacity
         font.family: model.fontFamily || controller.defaultFontFamily
         font.pixelSize: model.fontSize || 20
-        
-        // Exclude placeholder text from being opaque
-        font.italic: !model.text
 
         // Sync size changes to the shape model
         onImplicitWidthChanged: syncSize()

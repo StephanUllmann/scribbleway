@@ -49,6 +49,9 @@ Window {
 
         function onActiveToolChanged() {
             let tool = controller.activeTool;
+            if (textEditor.visible) {
+                textEditor.commitText();
+            }
             if (canvasWindow.activeDrawTool !== tool) {
                 if (canvasWindow.isDrawing) {
                     canvasWindow.abortShape();
@@ -76,6 +79,9 @@ Window {
             if (canvasWindow.isDrawing) {
                 canvasWindow.abortShape();
             }
+            if (textEditor.visible) {
+                textEditor.commitText();
+            }
             canvasWindow.activeDrawTool = "";
             // Update input mask to include all shape bounding boxes
             canvasWindow.requestInputRegionUpdate();
@@ -85,6 +91,9 @@ Window {
             // Exit any active drawing
             if (canvasWindow.isDrawing) {
                 canvasWindow.abortShape();
+            }
+            if (textEditor.visible) {
+                textEditor.commitText();
             }
             canvasWindow.activeDrawTool = "";
             controller.setSelectedIndex(-1);
@@ -444,7 +453,14 @@ Window {
         border.width: 1
     }
 
-    // --- FLOATING INLINE TEXT EDITOR ---
+    // Hidden text measurer to calculate natural text size without binding loops
+    Text {
+        id: textMeasurer
+        visible: false
+        font.family: textEditor.font.family
+        font.pixelSize: textEditor.font.pixelSize
+        text: textEditor.text
+    }
 
     Controls.TextArea {
         id: textEditor
@@ -452,8 +468,12 @@ Window {
         wrapMode: Text.Wrap
         textFormat: Text.PlainText
         
+        property real maxWidth: canvasWindow.width - x - 20
+        width: Math.min(maxWidth, Math.max(150, textMeasurer.implicitWidth + leftPadding + rightPadding + 20))
+        height: Math.max(40, contentHeight + topPadding + bottomPadding + 10)
+        
         background: Rectangle {
-            color: "white"
+            color: Qt.rgba(1, 1, 1, 0.45)
             border.color: "#3b82f6"
             border.width: 1.5
             radius: 4
@@ -474,6 +494,9 @@ Window {
             return controller.defaultFontSize;
         }
         color: "black"
+
+        onWidthChanged: canvasWindow.requestInputRegionUpdate()
+        onHeightChanged: canvasWindow.requestInputRegionUpdate()
 
         onVisibleChanged: {
             if (visible) {
@@ -527,8 +550,6 @@ Window {
         // Position text editor exactly over the text shape bounds
         textEditor.x = shape.x;
         textEditor.y = shape.y;
-        textEditor.width = Math.max(150, shape.width);
-        textEditor.height = Math.max(40, shape.height);
         textEditor.text = shape.text || "";
         textEditor.visible = true;
 

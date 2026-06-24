@@ -26,6 +26,17 @@ Item {
     property real shapeToX: 0
     property real shapeToY: 0
 
+    // Endpoints for freehand mode
+    readonly property bool isLineOrFreehand: (mode === "line") || (model && model.type && model.type.toLowerCase() === "freehand")
+    readonly property var freehandStart: {
+        let pts = model ? model.points : null;
+        return (pts && typeof pts === "object" && pts.length > 0) ? pts[0] : null;
+    }
+    readonly property var freehandEnd: {
+        let pts = model ? model.points : null;
+        return (pts && typeof pts === "object" && pts.length > 1) ? pts[pts.length - 1] : null;
+    }
+
     // Signals to update coordinates back to model
     signal rectGeometryChanged(real x, real y, real w, real h)
     signal lineGeometryChanged(real fx, real fy, real tx, real ty)
@@ -97,7 +108,7 @@ Item {
 
         // Thin blue border
         Rectangle {
-            visible: mode !== "line"
+            visible: !isLineOrFreehand
             x: mode === "line" ? Math.min(shapeFromX, shapeToX) : shapeX
             y: mode === "line" ? Math.min(shapeFromY, shapeToY) : shapeY
             width: mode === "line" ? Math.abs(shapeFromX - shapeToX) : shapeWidth
@@ -234,9 +245,9 @@ Item {
             }
         }
 
-        // Endpoint Handles (Line Mode)
+        // Endpoint Handles (Line & Freehand Mode)
         Repeater {
-            model: mode === "line" ? 2 : 0
+            model: isLineOrFreehand ? 2 : 0
             Rectangle {
                 width: 12
                 height: 12
@@ -245,12 +256,26 @@ Item {
                 border.width: 1.5
                 radius: 6
                 
-                x: (index === 0 ? shapeFromX : shapeToX) - width/2
-                y: (index === 0 ? shapeFromY : shapeToY) - height/2
+                x: {
+                    if (mode === "line") {
+                        return (index === 0 ? shapeFromX : shapeToX) - width/2;
+                    } else {
+                        let p = index === 0 ? freehandStart : (freehandEnd || freehandStart);
+                        return (p ? p.x : 0) - width/2;
+                    }
+                }
+                y: {
+                    if (mode === "line") {
+                        return (index === 0 ? shapeFromY : shapeToY) - height/2;
+                    } else {
+                        let p = index === 0 ? freehandStart : (freehandEnd || freehandStart);
+                        return (p ? p.y : 0) - height/2;
+                    }
+                }
 
                 MouseArea {
                     anchors.fill: parent
-                    enabled: !controller.hasMultiSelection
+                    enabled: !controller.hasMultiSelection && (mode === "line")
                     cursorShape: enabled ? Qt.SizeAllCursor : Qt.ArrowCursor
 
                     property real dragStartX: 0
