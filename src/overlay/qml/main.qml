@@ -163,6 +163,9 @@ Window {
                 shape["y"] = previewY;
                 shape["width"] = previewW;
                 shape["height"] = previewH;
+                if (activeDrawTool === "rectangle") {
+                    shape["borderRadius"] = controller.defaultBorderRadius;
+                }
                 controller.addShape(shape);
             }
         }
@@ -306,26 +309,20 @@ Window {
     }
 
     // Rectangle Live Preview
-    Shape {
-        anchors.fill: parent
+    Rectangle {
         visible: isDrawing && activeDrawTool === "rectangle"
+        x: previewX
+        y: previewY
+        width: previewW
+        height: previewH
         opacity: controller.defaultOpacity
-
-        ShapePath {
-            strokeColor: controller.defaultColor
-            strokeWidth: controller.defaultStrokeWidth
-            fillColor: {
-                let c = Qt.color(controller.defaultColor);
-                return Qt.rgba(c.r, c.g, c.b, 0.12);
-            }
-
-            startX: previewX
-            startY: previewY
-            PathLine { x: previewX + previewW; y: previewY }
-            PathLine { x: previewX + previewW; y: previewY + previewH }
-            PathLine { x: previewX; y: previewY + previewH }
-            PathLine { x: previewX; y: previewY }
+        border.color: controller.defaultColor
+        border.width: controller.defaultStrokeWidth
+        color: {
+            let c = Qt.color(controller.defaultColor);
+            return Qt.rgba(c.r, c.g, c.b, 0.12);
         }
+        radius: controller.defaultBorderRadius
     }
 
     // Ellipse Live Preview
@@ -400,6 +397,12 @@ Window {
         property real tx: drawStartPoint.x + previewW
         property real ty: drawStartPoint.y + previewH
 
+        // Calculate midpoint at the bottom/base of the arrowhead
+        property real lineLength: Math.sqrt(Math.pow(previewW, 2) + Math.pow(previewH, 2))
+        property real stemLength: Math.max(0, lineLength - len * Math.cos(halfAng))
+        property real baseX: drawStartPoint.x + stemLength * Math.cos(angle)
+        property real baseY: drawStartPoint.y + stemLength * Math.sin(angle)
+
         ShapePath {
             strokeColor: controller.defaultColor
             strokeWidth: controller.defaultStrokeWidth
@@ -407,7 +410,7 @@ Window {
 
             startX: drawStartPoint.x
             startY: drawStartPoint.y
-            PathLine { x: arrowPreviewShape.tx; y: arrowPreviewShape.ty }
+            PathLine { x: arrowPreviewShape.baseX; y: arrowPreviewShape.baseY }
         }
 
         ShapePath {

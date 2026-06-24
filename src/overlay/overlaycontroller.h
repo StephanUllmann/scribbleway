@@ -30,6 +30,7 @@ class OverlayController : public QObject
     Q_PROPERTY(double defaultOpacity READ defaultOpacity WRITE setDefaultOpacity NOTIFY defaultOpacityChanged)
     Q_PROPERTY(QString defaultFontFamily READ defaultFontFamily WRITE setDefaultFontFamily NOTIFY defaultFontFamilyChanged)
     Q_PROPERTY(int defaultFontSize READ defaultFontSize WRITE setDefaultFontSize NOTIFY defaultFontSizeChanged)
+    Q_PROPERTY(int defaultBorderRadius READ defaultBorderRadius WRITE setDefaultBorderRadius NOTIFY defaultBorderRadiusChanged)
     Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
 
 public:
@@ -61,6 +62,9 @@ public:
 
     int defaultFontSize() const;
     void setDefaultFontSize(int size);
+    
+    int defaultBorderRadius() const;
+    void setDefaultBorderRadius(int radius);
 
     ShapesModel* shapesModel();
 
@@ -114,6 +118,7 @@ Q_SIGNALS:
     void defaultOpacityChanged();
     void defaultFontFamilyChanged();
     void defaultFontSizeChanged();
+    void defaultBorderRadiusChanged();
     
     // DBus signals (matched by AppletBackend slots)
     void selectionChanged(const QVariantMap &selectionState);
@@ -147,6 +152,7 @@ private:
     double m_defaultOpacity = 1.0;
     QString m_defaultFontFamily;
     int m_defaultFontSize = 20;
+    int m_defaultBorderRadius = 8;
 
     QRegion m_lastInputMask;
 };

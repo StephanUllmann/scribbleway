@@ -26,6 +26,12 @@ BaseShape {
     readonly property real arrowRightX: shapeToX - arrowLength * Math.cos(lineAngle + arrowHalfAngle)
     readonly property real arrowRightY: shapeToY - arrowLength * Math.sin(lineAngle + arrowHalfAngle)
 
+    // Calculate midpoint at the bottom/base of the arrowhead
+    readonly property real lineLength: Math.sqrt(Math.pow(shapeToX - shapeFromX, 2) + Math.pow(shapeToY - shapeFromY, 2))
+    readonly property real stemLength: Math.max(0, lineLength - arrowLength * Math.cos(arrowHalfAngle))
+    readonly property real arrowBaseX: shapeFromX + stemLength * Math.cos(lineAngle)
+    readonly property real arrowBaseY: shapeFromY + stemLength * Math.sin(lineAngle)
+
     Shape {
         anchors.fill: parent
         opacity: model.opacity
@@ -41,8 +47,8 @@ BaseShape {
             startY: root.shapeFromY
 
             PathLine {
-                x: root.shapeToX
-                y: root.shapeToY
+                x: root.arrowBaseX
+                y: root.arrowBaseY
             }
         }
 

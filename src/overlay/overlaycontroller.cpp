@@ -174,6 +174,19 @@ void OverlayController::setDefaultFontSize(int size)
     }
 }
 
+int OverlayController::defaultBorderRadius() const
+{
+    return m_defaultBorderRadius;
+}
+
+void OverlayController::setDefaultBorderRadius(int radius)
+{
+    if (m_defaultBorderRadius != radius) {
+        m_defaultBorderRadius = radius;
+        Q_EMIT defaultBorderRadiusChanged();
+    }
+}
+
 void OverlayController::addShape(const QVariantMap &shape)
 {
     QVariantMap demarshalledShape;
@@ -236,11 +249,15 @@ void OverlayController::setSelectedIndex(int index)
             if (shape.contains(QStringLiteral("fontSize"))) {
                 m_defaultFontSize = shape[QStringLiteral("fontSize")].toInt();
             }
+            if (shape.contains(QStringLiteral("borderRadius"))) {
+                m_defaultBorderRadius = shape[QStringLiteral("borderRadius")].toInt();
+            }
             Q_EMIT defaultColorChanged();
             Q_EMIT defaultStrokeWidthChanged();
             Q_EMIT defaultOpacityChanged();
             Q_EMIT defaultFontFamilyChanged();
             Q_EMIT defaultFontSizeChanged();
+            Q_EMIT defaultBorderRadiusChanged();
 
             ensureSelectMode();
         }
@@ -295,6 +312,7 @@ QVariantMap OverlayController::getSelectionState()
         state[QStringLiteral("opacity")] = shape[QStringLiteral("opacity")].toDouble();
         state[QStringLiteral("fontFamily")] = shape.value(QStringLiteral("fontFamily"), m_defaultFontFamily).toString();
         state[QStringLiteral("fontSize")] = shape.value(QStringLiteral("fontSize"), m_defaultFontSize).toInt();
+        state[QStringLiteral("borderRadius")] = shape.value(QStringLiteral("borderRadius"), m_defaultBorderRadius).toInt();
         state[QStringLiteral("locked")] = shape.value(QStringLiteral("locked"), false).toBool();
         state[QStringLiteral("selectedIndex")] = m_selectedIndex;
     } else {
@@ -305,6 +323,7 @@ QVariantMap OverlayController::getSelectionState()
         state[QStringLiteral("opacity")] = m_defaultOpacity;
         state[QStringLiteral("fontFamily")] = m_defaultFontFamily;
         state[QStringLiteral("fontSize")] = m_defaultFontSize;
+        state[QStringLiteral("borderRadius")] = m_defaultBorderRadius;
         state[QStringLiteral("locked")] = false;
         state[QStringLiteral("selectedIndex")] = -1;
     }
@@ -338,6 +357,9 @@ void OverlayController::updateProperties(const QVariantMap &properties)
     }
     if (demarshalled.contains(QStringLiteral("fontSize"))) {
         setDefaultFontSize(demarshalled[QStringLiteral("fontSize")].toInt());
+    }
+    if (demarshalled.contains(QStringLiteral("borderRadius"))) {
+        setDefaultBorderRadius(demarshalled[QStringLiteral("borderRadius")].toInt());
     }
 
     m_shapesModel.beginEdit();

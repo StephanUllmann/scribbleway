@@ -15,26 +15,20 @@ BaseShape {
         controller.updateShape(index, { "x": nx, "y": ny, "width": nw, "height": nh });
     }
 
-    Shape {
-        anchors.fill: parent
+    Rectangle {
+        x: root.shapeX
+        y: root.shapeY
+        width: root.shapeWidth
+        height: root.shapeHeight
         opacity: model.opacity
         
-        ShapePath {
-            strokeColor: model.color
-            strokeWidth: model.strokeWidth
-            // Excalidraw-like premium fill style (stroke color at 12% opacity)
-            fillColor: {
-                let c = Qt.color(model.color);
-                return Qt.rgba(c.r, c.g, c.b, 0.12);
-            }
-            
-            startX: root.shapeX
-            startY: root.shapeY
-            
-            PathLine { x: root.shapeX + root.shapeWidth; y: root.shapeY }
-            PathLine { x: root.shapeX + root.shapeWidth; y: root.shapeY + root.shapeHeight }
-            PathLine { x: root.shapeX; y: root.shapeY + root.shapeHeight }
-            PathLine { x: root.shapeX; y: root.shapeY }
+        border.color: model.color
+        border.width: model.strokeWidth
+        // Excalidraw-like premium fill style (stroke color at 12% opacity)
+        color: {
+            let c = Qt.color(model.color);
+            return Qt.rgba(c.r, c.g, c.b, 0.12);
         }
+        radius: model.borderRadius !== undefined ? model.borderRadius : 0
     }
 }

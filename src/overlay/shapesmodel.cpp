@@ -37,6 +37,7 @@ QVariant ShapesModel::data(const QModelIndex &index, int role) const
         case TextRole: return shape.value(QStringLiteral("text"));
         case FontFamilyRole: return shape.value(QStringLiteral("fontFamily"));
         case FontSizeRole: return shape.value(QStringLiteral("fontSize"));
+        case BorderRadiusRole: return shape.value(QStringLiteral("borderRadius"));
         default: return QVariant();
     }
 }
@@ -63,6 +64,7 @@ QHash<int, QByteArray> ShapesModel::roleNames() const
     roles[TextRole] = "text";
     roles[FontFamilyRole] = "fontFamily";
     roles[FontSizeRole] = "fontSize";
+    roles[BorderRadiusRole] = "borderRadius";
     return roles;
 }
 
@@ -164,6 +166,7 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
                 else if (it.key() == QStringLiteral("text")) changedRoles << TextRole;
                 else if (it.key() == QStringLiteral("fontFamily")) changedRoles << FontFamilyRole;
                 else if (it.key() == QStringLiteral("fontSize")) changedRoles << FontSizeRole;
+                else if (it.key() == QStringLiteral("borderRadius")) changedRoles << BorderRadiusRole;
             }
         }
         if (!changedRoles.isEmpty()) {

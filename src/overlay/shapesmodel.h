@@ -29,7 +29,8 @@ public:
         ToYRole,
         TextRole,
         FontFamilyRole,
-        FontSizeRole
+        FontSizeRole,
+        BorderRadiusRole
     };
     Q_ENUM(ShapeRoles)
 

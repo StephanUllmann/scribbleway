@@ -26,6 +26,7 @@ ColumnLayout {
     property string currentToolName: "freehand"
     property string recordingActionId: ""
     property string reassignmentNoticeText: ""
+    property bool isRectActive: (root.backend.hasSelection && root.backend.selectedType.toLowerCase() === "rectangle") || (!root.backend.hasSelection && currentToolName === "rectangle")
 
     Timer {
         id: reassignmentNoticeTimer
@@ -337,6 +338,32 @@ ColumnLayout {
 
             PlasmaComponents.Label {
                 text: Math.round((root.backend.hasSelection ? root.backend.selectedOpacity : 1.0) * 100) + "%"
+            }
+        }
+
+        // Row 5: Border Radius (only if Rectangle tool is active or Rectangle shape is selected)
+        RowLayout {
+            Layout.fillWidth: true
+            visible: fullRoot.isRectActive
+            
+            PlasmaComponents.Label {
+                text: "Radius:"
+                width: Kirigami.Units.gridUnit * 3
+            }
+            
+            PlasmaComponents.Slider {
+                Layout.fillWidth: true
+                from: 0
+                to: 50
+                stepSize: 1
+                value: root.backend.selectedBorderRadius
+                onMoved: {
+                    root.backend.setBorderRadius(value)
+                }
+            }
+
+            PlasmaComponents.Label {
+                text: Math.round(root.backend.selectedBorderRadius) + "px"
             }
         }
 

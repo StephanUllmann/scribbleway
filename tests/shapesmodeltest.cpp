@@ -22,6 +22,7 @@ private Q_SLOTS:
     void testMoveShape();
     void testOverlayControllerCopyPaste();
     void testMultiSelection();
+    void testBorderRadius();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -432,6 +433,40 @@ void ShapesModelTest::testMultiSelection()
     QCOMPARE(controller.shapesModel()->rowCount(), 1);
     // The only remaining shape should be shape 2
     QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("x")].toDouble(), 200.0);
+}
+
+void ShapesModelTest::testBorderRadius()
+{
+    OverlayController controller;
+
+    // Check initial selection state has default border radius 8
+    QVariantMap selectionState = controller.getSelectionState();
+    QCOMPARE(selectionState[QStringLiteral("borderRadius")].toInt(), 8);
+
+    // Update default border radius
+    QVariantMap updateProps;
+    updateProps[QStringLiteral("borderRadius")] = 12;
+    controller.updateProperties(updateProps);
+
+    QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 12);
+    QCOMPARE(controller.defaultBorderRadius(), 12);
+
+    // Create a shape, select it, and check it inherits/updates border radius
+    QVariantMap shape;
+    shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+    shape[QStringLiteral("borderRadius")] = 5;
+    controller.addShape(shape); // selects it automatically
+
+    QCOMPARE(controller.selectedIndex(), 0);
+    QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 5);
+
+    // Update properties on the selected shape
+    QVariantMap updateShapeProps;
+    updateShapeProps[QStringLiteral("borderRadius")] = 20;
+    controller.updateProperties(updateShapeProps);
+
+    QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 20);
+    QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 20);
 }
 
 
