@@ -97,6 +97,7 @@ Item {
 
         // Thin blue border
         Rectangle {
+            visible: mode !== "line"
             x: mode === "line" ? Math.min(shapeFromX, shapeToX) : shapeX
             y: mode === "line" ? Math.min(shapeFromY, shapeToY) : shapeY
             width: mode === "line" ? Math.abs(shapeFromX - shapeToX) : shapeWidth
@@ -235,7 +236,7 @@ Item {
 
         // Endpoint Handles (Line Mode)
         Repeater {
-            model: (mode === "line" && !controller.hasMultiSelection) ? 2 : 0
+            model: mode === "line" ? 2 : 0
             Rectangle {
                 width: 12
                 height: 12
@@ -249,7 +250,8 @@ Item {
 
                 MouseArea {
                     anchors.fill: parent
-                    cursorShape: Qt.SizeAllCursor
+                    enabled: !controller.hasMultiSelection
+                    cursorShape: enabled ? Qt.SizeAllCursor : Qt.ArrowCursor
 
                     property real dragStartX: 0
                     property real dragStartY: 0
