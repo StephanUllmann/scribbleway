@@ -21,6 +21,7 @@ private Q_SLOTS:
     void testOverlayControllerProperties();
     void testMoveShape();
     void testOverlayControllerCopyPaste();
+    void testMultiSelection();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -347,6 +348,90 @@ void ShapesModelTest::testOverlayControllerCopyPaste()
     QCOMPARE(pastedShape[QStringLiteral("width")].toDouble(), 100.0);
     QCOMPARE(pastedShape[QStringLiteral("height")].toDouble(), 50.0);
 }
+
+void ShapesModelTest::testMultiSelection()
+{
+    OverlayController controller;
+
+    // Add three shapes
+    QVariantMap s1;
+    s1[QStringLiteral("type")] = QStringLiteral("rectangle");
+    s1[QStringLiteral("x")] = 10.0;
+    s1[QStringLiteral("y")] = 10.0;
+    s1[QStringLiteral("width")] = 50.0;
+    s1[QStringLiteral("height")] = 50.0;
+    s1[QStringLiteral("color")] = QStringLiteral("#ff0000");
+
+    QVariantMap s2 = s1;
+    s2[QStringLiteral("x")] = 100.0;
+    s2[QStringLiteral("y")] = 100.0;
+
+    QVariantMap s3 = s1;
+    s3[QStringLiteral("x")] = 200.0;
+    s3[QStringLiteral("y")] = 200.0;
+
+    controller.addShape(s1);
+    controller.addShape(s2);
+    controller.addShape(s3);
+
+    QCOMPARE(controller.shapesModel()->rowCount(), 3);
+
+    // Initial selected index is 2 (since s3 was added last)
+    QCOMPARE(controller.selectedIndex(), 2);
+    QCOMPARE(controller.hasMultiSelection(), false);
+
+    // Select shape 0 (clearing previous selection)
+    controller.selectShape(0, false);
+    QCOMPARE(controller.selectedIndex(), 0);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), true);
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("selected")].toBool(), false);
+    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("selected")].toBool(), false);
+
+    // Shift-select shape 1
+    controller.selectShape(1, true);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), true);
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("selected")].toBool(), true);
+    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("selected")].toBool(), false);
+    QCOMPARE(controller.hasMultiSelection(), true);
+
+    // Test dragging the selected shapes group
+    controller.beginEdit();
+    controller.dragSelected(15.0, 25.0);
+    controller.endEdit();
+
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("x")].toDouble(), 25.0);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("y")].toDouble(), 35.0);
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("x")].toDouble(), 115.0);
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("y")].toDouble(), 125.0);
+    // Shape 2 is not selected and should remain at (200.0, 200.0)
+    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("x")].toDouble(), 200.0);
+    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("y")].toDouble(), 200.0);
+
+    // Test editing selected shapes together
+    QVariantMap updateProps;
+    updateProps[QStringLiteral("color")] = QStringLiteral("#0000ff");
+    controller.updateProperties(updateProps);
+
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("color")].toString(), QStringLiteral("#0000ff"));
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("color")].toString(), QStringLiteral("#0000ff"));
+    // Shape 2 remains red
+    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("color")].toString(), QStringLiteral("#ff0000"));
+
+    // Test drag selection helper
+    // Rect from (0,0) to (150, 150) should select shape 0 and 1, but not 2.
+    controller.beginDragSelection(false);
+    controller.selectShapesInRect(0.0, 0.0, 150.0, 150.0, false);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), true);
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("selected")].toBool(), true);
+    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("selected")].toBool(), false);
+
+    // Test deleting selected shapes
+    controller.deleteSelected();
+    QCOMPARE(controller.shapesModel()->rowCount(), 1);
+    // The only remaining shape should be shape 2
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("x")].toDouble(), 200.0);
+}
+
 
 QTEST_MAIN(ShapesModelTest)
 #include "shapesmodeltest.moc"

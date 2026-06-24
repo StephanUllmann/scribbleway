@@ -5,9 +5,6 @@ BaseShape {
     
     mode: "none" // Move only, text size is managed via font slider
     shapeIndex: index
-    isSelected: model.selected
-    isLocked: model.locked
-
     shapeX: model.x
     shapeY: model.y
     shapeWidth: model.width

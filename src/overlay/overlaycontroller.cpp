@@ -7,6 +7,7 @@
 #include <QClipboard>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QCursor>
 #include <QPointF>
 #include <limits>
@@ -208,10 +209,13 @@ void OverlayController::updateShape(int index, const QVariantMap &properties)
 
 void OverlayController::setSelectedIndex(int index)
 {
-    if (m_selectedIndex != index) {
-        // Clear selection state in previous shape
-        if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
-            m_shapesModel.updateShape(m_selectedIndex, {{QStringLiteral("selected"), false}});
+    if (m_selectedIndex != index || index == -1) {
+        m_shapesModel.beginEdit();
+        // Clear selection state in all shapes
+        for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+            if (i != index && m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+                m_shapesModel.updateShape(i, {{QStringLiteral("selected"), false}});
+            }
         }
         
         m_selectedIndex = index;
@@ -246,6 +250,7 @@ void OverlayController::setSelectedIndex(int index)
                 Q_EMIT activeToolChanged(m_activeTool);
             }
         }
+        m_shapesModel.endEdit();
         
         notifyShapesChanged();
         notifySelectionChanged();
@@ -341,9 +346,19 @@ void OverlayController::updateProperties(const QVariantMap &properties)
         setDefaultFontSize(demarshalled[QStringLiteral("fontSize")].toInt());
     }
 
-    if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
+    m_shapesModel.beginEdit();
+    bool updatedAny = false;
+    for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+            m_shapesModel.updateShape(i, demarshalled);
+            updatedAny = true;
+        }
+    }
+
+    if (!updatedAny && m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
         m_shapesModel.updateShape(m_selectedIndex, demarshalled);
     }
+    m_shapesModel.endEdit();
 
     notifyShapesChanged();
     notifySelectionChanged();
@@ -368,6 +383,12 @@ void OverlayController::clear()
 void OverlayController::beginEdit()
 {
     m_shapesModel.beginEdit();
+    m_dragStartShapes.clear();
+    for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+            m_dragStartShapes.insert(i, m_shapesModel.shapes()[i]);
+        }
+    }
 }
 
 void OverlayController::endEdit()
@@ -426,18 +447,45 @@ void OverlayController::enterPassthroughMode()
 
 void OverlayController::deleteSelected()
 {
-    if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
+    m_shapesModel.beginEdit();
+    bool deletedAny = false;
+    for (int i = m_shapesModel.rowCount() - 1; i >= 0; --i) {
+        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+            deleteShape(i);
+            deletedAny = true;
+        }
+    }
+    if (!deletedAny && m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
         deleteShape(m_selectedIndex);
     }
+    m_shapesModel.endEdit();
 }
 
 void OverlayController::toggleLock()
 {
-    if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
-        QVariantMap shape = m_shapesModel.shapes()[m_selectedIndex];
-        bool locked = shape.value(QStringLiteral("locked"), false).toBool();
+    m_shapesModel.beginEdit();
+    bool lockedAny = false;
+    bool hasUnlockedSelected = false;
+    for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+            if (!m_shapesModel.shapes()[i].value(QStringLiteral("locked"), false).toBool()) {
+                hasUnlockedSelected = true;
+                break;
+            }
+        }
+    }
+    
+    for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+            setShapeLocked(i, hasUnlockedSelected);
+            lockedAny = true;
+        }
+    }
+    if (!lockedAny && m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
+        bool locked = m_shapesModel.shapes()[m_selectedIndex].value(QStringLiteral("locked"), false).toBool();
         setShapeLocked(m_selectedIndex, !locked);
     }
+    m_shapesModel.endEdit();
 }
 
 void OverlayController::raiseSelected()
@@ -490,12 +538,72 @@ void OverlayController::deleteShape(int index)
     }
 }
 
-void OverlayController::selectShape(int index)
+void OverlayController::selectShape(int index, bool shiftHeld)
 {
-    if (index >= 0 && index < m_shapesModel.rowCount()) {
-        setSelectedIndex(index);
+    if (index < 0 || index >= m_shapesModel.rowCount()) {
+        if (!shiftHeld) {
+            setSelectedIndex(-1);
+        }
+        return;
+    }
+
+    bool wasSelected = m_shapesModel.shapes()[index].value(QStringLiteral("selected"), false).toBool();
+
+    if (shiftHeld) {
+        m_shapesModel.updateShape(index, {{QStringLiteral("selected"), !wasSelected}});
+        
+        if (!wasSelected) {
+            m_selectedIndex = index;
+            if (m_currentMode != QStringLiteral("select")) {
+                m_currentMode = QStringLiteral("select");
+                Q_EMIT modeChanged(m_currentMode);
+            }
+            if (!m_activeTool.isEmpty()) {
+                m_activeTool = QStringLiteral("");
+                Q_EMIT activeToolChanged(m_activeTool);
+            }
+        } else {
+            if (m_selectedIndex == index) {
+                int newSelected = -1;
+                for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+                    if (m_shapesModel.shapes()[i].value(QStringLiteral("selected"), false).toBool()) {
+                        newSelected = i;
+                        break;
+                    }
+                }
+                m_selectedIndex = newSelected;
+            }
+        }
+        notifyShapesChanged();
+        notifySelectionChanged();
     } else {
-        setSelectedIndex(-1);
+        if (wasSelected) {
+            if (m_selectedIndex != index) {
+                m_selectedIndex = index;
+                notifySelectionChanged();
+            }
+        } else {
+            m_shapesModel.beginEdit();
+            for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+                if (i != index && m_shapesModel.shapes()[i].value(QStringLiteral("selected"), false).toBool()) {
+                    m_shapesModel.updateShape(i, {{QStringLiteral("selected"), false}});
+                }
+            }
+            m_shapesModel.updateShape(index, {{QStringLiteral("selected"), true}});
+            m_selectedIndex = index;
+            m_shapesModel.endEdit();
+
+            if (m_currentMode != QStringLiteral("select")) {
+                m_currentMode = QStringLiteral("select");
+                Q_EMIT modeChanged(m_currentMode);
+            }
+            if (!m_activeTool.isEmpty()) {
+                m_activeTool = QStringLiteral("");
+                Q_EMIT activeToolChanged(m_activeTool);
+            }
+            notifyShapesChanged();
+            notifySelectionChanged();
+        }
     }
 }
 
@@ -572,15 +680,32 @@ void OverlayController::changeShortcut(const QString &actionId, const QString &s
 
 void OverlayController::copySelected()
 {
-    if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
+    QVariantList selectedShapes;
+    for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+            QVariantMap shape = m_shapesModel.shapes().at(i);
+            shape.insert(QStringLiteral("selected"), false);
+            selectedShapes.append(shape);
+        }
+    }
+
+    if (selectedShapes.isEmpty() && m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
         QVariantMap shape = m_shapesModel.shapes().at(m_selectedIndex);
-        
-        // Remove 'selected' state before serializing so it doesn't propagate
         shape.insert(QStringLiteral("selected"), false);
-        
-        QJsonObject jsonObj = QJsonObject::fromVariantMap(shape);
-        QJsonDocument doc(jsonObj);
-        QGuiApplication::clipboard()->setText(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+        selectedShapes.append(shape);
+    }
+
+    if (!selectedShapes.isEmpty()) {
+        if (selectedShapes.size() == 1) {
+            QJsonObject jsonObj = QJsonObject::fromVariantMap(selectedShapes.first().toMap());
+            QJsonDocument doc(jsonObj);
+            QGuiApplication::clipboard()->setText(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+        } else {
+            QJsonObject rootObj;
+            rootObj.insert(QStringLiteral("scribbleway_group"), QJsonArray::fromVariantList(selectedShapes));
+            QJsonDocument doc(rootObj);
+            QGuiApplication::clipboard()->setText(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+        }
     }
 }
 
@@ -593,69 +718,11 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
     if (!doc.isObject()) return;
 
     QJsonObject jsonObj = doc.object();
-    if (!jsonObj.contains(QStringLiteral("type"))) return;
 
-    QVariantMap shape = jsonObj.toVariantMap();
-    QString type = shape[QStringLiteral("type")].toString();
-
-    // Ensure it's not marked selected or locked initially
-    shape.insert(QStringLiteral("selected"), false);
-    shape.insert(QStringLiteral("locked"), false);
-
-    // Calculate center of the original shape
-    double cx = 0;
-    double cy = 0;
-
-    if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
-        cx = shape[QStringLiteral("x")].toDouble() + shape[QStringLiteral("width")].toDouble() / 2.0;
-        cy = shape[QStringLiteral("y")].toDouble() + shape[QStringLiteral("height")].toDouble() / 2.0;
-    } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
-        cx = (shape[QStringLiteral("fromX")].toDouble() + shape[QStringLiteral("toX")].toDouble()) / 2.0;
-        cy = (shape[QStringLiteral("fromY")].toDouble() + shape[QStringLiteral("toY")].toDouble()) / 2.0;
-    } else if (type == QStringLiteral("freehand")) {
-        QVariantList points = shape[QStringLiteral("points")].toList();
-        if (points.isEmpty()) return;
-
-        double minX = std::numeric_limits<double>::max();
-        double maxX = std::numeric_limits<double>::lowest();
-        double minY = std::numeric_limits<double>::max();
-        double maxY = std::numeric_limits<double>::lowest();
-
-        for (const QVariant &pv : points) {
-            double px = 0;
-            double py = 0;
-            if (pv.canConvert<QPointF>()) {
-                QPointF p = pv.toPointF();
-                px = p.x();
-                py = p.y();
-            } else if (pv.typeId() == QMetaType::QVariantMap) {
-                QVariantMap pm = pv.toMap();
-                px = pm[QStringLiteral("x")].toDouble();
-                py = pm[QStringLiteral("y")].toDouble();
-            } else {
-                continue;
-            }
-            if (px < minX) minX = px;
-            if (px > maxX) maxX = px;
-            if (py < minY) minY = py;
-            if (py > maxY) maxY = py;
-        }
-
-        if (minX <= maxX && minY <= maxY) {
-            cx = (minX + maxX) / 2.0;
-            cy = (minY + maxY) / 2.0;
-        }
-    } else {
-        // Unknown shape type
-        return;
-    }
-
-    // Determine target local mouse position
     QPointF localMousePos;
     if (localX >= 0.0 && localY >= 0.0) {
         localMousePos = QPointF(localX, localY);
     } else {
-        // Get current global mouse position and map it to window
         QPoint globalMousePos = QCursor::pos();
         localMousePos = globalMousePos;
         if (m_window) {
@@ -663,37 +730,366 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
         }
     }
 
-    // Calculate delta to translate center to mouse position
-    double dx = localMousePos.x() - cx;
-    double dy = localMousePos.y() - cy;
+    if (jsonObj.contains(QStringLiteral("scribbleway_group"))) {
+        QVariantList list = jsonObj.value(QStringLiteral("scribbleway_group")).toArray().toVariantList();
+        if (list.isEmpty()) return;
 
-    // Apply delta to coordinates
-    if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
-        shape.insert(QStringLiteral("x"), shape[QStringLiteral("x")].toDouble() + dx);
-        shape.insert(QStringLiteral("y"), shape[QStringLiteral("y")].toDouble() + dy);
-    } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
-        shape.insert(QStringLiteral("fromX"), shape[QStringLiteral("fromX")].toDouble() + dx);
-        shape.insert(QStringLiteral("toX"), shape[QStringLiteral("toX")].toDouble() + dx);
-        shape.insert(QStringLiteral("fromY"), shape[QStringLiteral("fromY")].toDouble() + dy);
-        shape.insert(QStringLiteral("toY"), shape[QStringLiteral("toY")].toDouble() + dy);
-    } else if (type == QStringLiteral("freehand")) {
-        QVariantList points = shape[QStringLiteral("points")].toList();
-        QVariantList newPoints;
-        for (const QVariant &pv : points) {
-            if (pv.canConvert<QPointF>()) {
-                QPointF p = pv.toPointF();
-                newPoints.append(QPointF(p.x() + dx, p.y() + dy));
-            } else if (pv.typeId() == QMetaType::QVariantMap) {
-                QVariantMap pm = pv.toMap();
-                pm.insert(QStringLiteral("x"), pm[QStringLiteral("x")].toDouble() + dx);
-                pm.insert(QStringLiteral("y"), pm[QStringLiteral("y")].toDouble() + dy);
-                newPoints.append(pm);
+        double minX = std::numeric_limits<double>::max();
+        double maxX = std::numeric_limits<double>::lowest();
+        double minY = std::numeric_limits<double>::max();
+        double maxY = std::numeric_limits<double>::lowest();
+
+        for (const QVariant &sv : list) {
+            QVariantMap shape = sv.toMap();
+            QString type = shape[QStringLiteral("type")].toString();
+            if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
+                double x = shape[QStringLiteral("x")].toDouble();
+                double y = shape[QStringLiteral("y")].toDouble();
+                double w = shape[QStringLiteral("width")].toDouble();
+                double h = shape[QStringLiteral("height")].toDouble();
+                minX = qMin(minX, x);
+                maxX = qMax(maxX, x + w);
+                minY = qMin(minY, y);
+                maxY = qMax(maxY, y + h);
+            } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+                double fx = shape[QStringLiteral("fromX")].toDouble();
+                double tx = shape[QStringLiteral("toX")].toDouble();
+                double fy = shape[QStringLiteral("fromY")].toDouble();
+                double ty = shape[QStringLiteral("toY")].toDouble();
+                minX = qMin(minX, qMin(fx, tx));
+                maxX = qMax(maxX, qMax(fx, tx));
+                minY = qMin(minY, qMin(fy, ty));
+                maxY = qMax(maxY, qMax(fy, ty));
+            } else if (type == QStringLiteral("freehand")) {
+                QVariantList points = shape[QStringLiteral("points")].toList();
+                for (const QVariant &pv : points) {
+                    double px = 0, py = 0;
+                    if (pv.canConvert<QPointF>()) {
+                        QPointF p = pv.toPointF();
+                        px = p.x(); py = p.y();
+                    } else if (pv.typeId() == QMetaType::QVariantMap) {
+                        QVariantMap pm = pv.toMap();
+                        px = pm[QStringLiteral("x")].toDouble();
+                        py = pm[QStringLiteral("y")].toDouble();
+                    } else {
+                        continue;
+                    }
+                    minX = qMin(minX, px);
+                    maxX = qMax(maxX, px);
+                    minY = qMin(minY, py);
+                    maxY = qMax(maxY, py);
+                }
             }
         }
-        shape.insert(QStringLiteral("points"), newPoints);
+
+        if (minX > maxX || minY > maxY) return;
+
+        double cx = (minX + maxX) / 2.0;
+        double cy = (minY + maxY) / 2.0;
+        double dx = localMousePos.x() - cx;
+        double dy = localMousePos.y() - cy;
+
+        m_shapesModel.beginEdit();
+        setSelectedIndex(-1);
+
+        QList<int> pastedIndices;
+        for (const QVariant &sv : list) {
+            QVariantMap shape = sv.toMap();
+            QString type = shape[QStringLiteral("type")].toString();
+            shape.insert(QStringLiteral("selected"), true);
+            shape.insert(QStringLiteral("locked"), false);
+
+            if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
+                shape.insert(QStringLiteral("x"), shape[QStringLiteral("x")].toDouble() + dx);
+                shape.insert(QStringLiteral("y"), shape[QStringLiteral("y")].toDouble() + dy);
+            } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+                shape.insert(QStringLiteral("fromX"), shape[QStringLiteral("fromX")].toDouble() + dx);
+                shape.insert(QStringLiteral("toX"), shape[QStringLiteral("toX")].toDouble() + dx);
+                shape.insert(QStringLiteral("fromY"), shape[QStringLiteral("fromY")].toDouble() + dy);
+                shape.insert(QStringLiteral("toY"), shape[QStringLiteral("toY")].toDouble() + dy);
+            } else if (type == QStringLiteral("freehand")) {
+                QVariantList points = shape[QStringLiteral("points")].toList();
+                QVariantList newPoints;
+                for (const QVariant &pv : points) {
+                    if (pv.canConvert<QPointF>()) {
+                        QPointF p = pv.toPointF();
+                        newPoints.append(QPointF(p.x() + dx, p.y() + dy));
+                    } else if (pv.typeId() == QMetaType::QVariantMap) {
+                        QVariantMap pm = pv.toMap();
+                        pm.insert(QStringLiteral("x"), pm[QStringLiteral("x")].toDouble() + dx);
+                        pm.insert(QStringLiteral("y"), pm[QStringLiteral("y")].toDouble() + dy);
+                        newPoints.append(pm);
+                    }
+                }
+                shape.insert(QStringLiteral("points"), newPoints);
+            }
+
+            QVariantMap demarshalledShape;
+            for (auto it = shape.begin(); it != shape.end(); ++it) {
+                demarshalledShape.insert(it.key(), DBusUtils::demarshal(it.value()));
+            }
+            m_shapesModel.addShape(demarshalledShape);
+            pastedIndices.append(m_shapesModel.rowCount() - 1);
+        }
+
+        if (!pastedIndices.isEmpty()) {
+            m_selectedIndex = pastedIndices.last();
+        }
+
+        m_shapesModel.endEdit();
+        notifyShapesChanged();
+        notifySelectionChanged();
+    } else {
+        if (!jsonObj.contains(QStringLiteral("type"))) return;
+
+        QVariantMap shape = jsonObj.toVariantMap();
+        QString type = shape[QStringLiteral("type")].toString();
+
+        shape.insert(QStringLiteral("selected"), true);
+        shape.insert(QStringLiteral("locked"), false);
+
+        double cx = 0;
+        double cy = 0;
+
+        if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
+            cx = shape[QStringLiteral("x")].toDouble() + shape[QStringLiteral("width")].toDouble() / 2.0;
+            cy = shape[QStringLiteral("y")].toDouble() + shape[QStringLiteral("height")].toDouble() / 2.0;
+        } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+            cx = (shape[QStringLiteral("fromX")].toDouble() + shape[QStringLiteral("toX")].toDouble()) / 2.0;
+            cy = (shape[QStringLiteral("fromY")].toDouble() + shape[QStringLiteral("toY")].toDouble()) / 2.0;
+        } else if (type == QStringLiteral("freehand")) {
+            QVariantList points = shape[QStringLiteral("points")].toList();
+            if (points.isEmpty()) return;
+
+            double minX = std::numeric_limits<double>::max();
+            double maxX = std::numeric_limits<double>::lowest();
+            double minY = std::numeric_limits<double>::max();
+            double maxY = std::numeric_limits<double>::lowest();
+
+            for (const QVariant &pv : points) {
+                double px = 0;
+                double py = 0;
+                if (pv.canConvert<QPointF>()) {
+                    QPointF p = pv.toPointF();
+                    px = p.x();
+                    py = p.y();
+                } else if (pv.typeId() == QMetaType::QVariantMap) {
+                    QVariantMap pm = pv.toMap();
+                    px = pm[QStringLiteral("x")].toDouble();
+                    py = pm[QStringLiteral("y")].toDouble();
+                } else {
+                    continue;
+                }
+                if (px < minX) minX = px;
+                if (px > maxX) maxX = px;
+                if (py < minY) minY = py;
+                if (py > maxY) maxY = py;
+            }
+
+            if (minX <= maxX && minY <= maxY) {
+                cx = (minX + maxX) / 2.0;
+                cy = (minY + maxY) / 2.0;
+            }
+        } else {
+            return;
+        }
+
+        double dx = localMousePos.x() - cx;
+        double dy = localMousePos.y() - cy;
+
+        if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
+            shape.insert(QStringLiteral("x"), shape[QStringLiteral("x")].toDouble() + dx);
+            shape.insert(QStringLiteral("y"), shape[QStringLiteral("y")].toDouble() + dy);
+        } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+            shape.insert(QStringLiteral("fromX"), shape[QStringLiteral("fromX")].toDouble() + dx);
+            shape.insert(QStringLiteral("toX"), shape[QStringLiteral("toX")].toDouble() + dx);
+            shape.insert(QStringLiteral("fromY"), shape[QStringLiteral("fromY")].toDouble() + dy);
+            shape.insert(QStringLiteral("toY"), shape[QStringLiteral("toY")].toDouble() + dy);
+        } else if (type == QStringLiteral("freehand")) {
+            QVariantList points = shape[QStringLiteral("points")].toList();
+            QVariantList newPoints;
+            for (const QVariant &pv : points) {
+                if (pv.canConvert<QPointF>()) {
+                    QPointF p = pv.toPointF();
+                    newPoints.append(QPointF(p.x() + dx, p.y() + dy));
+                } else if (pv.typeId() == QMetaType::QVariantMap) {
+                    QVariantMap pm = pv.toMap();
+                    pm.insert(QStringLiteral("x"), pm[QStringLiteral("x")].toDouble() + dx);
+                    pm.insert(QStringLiteral("y"), pm[QStringLiteral("y")].toDouble() + dy);
+                    newPoints.append(pm);
+                }
+            }
+            shape.insert(QStringLiteral("points"), newPoints);
+        }
+
+        setSelectedIndex(-1);
+
+        QVariantMap demarshalledShape;
+        for (auto it = shape.begin(); it != shape.end(); ++it) {
+            demarshalledShape.insert(it.key(), DBusUtils::demarshal(it.value()));
+        }
+        m_shapesModel.addShape(demarshalledShape);
+        setSelectedIndex(m_shapesModel.rowCount() - 1);
+        notifyShapesChanged();
+        notifySelectionChanged();
+    }
+}
+
+bool OverlayController::hasMultiSelection() const
+{
+    int count = 0;
+    const auto shapesList = m_shapesModel.shapes();
+    for (const auto &shape : shapesList) {
+        if (shape.value(QStringLiteral("selected"), false).toBool()) {
+            count++;
+            if (count > 1) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void OverlayController::beginDragSelection(bool shiftHeld)
+{
+    m_preDragSelection.clear();
+    if (shiftHeld) {
+        for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+            if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+                m_preDragSelection.insert(i);
+            }
+        }
+    }
+}
+
+void OverlayController::selectShapesInRect(double rx, double ry, double rw, double rh, bool shiftHeld)
+{
+    Q_UNUSED(shiftHeld);
+    QRectF selectRect(rx, ry, rw, rh);
+    selectRect = selectRect.normalized();
+
+    m_shapesModel.beginEdit();
+
+    int newSelectedIndex = -1;
+
+    for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+        QVariantMap shape = m_shapesModel.shapes()[i];
+        QString type = shape[QStringLiteral("type")].toString();
+        bool intersects = false;
+
+        if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
+            double sx = shape[QStringLiteral("x")].toDouble();
+            double sy = shape[QStringLiteral("y")].toDouble();
+            double sw = shape[QStringLiteral("width")].toDouble();
+            double sh = shape[QStringLiteral("height")].toDouble();
+            QRectF shapeRect(sx, sy, sw, sh);
+            intersects = selectRect.intersects(shapeRect) || selectRect.contains(shapeRect);
+        } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+            double fx = shape[QStringLiteral("fromX")].toDouble();
+            double fy = shape[QStringLiteral("fromY")].toDouble();
+            double tx = shape[QStringLiteral("toX")].toDouble();
+            double ty = shape[QStringLiteral("toY")].toDouble();
+
+            auto lineIntersectsLine = [](double ax1, double ay1, double ax2, double ay2,
+                                         double bx1, double by1, double bx2, double by2) -> bool {
+                double d = (ax2 - ax1) * (by2 - by1) - (ay2 - ay1) * (bx2 - bx1);
+                if (qFuzzyIsNull(d)) return false;
+                double u = ((bx1 - ax1) * (by2 - by1) - (by1 - ay1) * (bx2 - bx1)) / d;
+                double v = ((bx1 - ax1) * (ay2 - ay1) - (by1 - ay1) * (ax2 - ax1)) / d;
+                return (u >= 0.0 && u <= 1.0 && v >= 0.0 && v <= 1.0);
+            };
+
+            if (selectRect.contains(QPointF(fx, fy)) || selectRect.contains(QPointF(tx, ty))) {
+                intersects = true;
+            } else {
+                double srx = selectRect.x();
+                double sry = selectRect.y();
+                double srw = selectRect.width();
+                double srh = selectRect.height();
+                intersects = lineIntersectsLine(fx, fy, tx, ty, srx, sry, srx, sry + srh) ||
+                             lineIntersectsLine(fx, fy, tx, ty, srx + srw, sry, srx + srw, sry + srh) ||
+                             lineIntersectsLine(fx, fy, tx, ty, srx, sry, srx + srw, sry) ||
+                             lineIntersectsLine(fx, fy, tx, ty, srx, sry + srh, srx + srw, sry + srh);
+            }
+        } else if (type == QStringLiteral("freehand")) {
+            QVariantList points = shape[QStringLiteral("points")].toList();
+            for (const QVariant &pv : points) {
+                QPointF p;
+                if (pv.canConvert<QPointF>()) {
+                    p = pv.toPointF();
+                } else if (pv.typeId() == QMetaType::QVariantMap) {
+                    QVariantMap pm = pv.toMap();
+                    p = QPointF(pm[QStringLiteral("x")].toDouble(), pm[QStringLiteral("y")].toDouble());
+                } else {
+                    continue;
+                }
+                if (selectRect.contains(p)) {
+                    intersects = true;
+                    break;
+                }
+            }
+        }
+
+        bool shouldSelect = intersects || m_preDragSelection.contains(i);
+
+        m_shapesModel.updateShape(i, {{QStringLiteral("selected"), shouldSelect}});
+        if (shouldSelect) {
+            newSelectedIndex = i;
+        }
     }
 
-    addShape(shape);
+    m_shapesModel.endEdit();
+
+    if (newSelectedIndex != -1) {
+        m_selectedIndex = newSelectedIndex;
+    } else {
+        m_selectedIndex = -1;
+    }
+
+    notifyShapesChanged();
+    notifySelectionChanged();
+}
+
+void OverlayController::dragSelected(double dx, double dy)
+{
+    if (m_dragStartShapes.isEmpty()) {
+        return;
+    }
+
+    m_shapesModel.beginEdit();
+    for (auto it = m_dragStartShapes.begin(); it != m_dragStartShapes.end(); ++it) {
+        int index = it.key();
+        QVariantMap shape = it.value();
+        QString type = shape[QStringLiteral("type")].toString();
+
+        if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
+            shape.insert(QStringLiteral("x"), shape[QStringLiteral("x")].toDouble() + dx);
+            shape.insert(QStringLiteral("y"), shape[QStringLiteral("y")].toDouble() + dy);
+        } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+            shape.insert(QStringLiteral("fromX"), shape[QStringLiteral("fromX")].toDouble() + dx);
+            shape.insert(QStringLiteral("toX"), shape[QStringLiteral("toX")].toDouble() + dx);
+            shape.insert(QStringLiteral("fromY"), shape[QStringLiteral("fromY")].toDouble() + dy);
+            shape.insert(QStringLiteral("toY"), shape[QStringLiteral("toY")].toDouble() + dy);
+        } else if (type == QStringLiteral("freehand")) {
+            QVariantList startPoints = shape[QStringLiteral("points")].toList();
+            QVariantList newPoints;
+            for (const QVariant &pv : startPoints) {
+                if (pv.canConvert<QPointF>()) {
+                    QPointF p = pv.toPointF();
+                    newPoints.append(QPointF(p.x() + dx, p.y() + dy));
+                } else if (pv.typeId() == QMetaType::QVariantMap) {
+                    QVariantMap pm = pv.toMap();
+                    pm.insert(QStringLiteral("x"), pm[QStringLiteral("x")].toDouble() + dx);
+                    pm.insert(QStringLiteral("y"), pm[QStringLiteral("y")].toDouble() + dy);
+                    newPoints.append(pm);
+                }
+            }
+            shape.insert(QStringLiteral("points"), newPoints);
+        }
+
+        m_shapesModel.updateShape(index, shape);
+    }
+    m_shapesModel.endEdit();
 }
 
 

@@ -35,6 +35,14 @@ Window {
     property bool isUpdatingInputRegion: false
     property point lastMousePos: Qt.point(width / 2, height / 2)
 
+    // Selection frame properties
+    property bool isSelectingFrame: false
+    property point selectStartPoint: Qt.point(0, 0)
+    property real selectX: 0
+    property real selectY: 0
+    property real selectW: 0
+    property real selectH: 0
+
     // Connections to C++ controller signals
     Connections {
         target: controller
@@ -219,7 +227,6 @@ Window {
             onLoaded: {
                 if (item) {
                     item.index = index;
-                    item.model = model;
                 }
                 canvasWindow.requestInputRegionUpdate();
             }
@@ -421,6 +428,19 @@ Window {
         }
     }
 
+    // --- SELECTION FRAME UI ---
+    Rectangle {
+        id: selectionFrameRect
+        visible: isSelectingFrame
+        x: selectX
+        y: selectY
+        width: selectW
+        height: selectH
+        color: "#1a3b82f6" // 10% opacity blue
+        border.color: "#3b82f6"
+        border.width: 1
+    }
+
     // --- FLOATING INLINE TEXT EDITOR ---
 
     Controls.TextArea {
@@ -560,17 +580,44 @@ Window {
     }
 
 
-    // Click outside to deselect active shape or finalize text editing
+    // Background interaction: handles click-to-deselect, text commit, and drag-selection frame
     MouseArea {
         anchors.fill: parent
         z: -1 // Behind shapes and draw capture layers
-        enabled: controller.selectedIndex !== -1 || textEditor.visible
+        enabled: controller.currentMode === "select" || controller.selectedIndex !== -1 || textEditor.visible
 
-        onPressed: {
+        onPressed: (mouse) => {
             if (textEditor.visible) {
                 textEditor.commitText();
+            } else if (controller.currentMode === "select") {
+                isSelectingFrame = true;
+                selectStartPoint = Qt.point(mouse.x, mouse.y);
+                selectX = mouse.x;
+                selectY = mouse.y;
+                selectW = 0;
+                selectH = 0;
+                controller.beginDragSelection(mouse.modifiers & Qt.ShiftModifier);
+                controller.selectShapesInRect(selectX, selectY, 0, 0, mouse.modifiers & Qt.ShiftModifier);
             } else {
                 controller.setSelectedIndex(-1);
+            }
+        }
+
+        onPositionChanged: (mouse) => {
+            if (isSelectingFrame) {
+                selectX = Math.min(mouse.x, selectStartPoint.x);
+                selectY = Math.min(mouse.y, selectStartPoint.y);
+                selectW = Math.abs(mouse.x - selectStartPoint.x);
+                selectH = Math.abs(mouse.y - selectStartPoint.y);
+                controller.selectShapesInRect(selectX, selectY, selectW, selectH, mouse.modifiers & Qt.ShiftModifier);
+            }
+        }
+
+        onReleased: {
+            if (isSelectingFrame) {
+                isSelectingFrame = false;
+                selectW = 0;
+                selectH = 0;
             }
         }
     }

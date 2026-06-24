@@ -6,9 +6,6 @@ BaseShape {
     
     mode: "line"
     shapeIndex: index
-    isSelected: model.selected
-    isLocked: model.locked
-
     shapeFromX: model.fromX
     shapeFromY: model.fromY
     shapeToX: model.toX

@@ -5,11 +5,14 @@ Item {
     anchors.fill: parent
 
     property int index: -1
-    property var model: null
     property int shapeIndex: index
     property string mode: "rect" // "rect", "line", "none" (freehand)
-    property bool isSelected: false
-    property bool isLocked: false
+    property bool isSelected: model.selected
+    property bool isLocked: model.locked
+
+    onIsSelectedChanged: {
+        console.log("BaseShape isSelected changed - index:", index, "shapeIndex:", shapeIndex, "isSelected:", isSelected, "coords:", shapeX, shapeY, shapeWidth, shapeHeight)
+    }
 
     // Rect-mode properties
     property real shapeX: 0
@@ -53,8 +56,8 @@ Item {
         property real startTY: 0
 
         onPressed: (mouse) => {
+            controller.selectShape(shapeIndex, mouse.modifiers & Qt.ShiftModifier);
             controller.beginEdit();
-            controller.selectShape(shapeIndex);
             let pos = mapToItem(baseShapeRoot, mouse.x, mouse.y);
             startMouseX = pos.x;
             startMouseY = pos.y;
@@ -75,10 +78,14 @@ Item {
                 let pos = mapToItem(baseShapeRoot, mouse.x, mouse.y);
                 let dx = pos.x - startMouseX;
                 let dy = pos.y - startMouseY;
-                if (mode === "line") {
-                    lineGeometryChanged(startFX + dx, startFY + dy, startTX + dx, startTY + dy);
+                if (isSelected) {
+                    controller.dragSelected(dx, dy);
                 } else {
-                    rectGeometryChanged(startShapeX + dx, startShapeY + dy, shapeWidth, shapeHeight);
+                    if (mode === "line") {
+                        lineGeometryChanged(startFX + dx, startFY + dy, startTX + dx, startTY + dy);
+                    } else {
+                        rectGeometryChanged(startShapeX + dx, startShapeY + dy, shapeWidth, shapeHeight);
+                    }
                 }
             }
         }
@@ -92,13 +99,12 @@ Item {
     Item {
         visible: isSelected && !isLocked
 
-        // Thin blue border for rect mode
+        // Thin blue border
         Rectangle {
-            visible: mode !== "line"
-            x: shapeX
-            y: shapeY
-            width: shapeWidth
-            height: shapeHeight
+            x: mode === "line" ? Math.min(shapeFromX, shapeToX) : shapeX
+            y: mode === "line" ? Math.min(shapeFromY, shapeToY) : shapeY
+            width: mode === "line" ? Math.abs(shapeFromX - shapeToX) : shapeWidth
+            height: mode === "line" ? Math.abs(shapeFromY - shapeToY) : shapeHeight
             color: "transparent"
             border.color: "#3b82f6"
             border.width: 1
@@ -106,7 +112,7 @@ Item {
 
         // Corner & Midpoint Handles (Rect Mode)
         Repeater {
-            model: mode === "rect" ? 8 : 0
+            model: (mode === "rect" && !controller.hasMultiSelection) ? 8 : 0
             Rectangle {
                 width: 10
                 height: 10
@@ -233,7 +239,7 @@ Item {
 
         // Endpoint Handles (Line Mode)
         Repeater {
-            model: mode === "line" ? 2 : 0
+            model: (mode === "line" && !controller.hasMultiSelection) ? 2 : 0
             Rectangle {
                 width: 12
                 height: 12

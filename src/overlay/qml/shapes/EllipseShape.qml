@@ -6,9 +6,6 @@ BaseShape {
     
     mode: "rect"
     shapeIndex: index
-    isSelected: model.selected
-    isLocked: model.locked
-
     shapeX: model.x
     shapeY: model.y
     shapeWidth: model.width

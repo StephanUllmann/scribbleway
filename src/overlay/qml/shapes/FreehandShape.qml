@@ -6,9 +6,6 @@ BaseShape {
     
     mode: "none" // Move only, no resizing
     shapeIndex: index
-    isSelected: model.selected
-    isLocked: model.locked
-
     // Compute bounding box from point list for selection and drag bounds
     property real calculatedMinX: 0
     property real calculatedMinY: 0

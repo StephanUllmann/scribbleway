@@ -6,6 +6,8 @@
 #include <QRegion>
 #include <QRect>
 #include <QAction>
+#include <QHash>
+#include <QSet>
 #include "shapesmodel.h"
 
 struct ShortcutAction {
@@ -28,6 +30,7 @@ class OverlayController : public QObject
     Q_PROPERTY(double defaultOpacity READ defaultOpacity WRITE setDefaultOpacity NOTIFY defaultOpacityChanged)
     Q_PROPERTY(QString defaultFontFamily READ defaultFontFamily WRITE setDefaultFontFamily NOTIFY defaultFontFamilyChanged)
     Q_PROPERTY(int defaultFontSize READ defaultFontSize WRITE setDefaultFontSize NOTIFY defaultFontSizeChanged)
+    Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
 
 public:
     explicit OverlayController(QObject *parent = nullptr);
@@ -37,6 +40,7 @@ public:
 
     QVariantList shapesMetadata() const;
     int selectedIndex() const;
+    bool hasMultiSelection() const;
 
     QString activeTool() const;
     void setActiveTool(const QString &tool);
@@ -71,6 +75,9 @@ public:
     Q_INVOKABLE QVariantMap getShape(int index) const;
     Q_INVOKABLE void copySelected();
     Q_INVOKABLE void pasteFromClipboard(double localX = -1.0, double localY = -1.0);
+    Q_INVOKABLE void selectShapesInRect(double rx, double ry, double rw, double rh, bool shiftHeld);
+    Q_INVOKABLE void beginDragSelection(bool shiftHeld);
+    Q_INVOKABLE void dragSelected(double dx, double dy);
 
     // DBus-invokable slots (also used in C++)
 public Q_SLOTS:
@@ -97,7 +104,7 @@ public Q_SLOTS:
 
     void setShapeLocked(int index, bool locked);
     void deleteShape(int index);
-    void selectShape(int index);
+    void selectShape(int index, bool shiftHeld = false);
 
 Q_SIGNALS:
     void windowChanged();
@@ -129,6 +136,8 @@ private:
     QQuickWindow *m_window = nullptr;
     ShapesModel m_shapesModel;
     int m_selectedIndex = -1;
+    QHash<int, QVariantMap> m_dragStartShapes;
+    QSet<int> m_preDragSelection;
 
     QString m_activeTool;
     QString m_currentMode = QStringLiteral("passthrough");

@@ -411,10 +411,10 @@ ColumnLayout {
                     height: Kirigami.Units.gridUnit * 2
                     
                     background: Rectangle {
-                        color: index === root.backend.selectedShapeIndex
+                        color: (modelData && modelData.selected)
                                ? Kirigami.Theme.highlightColor
                                : (hovered ? Kirigami.Theme.hoverColor : "transparent")
-                        opacity: index === root.backend.selectedShapeIndex ? 0.3 : 1.0
+                        opacity: (modelData && modelData.selected) ? 0.3 : 1.0
                         radius: 4
                     }
 
