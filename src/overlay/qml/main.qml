@@ -529,37 +529,33 @@ Window {
 
     Shortcut {
         sequence: "Delete"
+        enabled: !textEditor.visible
         onActivated: {
-            if (!textEditor.visible) {
-                controller.deleteSelected();
-            }
+            controller.deleteSelected();
         }
     }
 
     Shortcut {
         sequence: "Backspace"
+        enabled: !textEditor.visible
         onActivated: {
-            if (!textEditor.visible) {
-                controller.deleteSelected();
-            }
+            controller.deleteSelected();
         }
     }
 
     Shortcut {
         sequence: StandardKey.Copy
+        enabled: !textEditor.visible
         onActivated: {
-            if (!textEditor.visible) {
-                controller.copySelected();
-            }
+            controller.copySelected();
         }
     }
 
     Shortcut {
         sequence: StandardKey.Paste
+        enabled: !textEditor.visible
         onActivated: {
-            if (!textEditor.visible) {
-                controller.pasteFromClipboard(canvasWindow.lastMousePos.x, canvasWindow.lastMousePos.y);
-            }
+            controller.pasteFromClipboard(canvasWindow.lastMousePos.x, canvasWindow.lastMousePos.y);
         }
     }
 
