@@ -17,18 +17,7 @@ BaseShape {
     shapeWidth: calculatedWidth
     shapeHeight: calculatedHeight
 
-    property var points: {
-        let pts = model.points;
-        if (!pts || typeof pts !== "object" || !pts.length) return [];
-        let mapped = [];
-        for (let i = 0; i < pts.length; ++i) {
-            let p = pts[i];
-            if (p) {
-                mapped.push(Qt.point(p.x, p.y));
-            }
-        }
-        return mapped;
-    }
+    property var points: model.points || []
     onPointsChanged: recalculateBounds()
 
     onRectGeometryChanged: (nx, ny, nw, nh) => {

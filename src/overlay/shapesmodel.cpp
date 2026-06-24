@@ -1,4 +1,26 @@
 #include "shapesmodel.h"
+#include <QPointF>
+
+static QVariantList normalizePoints(const QVariant &var)
+{
+    QVariantList result;
+    const QVariantList list = var.toList();
+    result.reserve(list.size());
+    for (const QVariant &v : list) {
+        if (v.canConvert<QPointF>()) {
+            result.append(QVariant::fromValue(v.toPointF()));
+        } else if (v.typeId() == QMetaType::QVariantMap) {
+            const QVariantMap map = v.toMap();
+            result.append(QVariant::fromValue(QPointF(
+                map.value(QStringLiteral("x")).toDouble(),
+                map.value(QStringLiteral("y")).toDouble()
+            )));
+        } else {
+            result.append(v);
+        }
+    }
+    return result;
+}
 
 ShapesModel::ShapesModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -120,8 +142,12 @@ void ShapesModel::addShape(const QVariantMap &shape)
     if (!m_isApplyingUndo) {
         saveHistorySnapshot();
     }
+    QVariantMap normalizedShape = shape;
+    if (normalizedShape.contains(QStringLiteral("points"))) {
+        normalizedShape.insert(QStringLiteral("points"), normalizePoints(normalizedShape.value(QStringLiteral("points"))));
+    }
     beginInsertRows(QModelIndex(), m_shapes.size(), m_shapes.size());
-    m_shapes.append(shape);
+    m_shapes.append(normalizedShape);
     endInsertRows();
 }
 
@@ -145,8 +171,12 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
         auto &shape = m_shapes[index];
         QList<int> changedRoles;
         for (auto it = properties.begin(); it != properties.end(); ++it) {
-            if (shape.value(it.key()) != it.value()) {
-                shape[it.key()] = it.value();
+            QVariant val = it.value();
+            if (it.key() == QStringLiteral("points")) {
+                val = normalizePoints(val);
+            }
+            if (shape.value(it.key()) != val) {
+                shape[it.key()] = val;
                 // Map key back to role for fine-grained change signal
                 if (it.key() == QStringLiteral("type")) changedRoles << TypeRole;
                 else if (it.key() == QStringLiteral("color")) changedRoles << ColorRole;
