@@ -6,7 +6,7 @@ pkgrel=1
 pkgdesc="A modern, Excalidraw-style screen annotation utility designed for Wayland and KDE Plasma 6"
 arch=('x86_64')
 url="https://github.com/StephanUllmann/scribbleway"
-license=('GPL3')
+license=('GPL-2.0-or-later')
 depends=('plasma-desktop' 'layer-shell-qt' 'kglobalaccel' 'kdbusaddons' 'qt6-declarative' 'qt6-base')
 makedepends=('git' 'cmake' 'extra-cmake-modules')
 provides=('scribbleway')
@@ -22,7 +22,7 @@ pkgver() {
 
 build() {
   cmake -B build -S "${pkgname%-git}" \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=None \
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DKDE_INSTALL_LIBDIR=lib \
     -DKDE_INSTALL_USE_QT_SYS_PATHS=ON
