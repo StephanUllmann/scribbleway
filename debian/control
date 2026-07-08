@@ -1,0 +1,26 @@
+Source: scribbleway
+Section: kde
+Priority: optional
+Maintainer: Stephan Ullmann <stephan@example.com>
+Build-Depends: debhelper (>= 13),
+               cmake,
+               extra-cmake-modules,
+               libkf6globalaccel-dev,
+               libkf6dbusaddons-dev,
+               libplasma-dev | libplasma6-dev,
+               liblayershellqtinterface-dev,
+               qt6-base-dev,
+               qt6-declarative-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/StephanUllmann/scribbleway
+
+Package: scribbleway
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         qml6-module-qtquick-layouts,
+         qml6-module-qtquick-controls,
+         qml6-module-qtquick-templates,
+         qml6-module-qtquick-shapes
+Description: Screen annotation utility for KDE Plasma 6
+ A modern, Excalidraw-style screen annotation utility designed for Wayland and KDE Plasma 6.
