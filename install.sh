@@ -43,6 +43,16 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 
+# Check for existence of required desktop files (Fail Fast)
+if [ ! -f scribbleway.desktop ]; then
+    echo "Error: scribbleway.desktop not found in current directory." >&2
+    exit 1
+fi
+if [ ! -f scribbleway-autostart.desktop ]; then
+    echo "Error: scribbleway-autostart.desktop not found in current directory." >&2
+    exit 1
+fi
+
 # Check if cmake is available
 if ! command -v cmake &> /dev/null; then
     echo "Error: cmake is required but not found in PATH." >&2
@@ -70,18 +80,10 @@ echo "=== Copying and adjusting Desktop files ==="
 mkdir -p "$HOME/.local/share/applications"
 mkdir -p "$HOME/.config/autostart"
 
-if [ ! -f scribbleway.desktop ]; then
-    echo "Error: scribbleway.desktop not found in current directory." >&2
-    exit 1
-fi
-if [ ! -f scribbleway-autostart.desktop ]; then
-    echo "Error: scribbleway-autostart.desktop not found in current directory." >&2
-    exit 1
-fi
 
 # Replace Exec command with the absolute path to scribbleway-overlay in local bin
-sed "s#Exec=scribbleway-overlay#Exec=$HOME/.local/bin/scribbleway-overlay#g" scribbleway.desktop > "$HOME/.local/share/applications/scribbleway.desktop"
-sed "s#Exec=scribbleway-overlay#Exec=$HOME/.local/bin/scribbleway-overlay#g" scribbleway-autostart.desktop > "$HOME/.config/autostart/scribbleway-autostart.desktop"
+sed "s#Exec=scribbleway-overlay#Exec=\"$HOME/.local/bin/scribbleway-overlay\"#g" scribbleway.desktop > "$HOME/.local/share/applications/scribbleway.desktop"
+sed "s#Exec=scribbleway-overlay#Exec=\"$HOME/.local/bin/scribbleway-overlay\"#g" scribbleway-autostart.desktop > "$HOME/.config/autostart/scribbleway-autostart.desktop"
 chmod +x "$HOME/.local/share/applications/scribbleway.desktop"
 chmod +x "$HOME/.config/autostart/scribbleway-autostart.desktop"
 
@@ -89,13 +91,6 @@ echo "Desktop files successfully configured."
 
 # Helper function to check if the environment is already configured
 check_already_configured() {
-    # Check current active environment variables
-    if [[ ":$QML2_IMPORT_PATH:" == *":$HOME/.local/lib/qml:"* || ":$QML2_IMPORT_PATH:" == *":$HOME/.local/lib/x86_64-linux-gnu/qml:"* ]]; then
-        if [[ ":$QT_PLUGIN_PATH:" == *":$HOME/.local/lib/plugins:"* ]]; then
-            return 0
-        fi
-    fi
-
     # Check files for our specific block to be safe against future runs
     local files_configured=false
     for file in "$HOME/.bashrc" "$HOME/.profile"; do
@@ -115,6 +110,19 @@ check_already_configured() {
 # Helper function to apply environment profile updates
 apply_env_updates() {
     local applied=false
+    local has_profile=false
+
+    # Check if at least one of the profiles exists as a file
+    if [ -f "$HOME/.bashrc" ] || [ -f "$HOME/.profile" ]; then
+        has_profile=true
+    fi
+
+    if [ "$has_profile" = false ]; then
+        echo "Warning: Neither ~/.bashrc nor ~/.profile was found."
+        echo "Creating ~/.profile to configure environment variables."
+        touch "$HOME/.profile"
+    fi
+
     for file in "$HOME/.bashrc" "$HOME/.profile"; do
         if [ -f "$file" ]; then
             if grep -q "Added by Scribbleway installer" "$file"; then
@@ -124,8 +132,8 @@ apply_env_updates() {
                 cat << 'EOF' >> "$file"
 
 # Added by Scribbleway installer
-export QML2_IMPORT_PATH="$HOME/.local/lib/qml:$HOME/.local/lib/x86_64-linux-gnu/qml:${QML2_IMPORT_PATH:-}"
-export QT_PLUGIN_PATH="$HOME/.local/lib/plugins:${QT_PLUGIN_PATH:-}"
+export QML2_IMPORT_PATH="$HOME/.local/lib/qml:$HOME/.local/lib/x86_64-linux-gnu/qml${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}"
+export QT_PLUGIN_PATH="$HOME/.local/lib/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
 EOF
                 applied=true
             fi
@@ -133,7 +141,7 @@ EOF
     done
     if [ "$applied" = true ]; then
         echo "Environment variables added successfully to shell profiles."
-        echo "Please restart your terminal or run: source ~/.bashrc"
+        echo "Please restart your terminal or run: source ~/.profile"
     fi
 }
 
@@ -155,23 +163,23 @@ else
         apply_env_updates
     elif [ "$PROMPT_ENV" = true ]; then
         echo
-        read -p "Would you like to add the required QML/Qt environment variables to your shell profiles (~/.bashrc and ~/.profile)? [y/N] " -n 1 -r
+        read -p "Would you like to add the required QML/Qt environment variables to your shell profiles (~/.bashrc and ~/.profile)? [y/N] " -n 1 -r || REPLY="n"
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             apply_env_updates
         else
             echo "Skipped shell environment variable configuration."
             echo "Remember to set them manually if QML plugins fail to load:"
-            echo "  export QML2_IMPORT_PATH=\"\$HOME/.local/lib/qml:\$HOME/.local/lib/x86_64-linux-gnu/qml:\${QML2_IMPORT_PATH:-}\""
-            echo "  export QT_PLUGIN_PATH=\"\$HOME/.local/lib/plugins:\${QT_PLUGIN_PATH:-}\""
+            echo "  export QML2_IMPORT_PATH=\"\$HOME/.local/lib/qml:\$HOME/.local/lib/x86_64-linux-gnu/qml\${QML2_IMPORT_PATH:+:\$QML2_IMPORT_PATH}\""
+            echo "  export QT_PLUGIN_PATH=\"\$HOME/.local/lib/plugins\${QT_PLUGIN_PATH:+:\$QT_PLUGIN_PATH}\""
         fi
     else
         echo
         echo "Non-interactive mode: Skipping automatic shell profile updates."
         echo "To apply them automatically, run this script with --yes / --non-interactive."
         echo "Otherwise, add the following to your ~/.bashrc or ~/.profile:"
-        echo "  export QML2_IMPORT_PATH=\"\$HOME/.local/lib/qml:\$HOME/.local/lib/x86_64-linux-gnu/qml:\${QML2_IMPORT_PATH:-}\""
-        echo "  export QT_PLUGIN_PATH=\"\$HOME/.local/lib/plugins:\${QT_PLUGIN_PATH:-}\""
+        echo "  export QML2_IMPORT_PATH=\"\$HOME/.local/lib/qml:\$HOME/.local/lib/x86_64-linux-gnu/qml\${QML2_IMPORT_PATH:+:\$QML2_IMPORT_PATH}\""
+        echo "  export QT_PLUGIN_PATH=\"\$HOME/.local/lib/plugins\${QT_PLUGIN_PATH:+:\$QT_PLUGIN_PATH}\""
     fi
 fi
 
