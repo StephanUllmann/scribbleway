@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QColor>
 #include <QCursor>
 #include <QPointF>
 #include <QLineF>
@@ -874,30 +875,15 @@ QJsonObject OverlayController::convertToExcalidraw(const QVariantMap &shape)
     QJsonObject elem;
     QString type = shape.value(QStringLiteral("type")).toString();
     
-    QString excalType;
-    if (type == QStringLiteral("rectangle")) {
-        excalType = QStringLiteral("rectangle");
-    } else if (type == QStringLiteral("ellipse")) {
-        excalType = QStringLiteral("ellipse");
-    } else if (type == QStringLiteral("text")) {
-        excalType = QStringLiteral("text");
-    } else if (type == QStringLiteral("line")) {
-        excalType = QStringLiteral("line");
-    } else if (type == QStringLiteral("arrow")) {
-        excalType = QStringLiteral("arrow");
-    } else if (type == QStringLiteral("freehand")) {
-        excalType = QStringLiteral("freedraw");
-    } else {
+    QString excalType = (type == QStringLiteral("freehand")) ? QStringLiteral("freedraw") : type;
+    if (excalType != QStringLiteral("rectangle") && excalType != QStringLiteral("ellipse") &&
+        excalType != QStringLiteral("text") && excalType != QStringLiteral("line") &&
+        excalType != QStringLiteral("arrow") && excalType != QStringLiteral("freedraw")) {
         return elem;
     }
     elem.insert(QStringLiteral("type"), excalType);
 
-    #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    #else
-    QString id = QUuid::createUuid().toString().replace(QLatin1Char('{'), QString()).replace(QLatin1Char('}'), QString());
-    #endif
-    id = id.mid(0, 8);
+    QString id = QUuid::createUuid().toString(QUuid::WithoutBraces).mid(0, 8);
     elem.insert(QStringLiteral("id"), id);
     
     elem.insert(QStringLiteral("strokeColor"), shape.value(QStringLiteral("color"), QStringLiteral("#000000")).toString());
@@ -918,7 +904,7 @@ QJsonObject OverlayController::convertToExcalidraw(const QVariantMap &shape)
     elem.insert(QStringLiteral("updated"), 0);
     elem.insert(QStringLiteral("locked"), shape.value(QStringLiteral("locked"), false).toBool());
 
-    if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse")) {
+    if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
         elem.insert(QStringLiteral("x"), shape.value(QStringLiteral("x")).toDouble());
         elem.insert(QStringLiteral("y"), shape.value(QStringLiteral("y")).toDouble());
         elem.insert(QStringLiteral("width"), shape.value(QStringLiteral("width")).toDouble());
@@ -934,23 +920,19 @@ QJsonObject OverlayController::convertToExcalidraw(const QVariantMap &shape)
             } else {
                 elem.insert(QStringLiteral("roundness"), QJsonValue::Null);
             }
+        } else if (type == QStringLiteral("text")) {
+            elem.insert(QStringLiteral("text"), shape.value(QStringLiteral("text")).toString());
+            elem.insert(QStringLiteral("fontSize"), shape.value(QStringLiteral("fontSize"), 20).toInt());
+            
+            QString family = shape.value(QStringLiteral("fontFamily")).toString().toLower();
+            int excalFont = 2;
+            if (family.contains(QStringLiteral("code")) || family.contains(QStringLiteral("mono"))) {
+                excalFont = 3;
+            } else if (family.contains(QStringLiteral("hand")) || family.contains(QStringLiteral("script")) || family.contains(QStringLiteral("virgil"))) {
+                excalFont = 1;
+            }
+            elem.insert(QStringLiteral("fontFamily"), excalFont);
         }
-    } else if (type == QStringLiteral("text")) {
-        elem.insert(QStringLiteral("x"), shape.value(QStringLiteral("x")).toDouble());
-        elem.insert(QStringLiteral("y"), shape.value(QStringLiteral("y")).toDouble());
-        elem.insert(QStringLiteral("width"), shape.value(QStringLiteral("width")).toDouble());
-        elem.insert(QStringLiteral("height"), shape.value(QStringLiteral("height")).toDouble());
-        elem.insert(QStringLiteral("text"), shape.value(QStringLiteral("text")).toString());
-        elem.insert(QStringLiteral("fontSize"), shape.value(QStringLiteral("fontSize"), 20).toInt());
-        
-        QString family = shape.value(QStringLiteral("fontFamily")).toString().toLower();
-        int excalFont = 2;
-        if (family.contains(QStringLiteral("code")) || family.contains(QStringLiteral("mono"))) {
-            excalFont = 3;
-        } else if (family.contains(QStringLiteral("hand")) || family.contains(QStringLiteral("script")) || family.contains(QStringLiteral("virgil"))) {
-            excalFont = 1;
-        }
-        elem.insert(QStringLiteral("fontFamily"), excalFont);
     } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
         double fromX = shape.value(QStringLiteral("fromX")).toDouble();
         double fromY = shape.value(QStringLiteral("fromY")).toDouble();
@@ -962,11 +944,7 @@ QJsonObject OverlayController::convertToExcalidraw(const QVariantMap &shape)
         elem.insert(QStringLiteral("width"), qAbs(toX - fromX));
         elem.insert(QStringLiteral("height"), qAbs(toY - fromY));
         
-        QJsonArray pts;
-        QJsonArray p1; p1.append(0.0); p1.append(0.0);
-        QJsonArray p2; p2.append(toX - fromX); p2.append(toY - fromY);
-        pts.append(p1);
-        pts.append(p2);
+        QJsonArray pts = { QJsonArray{0.0, 0.0}, QJsonArray{toX - fromX, toY - fromY} };
         elem.insert(QStringLiteral("points"), pts);
     } else if (type == QStringLiteral("freehand")) {
         QVariantList pointsList = shape.value(QStringLiteral("points")).toList();
@@ -1024,28 +1002,16 @@ QVariantMap OverlayController::convertFromExcalidraw(const QJsonObject &elem)
     QVariantMap shape;
     QString excalType = elem.value(QStringLiteral("type")).toString();
     
-    QString type;
-    if (excalType == QStringLiteral("rectangle")) {
-        type = QStringLiteral("rectangle");
-    } else if (excalType == QStringLiteral("ellipse")) {
-        type = QStringLiteral("ellipse");
-    } else if (excalType == QStringLiteral("text")) {
-        type = QStringLiteral("text");
-    } else if (excalType == QStringLiteral("line")) {
-        type = QStringLiteral("line");
-    } else if (excalType == QStringLiteral("arrow")) {
-        type = QStringLiteral("arrow");
-    } else if (excalType == QStringLiteral("freedraw")) {
-        type = QStringLiteral("freehand");
-    } else {
+    QString type = (excalType == QStringLiteral("freedraw")) ? QStringLiteral("freehand") : excalType;
+    if (type != QStringLiteral("rectangle") && type != QStringLiteral("ellipse") &&
+        type != QStringLiteral("text") && type != QStringLiteral("line") &&
+        type != QStringLiteral("arrow") && type != QStringLiteral("freehand")) {
         return shape;
     }
     shape.insert(QStringLiteral("type"), type);
 
     QString strokeColor = elem.value(QStringLiteral("strokeColor")).toString(QStringLiteral("#000000"));
-    if (strokeColor.compare(QStringLiteral("#ffffff"), Qt::CaseInsensitive) == 0 ||
-        strokeColor.compare(QStringLiteral("#fff"), Qt::CaseInsensitive) == 0 ||
-        strokeColor.compare(QStringLiteral("white"), Qt::CaseInsensitive) == 0) {
+    if (QColor(strokeColor) == Qt::white) {
         strokeColor = QStringLiteral("#e63946");
     }
     shape.insert(QStringLiteral("color"), strokeColor);
@@ -1057,42 +1023,31 @@ QVariantMap OverlayController::convertFromExcalidraw(const QJsonObject &elem)
     shape.insert(QStringLiteral("selected"), true);
     shape.insert(QStringLiteral("locked"), false);
 
-    if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse")) {
+    if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
         shape.insert(QStringLiteral("x"), elem.value(QStringLiteral("x")).toDouble());
         shape.insert(QStringLiteral("y"), elem.value(QStringLiteral("y")).toDouble());
         shape.insert(QStringLiteral("width"), elem.value(QStringLiteral("width")).toDouble());
         shape.insert(QStringLiteral("height"), elem.value(QStringLiteral("height")).toDouble());
         
         if (type == QStringLiteral("rectangle")) {
-            QJsonValue roundnessVal = elem.value(QStringLiteral("roundness"));
-            if (roundnessVal.isObject()) {
-                QJsonObject roundnessObj = roundnessVal.toObject();
-                int radius = static_cast<int>(roundnessObj.value(QStringLiteral("value")).toDouble(8.0));
-                shape.insert(QStringLiteral("borderRadius"), radius);
-            } else if (roundnessVal.isNull()) {
-                shape.insert(QStringLiteral("borderRadius"), 0);
+            QJsonValue rv = elem.value(QStringLiteral("roundness"));
+            int radius = rv.isObject() ? static_cast<int>(rv.toObject().value(QStringLiteral("value")).toDouble(8.0)) : (rv.isNull() ? 0 : 8);
+            shape.insert(QStringLiteral("borderRadius"), radius);
+        } else if (type == QStringLiteral("text")) {
+            shape.insert(QStringLiteral("text"), elem.value(QStringLiteral("text")).toString());
+            shape.insert(QStringLiteral("fontSize"), static_cast<int>(elem.value(QStringLiteral("fontSize")).toDouble(20.0)));
+            
+            int excalFont = static_cast<int>(elem.value(QStringLiteral("fontFamily")).toDouble(2.0));
+            QString family;
+            if (excalFont == 3) {
+                family = QStringLiteral("Cascadia Code");
+            } else if (excalFont == 1) {
+                family = QStringLiteral("Virgil");
             } else {
-                shape.insert(QStringLiteral("borderRadius"), 8);
+                family = QStringLiteral("sans-serif");
             }
+            shape.insert(QStringLiteral("fontFamily"), family);
         }
-    } else if (type == QStringLiteral("text")) {
-        shape.insert(QStringLiteral("x"), elem.value(QStringLiteral("x")).toDouble());
-        shape.insert(QStringLiteral("y"), elem.value(QStringLiteral("y")).toDouble());
-        shape.insert(QStringLiteral("width"), elem.value(QStringLiteral("width")).toDouble());
-        shape.insert(QStringLiteral("height"), elem.value(QStringLiteral("height")).toDouble());
-        shape.insert(QStringLiteral("text"), elem.value(QStringLiteral("text")).toString());
-        shape.insert(QStringLiteral("fontSize"), static_cast<int>(elem.value(QStringLiteral("fontSize")).toDouble(20.0)));
-        
-        int excalFont = static_cast<int>(elem.value(QStringLiteral("fontFamily")).toDouble(2.0));
-        QString family;
-        if (excalFont == 3) {
-            family = QStringLiteral("Cascadia Code");
-        } else if (excalFont == 1) {
-            family = QStringLiteral("Virgil");
-        } else {
-            family = QStringLiteral("sans-serif");
-        }
-        shape.insert(QStringLiteral("fontFamily"), family);
     } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
         double x = elem.value(QStringLiteral("x")).toDouble();
         double y = elem.value(QStringLiteral("y")).toDouble();
