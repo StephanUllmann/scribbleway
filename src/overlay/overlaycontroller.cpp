@@ -726,6 +726,7 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
 
     QJsonObject jsonObj = doc.object();
     QVariantList list;
+    // ponytail: only support excalidraw clipboard format, add fallback if other formats are needed
     if (jsonObj.value(QStringLiteral("type")).toString() == QStringLiteral("excalidraw/clipboard")) {
         QJsonArray elements = jsonObj.value(QStringLiteral("elements")).toArray();
         for (const QJsonValue &val : elements) {
@@ -734,19 +735,6 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
             if (!shape.isEmpty()) {
                 list.append(shape);
             }
-        }
-    } else if (jsonObj.contains(QStringLiteral("scribbleway_group"))) {
-        list = jsonObj.value(QStringLiteral("scribbleway_group")).toArray().toVariantList();
-    } else if (jsonObj.contains(QStringLiteral("type"))) {
-        QString t = jsonObj.value(QStringLiteral("type")).toString();
-        if (t == QStringLiteral("rectangle") || t == QStringLiteral("ellipse") || t == QStringLiteral("text") ||
-            t == QStringLiteral("line") || t == QStringLiteral("arrow") || t == QStringLiteral("freedraw")) {
-            QVariantMap shape = convertFromExcalidraw(jsonObj);
-            if (!shape.isEmpty()) {
-                list.append(shape);
-            }
-        } else {
-            list.append(jsonObj.toVariantMap());
         }
     }
 
