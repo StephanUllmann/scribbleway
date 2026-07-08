@@ -111,13 +111,7 @@ int main(int argc, char *argv[])
         QVariantMap state = controller.getSelectionState();
         QString currentColor = state.value(QStringLiteral("color")).toString().toLower();
         
-        int idx = -1;
-        for (int i = 0; i < presetColors.size(); ++i) {
-            if (presetColors[i].toLower() == currentColor) {
-                idx = i;
-                break;
-            }
-        }
+        int idx = presetColors.indexOf(currentColor);
         
         int nextIdx = (idx + 1) % presetColors.size();
         QString nextColor = presetColors[nextIdx];
