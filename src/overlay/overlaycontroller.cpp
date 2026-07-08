@@ -3,6 +3,7 @@
 #include <LayerShellQt/Window>
 #include <QScreen>
 #include <QGuiApplication>
+#include <QUuid>
 #include <KGlobalAccel>
 #include <QClipboard>
 #include <QJsonDocument>
@@ -694,18 +695,21 @@ void OverlayController::changeShortcut(const QString &actionId, const QString &s
 
 void OverlayController::copySelected()
 {
-    QVariantList selectedShapes;
+    QJsonArray elements;
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
         if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
             QVariantMap shape = m_shapesModel.shapes().at(i);
-            shape.insert(QStringLiteral("selected"), false);
-            selectedShapes.append(shape);
+            QJsonObject elemObj = convertToExcalidraw(shape);
+            if (!elemObj.isEmpty()) {
+                elements.append(elemObj);
+            }
         }
     }
 
-    if (!selectedShapes.isEmpty()) {
+    if (!elements.isEmpty()) {
         QJsonObject rootObj;
-        rootObj.insert(QStringLiteral("scribbleway_group"), QJsonArray::fromVariantList(selectedShapes));
+        rootObj.insert(QStringLiteral("type"), QStringLiteral("excalidraw/clipboard"));
+        rootObj.insert(QStringLiteral("elements"), elements);
         QJsonDocument doc(rootObj);
         QGuiApplication::clipboard()->setText(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
     }
@@ -721,10 +725,28 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
 
     QJsonObject jsonObj = doc.object();
     QVariantList list;
-    if (jsonObj.contains(QStringLiteral("scribbleway_group"))) {
+    if (jsonObj.value(QStringLiteral("type")).toString() == QStringLiteral("excalidraw/clipboard")) {
+        QJsonArray elements = jsonObj.value(QStringLiteral("elements")).toArray();
+        for (const QJsonValue &val : elements) {
+            QJsonObject elemObj = val.toObject();
+            QVariantMap shape = convertFromExcalidraw(elemObj);
+            if (!shape.isEmpty()) {
+                list.append(shape);
+            }
+        }
+    } else if (jsonObj.contains(QStringLiteral("scribbleway_group"))) {
         list = jsonObj.value(QStringLiteral("scribbleway_group")).toArray().toVariantList();
     } else if (jsonObj.contains(QStringLiteral("type"))) {
-        list.append(jsonObj.toVariantMap());
+        QString t = jsonObj.value(QStringLiteral("type")).toString();
+        if (t == QStringLiteral("rectangle") || t == QStringLiteral("ellipse") || t == QStringLiteral("text") ||
+            t == QStringLiteral("line") || t == QStringLiteral("arrow") || t == QStringLiteral("freedraw")) {
+            QVariantMap shape = convertFromExcalidraw(jsonObj);
+            if (!shape.isEmpty()) {
+                list.append(shape);
+            }
+        } else {
+            list.append(jsonObj.toVariantMap());
+        }
     }
 
     if (list.isEmpty()) return;
@@ -845,6 +867,274 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
     m_shapesModel.endEdit();
     notifyShapesChanged();
     notifySelectionChanged();
+}
+
+QJsonObject OverlayController::convertToExcalidraw(const QVariantMap &shape)
+{
+    QJsonObject elem;
+    QString type = shape.value(QStringLiteral("type")).toString();
+    
+    QString excalType;
+    if (type == QStringLiteral("rectangle")) {
+        excalType = QStringLiteral("rectangle");
+    } else if (type == QStringLiteral("ellipse")) {
+        excalType = QStringLiteral("ellipse");
+    } else if (type == QStringLiteral("text")) {
+        excalType = QStringLiteral("text");
+    } else if (type == QStringLiteral("line")) {
+        excalType = QStringLiteral("line");
+    } else if (type == QStringLiteral("arrow")) {
+        excalType = QStringLiteral("arrow");
+    } else if (type == QStringLiteral("freehand")) {
+        excalType = QStringLiteral("freedraw");
+    } else {
+        return elem;
+    }
+    elem.insert(QStringLiteral("type"), excalType);
+
+    #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    #else
+    QString id = QUuid::createUuid().toString().replace(QLatin1Char('{'), QString()).replace(QLatin1Char('}'), QString());
+    #endif
+    id = id.mid(0, 8);
+    elem.insert(QStringLiteral("id"), id);
+    
+    elem.insert(QStringLiteral("strokeColor"), shape.value(QStringLiteral("color"), QStringLiteral("#000000")).toString());
+    elem.insert(QStringLiteral("strokeWidth"), shape.value(QStringLiteral("strokeWidth"), 1.0).toDouble());
+    
+    double opacityFloat = shape.value(QStringLiteral("opacity"), 1.0).toDouble();
+    elem.insert(QStringLiteral("opacity"), qRound(opacityFloat * 100.0));
+    
+    elem.insert(QStringLiteral("backgroundColor"), QStringLiteral("transparent"));
+    elem.insert(QStringLiteral("fillStyle"), QStringLiteral("solid"));
+    elem.insert(QStringLiteral("strokeStyle"), QStringLiteral("solid"));
+    elem.insert(QStringLiteral("roughness"), 0);
+    elem.insert(QStringLiteral("angle"), 0.0);
+    elem.insert(QStringLiteral("isDeleted"), false);
+    elem.insert(QStringLiteral("seed"), 123456);
+    elem.insert(QStringLiteral("version"), 1);
+    elem.insert(QStringLiteral("versionNonce"), 123456789);
+    elem.insert(QStringLiteral("updated"), 0);
+    elem.insert(QStringLiteral("locked"), shape.value(QStringLiteral("locked"), false).toBool());
+
+    if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse")) {
+        elem.insert(QStringLiteral("x"), shape.value(QStringLiteral("x")).toDouble());
+        elem.insert(QStringLiteral("y"), shape.value(QStringLiteral("y")).toDouble());
+        elem.insert(QStringLiteral("width"), shape.value(QStringLiteral("width")).toDouble());
+        elem.insert(QStringLiteral("height"), shape.value(QStringLiteral("height")).toDouble());
+        
+        if (type == QStringLiteral("rectangle")) {
+            int borderRadius = shape.value(QStringLiteral("borderRadius"), 0).toInt();
+            if (borderRadius > 0) {
+                QJsonObject roundnessObj;
+                roundnessObj.insert(QStringLiteral("type"), 3);
+                roundnessObj.insert(QStringLiteral("value"), borderRadius);
+                elem.insert(QStringLiteral("roundness"), roundnessObj);
+            } else {
+                elem.insert(QStringLiteral("roundness"), QJsonValue::Null);
+            }
+        }
+    } else if (type == QStringLiteral("text")) {
+        elem.insert(QStringLiteral("x"), shape.value(QStringLiteral("x")).toDouble());
+        elem.insert(QStringLiteral("y"), shape.value(QStringLiteral("y")).toDouble());
+        elem.insert(QStringLiteral("width"), shape.value(QStringLiteral("width")).toDouble());
+        elem.insert(QStringLiteral("height"), shape.value(QStringLiteral("height")).toDouble());
+        elem.insert(QStringLiteral("text"), shape.value(QStringLiteral("text")).toString());
+        elem.insert(QStringLiteral("fontSize"), shape.value(QStringLiteral("fontSize"), 20).toInt());
+        
+        QString family = shape.value(QStringLiteral("fontFamily")).toString().toLower();
+        int excalFont = 2;
+        if (family.contains(QStringLiteral("code")) || family.contains(QStringLiteral("mono"))) {
+            excalFont = 3;
+        } else if (family.contains(QStringLiteral("hand")) || family.contains(QStringLiteral("script")) || family.contains(QStringLiteral("virgil"))) {
+            excalFont = 1;
+        }
+        elem.insert(QStringLiteral("fontFamily"), excalFont);
+    } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+        double fromX = shape.value(QStringLiteral("fromX")).toDouble();
+        double fromY = shape.value(QStringLiteral("fromY")).toDouble();
+        double toX = shape.value(QStringLiteral("toX")).toDouble();
+        double toY = shape.value(QStringLiteral("toY")).toDouble();
+        
+        elem.insert(QStringLiteral("x"), fromX);
+        elem.insert(QStringLiteral("y"), fromY);
+        elem.insert(QStringLiteral("width"), qAbs(toX - fromX));
+        elem.insert(QStringLiteral("height"), qAbs(toY - fromY));
+        
+        QJsonArray pts;
+        QJsonArray p1; p1.append(0.0); p1.append(0.0);
+        QJsonArray p2; p2.append(toX - fromX); p2.append(toY - fromY);
+        pts.append(p1);
+        pts.append(p2);
+        elem.insert(QStringLiteral("points"), pts);
+    } else if (type == QStringLiteral("freehand")) {
+        QVariantList pointsList = shape.value(QStringLiteral("points")).toList();
+        if (pointsList.isEmpty()) {
+            return elem;
+        }
+        
+        double minX = std::numeric_limits<double>::max();
+        double maxX = std::numeric_limits<double>::lowest();
+        double minY = std::numeric_limits<double>::max();
+        double maxY = std::numeric_limits<double>::lowest();
+        
+        QList<QPointF> qpts;
+        for (const QVariant &v : pointsList) {
+            QPointF p;
+            if (v.canConvert<QPointF>()) {
+                p = v.toPointF();
+            } else if (v.typeId() == QMetaType::QVariantMap) {
+                QVariantMap m = v.toMap();
+                p = QPointF(m.value(QStringLiteral("x")).toDouble(), m.value(QStringLiteral("y")).toDouble());
+            } else {
+                continue;
+            }
+            qpts.append(p);
+            minX = qMin(minX, p.x());
+            maxX = qMax(maxX, p.x());
+            minY = qMin(minY, p.y());
+            maxY = qMax(maxY, p.y());
+        }
+        
+        if (qpts.isEmpty()) {
+            return elem;
+        }
+        
+        elem.insert(QStringLiteral("x"), minX);
+        elem.insert(QStringLiteral("y"), minY);
+        elem.insert(QStringLiteral("width"), maxX - minX);
+        elem.insert(QStringLiteral("height"), maxY - minY);
+        
+        QJsonArray pts;
+        for (const QPointF &p : qpts) {
+            QJsonArray ptVal;
+            ptVal.append(p.x() - minX);
+            ptVal.append(p.y() - minY);
+            pts.append(ptVal);
+        }
+        elem.insert(QStringLiteral("points"), pts);
+    }
+
+    return elem;
+}
+
+QVariantMap OverlayController::convertFromExcalidraw(const QJsonObject &elem)
+{
+    QVariantMap shape;
+    QString excalType = elem.value(QStringLiteral("type")).toString();
+    
+    QString type;
+    if (excalType == QStringLiteral("rectangle")) {
+        type = QStringLiteral("rectangle");
+    } else if (excalType == QStringLiteral("ellipse")) {
+        type = QStringLiteral("ellipse");
+    } else if (excalType == QStringLiteral("text")) {
+        type = QStringLiteral("text");
+    } else if (excalType == QStringLiteral("line")) {
+        type = QStringLiteral("line");
+    } else if (excalType == QStringLiteral("arrow")) {
+        type = QStringLiteral("arrow");
+    } else if (excalType == QStringLiteral("freedraw")) {
+        type = QStringLiteral("freehand");
+    } else {
+        return shape;
+    }
+    shape.insert(QStringLiteral("type"), type);
+
+    QString strokeColor = elem.value(QStringLiteral("strokeColor")).toString(QStringLiteral("#000000"));
+    if (strokeColor.compare(QStringLiteral("#ffffff"), Qt::CaseInsensitive) == 0 ||
+        strokeColor.compare(QStringLiteral("#fff"), Qt::CaseInsensitive) == 0 ||
+        strokeColor.compare(QStringLiteral("white"), Qt::CaseInsensitive) == 0) {
+        strokeColor = QStringLiteral("#e63946");
+    }
+    shape.insert(QStringLiteral("color"), strokeColor);
+    shape.insert(QStringLiteral("strokeWidth"), elem.value(QStringLiteral("strokeWidth")).toDouble(1.0));
+    
+    double opacityInt = elem.value(QStringLiteral("opacity")).toDouble(100.0);
+    shape.insert(QStringLiteral("opacity"), opacityInt / 100.0);
+    
+    shape.insert(QStringLiteral("selected"), true);
+    shape.insert(QStringLiteral("locked"), false);
+
+    if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse")) {
+        shape.insert(QStringLiteral("x"), elem.value(QStringLiteral("x")).toDouble());
+        shape.insert(QStringLiteral("y"), elem.value(QStringLiteral("y")).toDouble());
+        shape.insert(QStringLiteral("width"), elem.value(QStringLiteral("width")).toDouble());
+        shape.insert(QStringLiteral("height"), elem.value(QStringLiteral("height")).toDouble());
+        
+        if (type == QStringLiteral("rectangle")) {
+            QJsonValue roundnessVal = elem.value(QStringLiteral("roundness"));
+            if (roundnessVal.isObject()) {
+                QJsonObject roundnessObj = roundnessVal.toObject();
+                int radius = static_cast<int>(roundnessObj.value(QStringLiteral("value")).toDouble(8.0));
+                shape.insert(QStringLiteral("borderRadius"), radius);
+            } else if (roundnessVal.isNull()) {
+                shape.insert(QStringLiteral("borderRadius"), 0);
+            } else {
+                shape.insert(QStringLiteral("borderRadius"), 8);
+            }
+        }
+    } else if (type == QStringLiteral("text")) {
+        shape.insert(QStringLiteral("x"), elem.value(QStringLiteral("x")).toDouble());
+        shape.insert(QStringLiteral("y"), elem.value(QStringLiteral("y")).toDouble());
+        shape.insert(QStringLiteral("width"), elem.value(QStringLiteral("width")).toDouble());
+        shape.insert(QStringLiteral("height"), elem.value(QStringLiteral("height")).toDouble());
+        shape.insert(QStringLiteral("text"), elem.value(QStringLiteral("text")).toString());
+        shape.insert(QStringLiteral("fontSize"), static_cast<int>(elem.value(QStringLiteral("fontSize")).toDouble(20.0)));
+        
+        int excalFont = static_cast<int>(elem.value(QStringLiteral("fontFamily")).toDouble(2.0));
+        QString family;
+        if (excalFont == 3) {
+            family = QStringLiteral("Cascadia Code");
+        } else if (excalFont == 1) {
+            family = QStringLiteral("Virgil");
+        } else {
+            family = QStringLiteral("sans-serif");
+        }
+        shape.insert(QStringLiteral("fontFamily"), family);
+    } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+        double x = elem.value(QStringLiteral("x")).toDouble();
+        double y = elem.value(QStringLiteral("y")).toDouble();
+        QJsonArray pts = elem.value(QStringLiteral("points")).toArray();
+        
+        double fromX = x;
+        double fromY = y;
+        double toX = x;
+        double toY = y;
+        
+        if (pts.size() >= 2) {
+            QJsonArray p1 = pts.first().toArray();
+            QJsonArray p2 = pts.last().toArray();
+            if (p1.size() >= 2 && p2.size() >= 2) {
+                fromX = x + p1.at(0).toDouble();
+                fromY = y + p1.at(1).toDouble();
+                toX = x + p2.at(0).toDouble();
+                toY = y + p2.at(1).toDouble();
+            }
+        }
+        
+        shape.insert(QStringLiteral("fromX"), fromX);
+        shape.insert(QStringLiteral("fromY"), fromY);
+        shape.insert(QStringLiteral("toX"), toX);
+        shape.insert(QStringLiteral("toY"), toY);
+    } else if (type == QStringLiteral("freehand")) {
+        double x = elem.value(QStringLiteral("x")).toDouble();
+        double y = elem.value(QStringLiteral("y")).toDouble();
+        QJsonArray pts = elem.value(QStringLiteral("points")).toArray();
+        
+        QVariantList pointsList;
+        for (const QJsonValue &v : pts) {
+            QJsonArray pt = v.toArray();
+            if (pt.size() >= 2) {
+                QPointF p(x + pt.at(0).toDouble(), y + pt.at(1).toDouble());
+                pointsList.append(QVariant::fromValue(p));
+            }
+        }
+        shape.insert(QStringLiteral("points"), pointsList);
+    }
+
+    return shape;
 }
 
 bool OverlayController::hasMultiSelection() const

@@ -23,6 +23,7 @@ private Q_SLOTS:
     void testOverlayControllerCopyPaste();
     void testMultiSelection();
     void testBorderRadius();
+    void testExcalidrawPasteCompatibility();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -326,9 +327,15 @@ void ShapesModelTest::testOverlayControllerCopyPaste()
     QVERIFY(!clipboardText.isEmpty());
     QJsonDocument doc = QJsonDocument::fromJson(clipboardText.toUtf8());
     QVERIFY(doc.isObject());
-    QJsonArray group = doc.object().value(QStringLiteral("scribbleway_group")).toArray();
-    QCOMPARE(group.size(), 1);
-    QCOMPARE(group.at(0).toObject().value(QStringLiteral("type")).toString(), QStringLiteral("rectangle"));
+    QCOMPARE(doc.object().value(QStringLiteral("type")).toString(), QStringLiteral("excalidraw/clipboard"));
+    QJsonArray elements = doc.object().value(QStringLiteral("elements")).toArray();
+    QCOMPARE(elements.size(), 1);
+    QJsonObject rectObj = elements.at(0).toObject();
+    QCOMPARE(rectObj.value(QStringLiteral("type")).toString(), QStringLiteral("rectangle"));
+    QCOMPARE(rectObj.value(QStringLiteral("x")).toDouble(), 10.0);
+    QCOMPARE(rectObj.value(QStringLiteral("y")).toDouble(), 20.0);
+    QCOMPARE(rectObj.value(QStringLiteral("width")).toDouble(), 100.0);
+    QCOMPARE(rectObj.value(QStringLiteral("height")).toDouble(), 50.0);
 
     // Deselect shape
     controller.setSelectedIndex(-1);
@@ -467,6 +474,163 @@ void ShapesModelTest::testBorderRadius()
 
     QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 20);
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 20);
+}
+
+void ShapesModelTest::testExcalidrawPasteCompatibility()
+{
+    OverlayController controller;
+
+    // Build the Excalidraw clipboard JSON payload
+    QJsonObject clipboardObj;
+    clipboardObj.insert(QStringLiteral("type"), QStringLiteral("excalidraw/clipboard"));
+
+    QJsonArray elements;
+
+    // 1. Rectangle element with roundness and extraneous fields
+    QJsonObject rectObj;
+    rectObj.insert(QStringLiteral("type"), QStringLiteral("rectangle"));
+    rectObj.insert(QStringLiteral("x"), 10.0);
+    rectObj.insert(QStringLiteral("y"), 20.0);
+    rectObj.insert(QStringLiteral("width"), 100.0);
+    rectObj.insert(QStringLiteral("height"), 50.0);
+    rectObj.insert(QStringLiteral("strokeColor"), QStringLiteral("#ff0000"));
+    rectObj.insert(QStringLiteral("strokeWidth"), 2.0);
+    rectObj.insert(QStringLiteral("opacity"), 80.0);
+    rectObj.insert(QStringLiteral("seed"), 123456);
+    rectObj.insert(QStringLiteral("version"), 1);
+    rectObj.insert(QStringLiteral("roughness"), 1);
+    rectObj.insert(QStringLiteral("angle"), 0.5);
+    rectObj.insert(QStringLiteral("fillStyle"), QStringLiteral("solid"));
+    rectObj.insert(QStringLiteral("strokeStyle"), QStringLiteral("dashed"));
+    
+    QJsonObject roundnessObj;
+    roundnessObj.insert(QStringLiteral("type"), 3);
+    roundnessObj.insert(QStringLiteral("value"), 15);
+    rectObj.insert(QStringLiteral("roundness"), roundnessObj);
+    
+    elements.append(rectObj);
+
+    // 2. Text element with font family/size and extraneous fields
+    QJsonObject textObj;
+    textObj.insert(QStringLiteral("type"), QStringLiteral("text"));
+    textObj.insert(QStringLiteral("x"), 50.0);
+    textObj.insert(QStringLiteral("y"), 60.0);
+    textObj.insert(QStringLiteral("width"), 80.0);
+    textObj.insert(QStringLiteral("height"), 30.0);
+    textObj.insert(QStringLiteral("strokeColor"), QStringLiteral("#ffffff"));
+    textObj.insert(QStringLiteral("strokeWidth"), 1.0);
+    textObj.insert(QStringLiteral("opacity"), 100.0);
+    textObj.insert(QStringLiteral("text"), QStringLiteral("Hello World"));
+    textObj.insert(QStringLiteral("fontSize"), 24);
+    textObj.insert(QStringLiteral("fontFamily"), 3);
+    textObj.insert(QStringLiteral("seed"), 789012);
+    textObj.insert(QStringLiteral("version"), 2);
+    textObj.insert(QStringLiteral("roughness"), 0);
+    textObj.insert(QStringLiteral("angle"), 0.0);
+    textObj.insert(QStringLiteral("fillStyle"), QStringLiteral("hachure"));
+    textObj.insert(QStringLiteral("strokeStyle"), QStringLiteral("solid"));
+    
+    elements.append(textObj);
+
+    // 3. Freedraw (freehand) element with relative coordinates and extraneous fields
+    QJsonObject freeObj;
+    freeObj.insert(QStringLiteral("type"), QStringLiteral("freedraw"));
+    freeObj.insert(QStringLiteral("x"), 200.0);
+    freeObj.insert(QStringLiteral("y"), 100.0);
+    freeObj.insert(QStringLiteral("strokeColor"), QStringLiteral("#0000ff"));
+    freeObj.insert(QStringLiteral("strokeWidth"), 3.0);
+    freeObj.insert(QStringLiteral("opacity"), 90.0);
+    freeObj.insert(QStringLiteral("seed"), 345678);
+    freeObj.insert(QStringLiteral("version"), 3);
+    freeObj.insert(QStringLiteral("roughness"), 2);
+    freeObj.insert(QStringLiteral("angle"), 0.0);
+    freeObj.insert(QStringLiteral("fillStyle"), QStringLiteral("solid"));
+    freeObj.insert(QStringLiteral("strokeStyle"), QStringLiteral("solid"));
+
+    QJsonArray pts;
+    QJsonArray p1; p1.append(0.0); p1.append(0.0);
+    QJsonArray p2; p2.append(10.0); p2.append(20.0);
+    QJsonArray p3; p3.append(50.0); p3.append(50.0);
+    pts.append(p1);
+    pts.append(p2);
+    pts.append(p3);
+    freeObj.insert(QStringLiteral("points"), pts);
+
+    elements.append(freeObj);
+
+    clipboardObj.insert(QStringLiteral("elements"), elements);
+
+    QJsonDocument doc(clipboardObj);
+    QGuiApplication::clipboard()->setText(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+
+    // Paste at the center of the bounding box (130.0, 85.0) to have zero shift (dx=0, dy=0)
+    controller.pasteFromClipboard(130.0, 85.0);
+
+    QCOMPARE(controller.shapesModel()->rowCount(), 3);
+
+    // Get the pasted shapes from the model
+    QVariantMap pastedRect = controller.shapesModel()->shapes().at(0);
+    QVariantMap pastedText = controller.shapesModel()->shapes().at(1);
+    QVariantMap pastedFree = controller.shapesModel()->shapes().at(2);
+
+    // Verify Rectangle properties
+    QCOMPARE(pastedRect[QStringLiteral("type")].toString(), QStringLiteral("rectangle"));
+    QCOMPARE(pastedRect[QStringLiteral("x")].toDouble(), 10.0);
+    QCOMPARE(pastedRect[QStringLiteral("y")].toDouble(), 20.0);
+    QCOMPARE(pastedRect[QStringLiteral("width")].toDouble(), 100.0);
+    QCOMPARE(pastedRect[QStringLiteral("height")].toDouble(), 50.0);
+    QCOMPARE(pastedRect[QStringLiteral("color")].toString(), QStringLiteral("#ff0000"));
+    QCOMPARE(pastedRect[QStringLiteral("strokeWidth")].toDouble(), 2.0);
+    QCOMPARE(pastedRect[QStringLiteral("opacity")].toDouble(), 0.8);
+    QCOMPARE(pastedRect[QStringLiteral("borderRadius")].toInt(), 15);
+
+    // Verify Text properties
+    QCOMPARE(pastedText[QStringLiteral("type")].toString(), QStringLiteral("text"));
+    QCOMPARE(pastedText[QStringLiteral("x")].toDouble(), 50.0);
+    QCOMPARE(pastedText[QStringLiteral("y")].toDouble(), 60.0);
+    QCOMPARE(pastedText[QStringLiteral("width")].toDouble(), 80.0);
+    QCOMPARE(pastedText[QStringLiteral("height")].toDouble(), 30.0);
+    QCOMPARE(pastedText[QStringLiteral("color")].toString(), QStringLiteral("#e63946"));
+    QCOMPARE(pastedText[QStringLiteral("strokeWidth")].toDouble(), 1.0);
+    QCOMPARE(pastedText[QStringLiteral("opacity")].toDouble(), 1.0);
+    QCOMPARE(pastedText[QStringLiteral("text")].toString(), QStringLiteral("Hello World"));
+    QCOMPARE(pastedText[QStringLiteral("fontSize")].toInt(), 24);
+    QCOMPARE(pastedText[QStringLiteral("fontFamily")].toString(), QStringLiteral("Cascadia Code"));
+
+    // Verify Freehand properties and absolute coordinates
+    QCOMPARE(pastedFree[QStringLiteral("type")].toString(), QStringLiteral("freehand"));
+    QCOMPARE(pastedFree[QStringLiteral("color")].toString(), QStringLiteral("#0000ff"));
+    QCOMPARE(pastedFree[QStringLiteral("strokeWidth")].toDouble(), 3.0);
+    QCOMPARE(pastedFree[QStringLiteral("opacity")].toDouble(), 0.9);
+
+    QVariantList points = pastedFree[QStringLiteral("points")].toList();
+    QCOMPARE(points.size(), 3);
+    QCOMPARE(points.at(0).toPointF().x(), 200.0);
+    QCOMPARE(points.at(0).toPointF().y(), 100.0);
+    QCOMPARE(points.at(1).toPointF().x(), 210.0);
+    QCOMPARE(points.at(1).toPointF().y(), 120.0);
+    QCOMPARE(points.at(2).toPointF().x(), 250.0);
+    QCOMPARE(points.at(2).toPointF().y(), 150.0);
+
+    // Verify that non-relevant/extraneous properties are completely stripped and not loaded
+    const QStringList extraneousKeys = {
+        QStringLiteral("seed"),
+        QStringLiteral("version"),
+        QStringLiteral("roughness"),
+        QStringLiteral("angle"),
+        QStringLiteral("fillStyle"),
+        QStringLiteral("strokeStyle"),
+        QStringLiteral("updated"),
+        QStringLiteral("versionNonce"),
+        QStringLiteral("isDeleted"),
+        QStringLiteral("roundness")
+    };
+
+    for (const QVariantMap &shape : {pastedRect, pastedText, pastedFree}) {
+        for (const QString &key : extraneousKeys) {
+            QVERIFY(!shape.contains(key));
+        }
+    }
 }
 
 

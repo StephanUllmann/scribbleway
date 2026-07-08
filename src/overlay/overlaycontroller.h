@@ -2,6 +2,8 @@
 
 #include <QObject>
 #include <QVariantList>
+#include <QVariantMap>
+#include <QJsonObject>
 #include <QQuickWindow>
 #include <QRegion>
 #include <QRect>
@@ -136,6 +138,8 @@ private:
     void notifySelectionChanged();
     void notifyShapesChanged();
     void ensureSelectMode();
+    QJsonObject convertToExcalidraw(const QVariantMap &shape);
+    QVariantMap convertFromExcalidraw(const QJsonObject &elem);
 
     QList<ShortcutAction> m_shortcutActions;
 
