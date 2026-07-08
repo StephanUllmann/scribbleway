@@ -42,17 +42,16 @@ int main(int argc, char *argv[])
 
     // Setup global actions and connect to KGlobalAccel
     auto setupGlobalAction = [&](const QString &objName, const QString &text, 
-                                 const QKeySequence &defaultShortcut, const QString &toolName = QString()) {
+                                 const QList<QKeySequence> &defaultShortcuts, const QString &toolName = QString()) {
         QAction *action = new QAction(&app);
         action->setObjectName(objName);
         action->setText(text);
         
-        QList<QKeySequence> shortcuts = {defaultShortcut};
-        KGlobalAccel::self()->setDefaultShortcut(action, shortcuts);
-        KGlobalAccel::self()->setShortcut(action, shortcuts);
+        KGlobalAccel::self()->setDefaultShortcut(action, defaultShortcuts);
+        KGlobalAccel::self()->setShortcut(action, defaultShortcuts);
         
         controller.registerAction(action, objName, text);
-        
+
         if (!toolName.isEmpty()) {
             QObject::connect(action, &QAction::triggered, &controller, [&controller, toolName]() {
                 controller.startDrawingGesture(toolName);
@@ -63,27 +62,27 @@ int main(int argc, char *argv[])
 
     // Toggle-to-draw actions
     setupGlobalAction(QStringLiteral("draw_freehand"), QStringLiteral("Draw Freehand"), 
-                      QKeySequence(QStringLiteral("Meta+Shift+F")), QStringLiteral("freehand"));
+                      {QKeySequence(QStringLiteral("Meta+Shift+F"))}, QStringLiteral("freehand"));
     setupGlobalAction(QStringLiteral("draw_arrow"), QStringLiteral("Draw Arrow"), 
-                      QKeySequence(QStringLiteral("Meta+Shift+A")), QStringLiteral("arrow"));
+                      {QKeySequence(QStringLiteral("Meta+Shift+A"))}, QStringLiteral("arrow"));
     setupGlobalAction(QStringLiteral("draw_rectangle"), QStringLiteral("Draw Rectangle"), 
-                      QKeySequence(QStringLiteral("Meta+Shift+V")), QStringLiteral("rectangle"));
+                      {QKeySequence(QStringLiteral("Meta+Shift+V"))}, QStringLiteral("rectangle"));
     setupGlobalAction(QStringLiteral("draw_ellipse"), QStringLiteral("Draw Ellipse"), 
-                      QKeySequence(QStringLiteral("Meta+Shift+E")), QStringLiteral("ellipse"));
+                      {QKeySequence(QStringLiteral("Meta+Shift+E"))}, QStringLiteral("ellipse"));
     setupGlobalAction(QStringLiteral("draw_line"), QStringLiteral("Draw Line"), 
-                      QKeySequence(QStringLiteral("Meta+Shift+L")), QStringLiteral("line"));
+                      {QKeySequence(QStringLiteral("Meta+Shift+L"))}, QStringLiteral("line"));
     setupGlobalAction(QStringLiteral("draw_text"), QStringLiteral("Draw Text"), 
-                      QKeySequence(QStringLiteral("Meta+Shift+T")), QStringLiteral("text"));
+                      {QKeySequence(QStringLiteral("Meta+Shift+T"))}, QStringLiteral("text"));
 
     // Trigger actions
     QAction *actionUndo = setupGlobalAction(QStringLiteral("action_undo"), QStringLiteral("Undo Last Action"), 
-                                            QKeySequence(QStringLiteral("Meta+Ctrl+Z")));
+                                            {QKeySequence(QStringLiteral("Meta+Ctrl+Z"))});
     QAction *actionClear = setupGlobalAction(QStringLiteral("action_clear"), QStringLiteral("Clear Screen"), 
-                                             QKeySequence(QStringLiteral("Meta+Ctrl+Delete")));
+                                             {QKeySequence(QStringLiteral("Meta+Ctrl+Delete"))});
     QAction *actionSelect = setupGlobalAction(QStringLiteral("action_select_mode"), QStringLiteral("Toggle Select Mode"), 
-                                              QKeySequence(QStringLiteral("Meta+Shift+S")));
+                                              {QKeySequence(QStringLiteral("Meta+Shift+S"))});
     QAction *actionActivateSelect = setupGlobalAction(QStringLiteral("action_activate_select_mode"), QStringLiteral("Enter Selection Mode"), 
-                                                      QKeySequence(QStringLiteral("Meta+Shift+X")));
+                                                      {QKeySequence(QStringLiteral("Meta+Shift+X"))});
 
     QObject::connect(actionUndo, &QAction::triggered, &controller, &OverlayController::undo);
     QObject::connect(actionClear, &QAction::triggered, &controller, &OverlayController::clear);
@@ -95,6 +94,68 @@ int main(int argc, char *argv[])
         }
     });
     QObject::connect(actionActivateSelect, &QAction::triggered, &controller, &OverlayController::enterSelectMode);
+
+    const QStringList presetColors = {
+        QStringLiteral("#e63946"),  // 1: Red
+        QStringLiteral("#f4a261"),  // 2: Orange
+        QStringLiteral("#e9c46a"),  // 3: Yellow
+        QStringLiteral("#2a9d8f"),  // 4: Green
+        QStringLiteral("#457b9d"),  // 5: Blue
+        QStringLiteral("#8338ec"),  // 6: Violet
+    };
+
+    // Cycle color shortcut (Meta+Shift+Q)
+    QAction *actionCycleColor = setupGlobalAction(QStringLiteral("action_cycle_color"), QStringLiteral("Cycle Preset Color"),
+                                                  {QKeySequence(QStringLiteral("Meta+Shift+Q"))});
+    QObject::connect(actionCycleColor, &QAction::triggered, &controller, [&controller, presetColors]() {
+        QVariantMap state = controller.getSelectionState();
+        QString currentColor = state.value(QStringLiteral("color")).toString().toLower();
+        
+        int idx = -1;
+        for (int i = 0; i < presetColors.size(); ++i) {
+            if (presetColors[i].toLower() == currentColor) {
+                idx = i;
+                break;
+            }
+        }
+        
+        int nextIdx = (idx + 1) % presetColors.size();
+        QString nextColor = presetColors[nextIdx];
+        
+        controller.updateProperties({{QStringLiteral("color"), nextColor}});
+    });
+
+    // Grow shortcut: increase font size for text, stroke width for others (Meta+Shift+Ü)
+    QAction *actionGrow = setupGlobalAction(QStringLiteral("action_grow"), QStringLiteral("Grow Selected"),
+                                            {QKeySequence(QStringLiteral("Meta+Shift+Ü"))});
+    QObject::connect(actionGrow, &QAction::triggered, &controller, [&controller]() {
+        QVariantMap state = controller.getSelectionState();
+        if (!state.value(QStringLiteral("hasSelection")).toBool()) return;
+        QString type = state.value(QStringLiteral("type")).toString();
+        if (type.toLower() == QStringLiteral("text")) {
+            int fontSize = state.value(QStringLiteral("fontSize"), 20).toInt();
+            controller.updateProperties({{QStringLiteral("fontSize"), fontSize + 2}});
+        } else {
+            int strokeWidth = state.value(QStringLiteral("strokeWidth"), 2).toInt();
+            controller.updateProperties({{QStringLiteral("strokeWidth"), qMin(strokeWidth + 1, 15)}});
+        }
+    });
+
+    // Shrink shortcut: decrease font size for text, stroke width for others (Meta+Shift+Ö)
+    QAction *actionShrink = setupGlobalAction(QStringLiteral("action_shrink"), QStringLiteral("Shrink Selected"),
+                                              {QKeySequence(QStringLiteral("Meta+Shift+Ö"))});
+    QObject::connect(actionShrink, &QAction::triggered, &controller, [&controller]() {
+        QVariantMap state = controller.getSelectionState();
+        if (!state.value(QStringLiteral("hasSelection")).toBool()) return;
+        QString type = state.value(QStringLiteral("type")).toString();
+        if (type.toLower() == QStringLiteral("text")) {
+            int fontSize = state.value(QStringLiteral("fontSize"), 20).toInt();
+            controller.updateProperties({{QStringLiteral("fontSize"), qMax(fontSize - 2, 10)}});
+        } else {
+            int strokeWidth = state.value(QStringLiteral("strokeWidth"), 2).toInt();
+            controller.updateProperties({{QStringLiteral("strokeWidth"), qMax(strokeWidth - 1, 1)}});
+        }
+    });
 
     // Load QML Engine
     QQmlApplicationEngine engine;
