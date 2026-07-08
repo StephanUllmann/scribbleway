@@ -22,7 +22,7 @@ OverlayController::OverlayController(QObject *parent)
     , m_activeTool(QStringLiteral("freehand"))
     , m_defaultColor(QStringLiteral("#e63946"))
 {
-    m_defaultFontFamily = DBusUtils::defaultFontFamily();
+    m_defaultFontFamily = QStringLiteral("monospace");
     m_shapesModel.setParent(this);
 }
 
@@ -196,8 +196,10 @@ void OverlayController::addShape(const QVariantMap &shape)
         demarshalledShape.insert(it.key(), DBusUtils::demarshal(it.value()));
     }
     qDebug() << "OverlayController::addShape - demarshalled shape:" << demarshalledShape;
+    m_shapesModel.beginEdit();
     m_shapesModel.addShape(demarshalledShape);
     setSelectedIndex(m_shapesModel.rowCount() - 1);
+    m_shapesModel.endEdit();
     notifyShapesChanged();
 }
 
@@ -531,6 +533,7 @@ void OverlayController::lowerSelected()
 void OverlayController::setShapeLocked(int index, bool locked)
 {
     if (index >= 0 && index < m_shapesModel.rowCount()) {
+        m_shapesModel.beginEdit();
         m_shapesModel.updateShape(index, {{QStringLiteral("locked"), locked}});
         // If locked, we deselect it
         if (locked && index == m_selectedIndex) {
@@ -538,6 +541,7 @@ void OverlayController::setShapeLocked(int index, bool locked)
         } else {
             notifyShapesChanged();
         }
+        m_shapesModel.endEdit();
     }
 }
 
@@ -841,11 +845,7 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
             shape.insert(QStringLiteral("points"), newPoints);
         }
 
-        QVariantMap demarshalledShape;
-        for (auto it = shape.begin(); it != shape.end(); ++it) {
-            demarshalledShape.insert(it.key(), DBusUtils::demarshal(it.value()));
-        }
-        m_shapesModel.addShape(demarshalledShape);
+        m_shapesModel.addShape(shape);
         pastedIndices.append(m_shapesModel.rowCount() - 1);
     }
 

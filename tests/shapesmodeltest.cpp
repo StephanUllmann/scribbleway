@@ -1,8 +1,17 @@
 #include <QtTest>
 #include <QClipboard>
 #include <QGuiApplication>
+#include <QProcess>
+#include <QDBusConnection>
+#include <QDBusInterface>
+#include <QDBusReply>
+#include <QSignalSpy>
+#include <QAction>
+#include <QKeySequence>
+#include <KGlobalAccel>
 #include "shapesmodel.h"
 #include "overlaycontroller.h"
+#include "appletbackend.h"
 #include <QFontDatabase>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -12,6 +21,8 @@ class ShapesModelTest : public QObject
     Q_OBJECT
 
 private Q_SLOTS:
+    void initTestCase();
+    void cleanupTestCase();
     void testAddShapeUndo();
     void testRemoveShapeUndo();
     void testClearUndo();
@@ -24,6 +35,13 @@ private Q_SLOTS:
     void testMultiSelection();
     void testBorderRadius();
     void testExcalidrawPasteCompatibility();
+    void testZOrder();
+    void testShapeLock();
+    void testToolModeTransitions();
+    void testPropertiesDefaultsUpdates();
+    void testMultiSelectionDragDelete();
+    void testExcalidrawSchemaEdgeCases();
+    void testAppletBackendIntegration();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -187,11 +205,7 @@ void ShapesModelTest::testOverlayControllerProperties()
     QCOMPARE(selectionState[QStringLiteral("color")].toString(), QStringLiteral("#e63946")); // default color
     QCOMPARE(selectionState[QStringLiteral("strokeWidth")].toInt(), 2);
     QCOMPARE(selectionState[QStringLiteral("opacity")].toDouble(), 1.0);
-    const QStringList families = QFontDatabase::families();
-    QString expectedFont = families.contains(QStringLiteral("Cascadia Code"), Qt::CaseInsensitive)
-        ? QStringLiteral("Cascadia Code")
-        : QStringLiteral("monospace");
-    QCOMPARE(selectionState[QStringLiteral("fontFamily")].toString(), expectedFont);
+    QCOMPARE(selectionState[QStringLiteral("fontFamily")].toString(), QStringLiteral("monospace"));
     QCOMPARE(selectionState[QStringLiteral("fontSize")].toInt(), 20);
     QCOMPARE(selectionState[QStringLiteral("selectedIndex")].toInt(), -1);
 
@@ -633,6 +647,560 @@ void ShapesModelTest::testExcalidrawPasteCompatibility()
     }
 }
 
+
+void ShapesModelTest::initTestCase()
+{
+    // Clean up any stray scribbleway-overlay instances
+    QProcess::execute(QStringLiteral("pkill"), {QStringLiteral("-f"), QStringLiteral("scribbleway-overlay")});
+    QTest::qWait(100);
+}
+
+void ShapesModelTest::cleanupTestCase()
+{
+}
+
+void ShapesModelTest::testZOrder()
+{
+    OverlayController controller;
+    
+    QVariantMap s1;
+    s1[QStringLiteral("type")] = QStringLiteral("rectangle");
+    QVariantMap s2;
+    s2[QStringLiteral("type")] = QStringLiteral("ellipse");
+    QVariantMap s3;
+    s3[QStringLiteral("type")] = QStringLiteral("line");
+    
+    controller.addShape(s1);
+    controller.addShape(s2);
+    controller.addShape(s3);
+    
+    QCOMPARE(controller.shapesModel()->rowCount(), 3);
+    QCOMPARE(controller.selectedIndex(), 2);
+    
+    // Top boundary constraint
+    controller.raiseSelected();
+    QCOMPARE(controller.selectedIndex(), 2);
+    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("type")].toString(), QStringLiteral("line"));
+    
+    // Select shape 1
+    controller.selectShape(1, false);
+    QCOMPARE(controller.selectedIndex(), 1);
+    
+    // Raise shape 1
+    controller.raiseSelected();
+    QCOMPARE(controller.selectedIndex(), 2);
+    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("type")].toString(), QStringLiteral("ellipse"));
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("type")].toString(), QStringLiteral("line"));
+    
+    // Raising it again should be no-op
+    controller.raiseSelected();
+    QCOMPARE(controller.selectedIndex(), 2);
+    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("type")].toString(), QStringLiteral("ellipse"));
+    
+    // Lower shape 2
+    controller.lowerSelected();
+    QCOMPARE(controller.selectedIndex(), 1);
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("type")].toString(), QStringLiteral("ellipse"));
+    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("type")].toString(), QStringLiteral("line"));
+    
+    // Lower it again
+    controller.lowerSelected();
+    QCOMPARE(controller.selectedIndex(), 0);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("type")].toString(), QStringLiteral("ellipse"));
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("type")].toString(), QStringLiteral("rectangle"));
+    
+    // Lower it again should be no-op
+    controller.lowerSelected();
+    QCOMPARE(controller.selectedIndex(), 0);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("type")].toString(), QStringLiteral("ellipse"));
+    
+    // Test undoing the last lower operation
+    controller.undo();
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("type")].toString(), QStringLiteral("rectangle"));
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("type")].toString(), QStringLiteral("ellipse"));
+    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("type")].toString(), QStringLiteral("line"));
+    QCOMPARE(controller.selectedIndex(), -1);
+}
+
+void ShapesModelTest::testShapeLock()
+{
+    OverlayController controller;
+    
+    QVariantMap shape;
+    shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+    controller.addShape(shape);
+    
+    QCOMPARE(controller.selectedIndex(), 0);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), false);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), true);
+    
+    // Lock shape
+    controller.setShapeLocked(0, true);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), true);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), false);
+    QCOMPARE(controller.selectedIndex(), -1);
+    
+    // Undo locking
+    controller.undo();
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), false);
+    
+    // Select again
+    controller.selectShape(0, false);
+    QCOMPARE(controller.selectedIndex(), 0);
+    
+    // Toggle lock
+    controller.toggleLock();
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), true);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), false);
+    QCOMPARE(controller.selectedIndex(), -1);
+    
+    // Unlock via toggleLock
+    controller.selectShape(0, false);
+    controller.toggleLock();
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), false);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), true);
+    
+    // Multi-selection locking
+    QVariantMap shape2;
+    shape2[QStringLiteral("type")] = QStringLiteral("ellipse");
+    controller.addShape(shape2);
+    
+    controller.selectShape(0, false);
+    controller.selectShape(1, true);
+    QCOMPARE(controller.hasMultiSelection(), true);
+    
+    controller.toggleLock();
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), true);
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("locked")].toBool(), true);
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), false);
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("selected")].toBool(), false);
+    QCOMPARE(controller.selectedIndex(), -1);
+    
+    controller.selectShape(0, false);
+    controller.selectShape(1, true);
+    controller.toggleLock();
+    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), false);
+    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("locked")].toBool(), false);
+}
+
+void ShapesModelTest::testToolModeTransitions()
+{
+    OverlayController controller;
+    
+    QCOMPARE(controller.currentMode(), QStringLiteral("passthrough"));
+    QCOMPARE(controller.activeTool(), QStringLiteral("freehand"));
+    
+    QVariantMap shape;
+    shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+    controller.addShape(shape);
+    QCOMPARE(controller.selectedIndex(), 0);
+    
+    controller.setTool(QStringLiteral("rectangle"));
+    QCOMPARE(controller.activeTool(), QStringLiteral("rectangle"));
+    QCOMPARE(controller.currentMode(), QStringLiteral("draw"));
+    QCOMPARE(controller.selectedIndex(), -1);
+    
+    controller.setTool(QString());
+    QCOMPARE(controller.activeTool(), QString());
+    QCOMPARE(controller.currentMode(), QStringLiteral("passthrough"));
+    
+    controller.setTool(QStringLiteral("ellipse"));
+    controller.enterSelectMode();
+    QCOMPARE(controller.currentMode(), QStringLiteral("select"));
+    QCOMPARE(controller.activeTool(), QString());
+    
+    controller.setTool(QStringLiteral("ellipse"));
+    controller.enterPassthroughMode();
+    QCOMPARE(controller.currentMode(), QStringLiteral("passthrough"));
+    QCOMPARE(controller.activeTool(), QString());
+}
+
+void ShapesModelTest::testPropertiesDefaultsUpdates()
+{
+    OverlayController controller;
+    
+    QVariantMap defaults;
+    defaults[QStringLiteral("color")] = QStringLiteral("#00ff00");
+    defaults[QStringLiteral("strokeWidth")] = 6;
+    defaults[QStringLiteral("opacity")] = 0.75;
+    defaults[QStringLiteral("fontFamily")] = QStringLiteral("serif");
+    defaults[QStringLiteral("fontSize")] = 25;
+    defaults[QStringLiteral("borderRadius")] = 15;
+    
+    controller.updateProperties(defaults);
+    
+    QCOMPARE(controller.defaultColor(), QStringLiteral("#00ff00"));
+    QCOMPARE(controller.defaultStrokeWidth(), 6);
+    QCOMPARE(controller.defaultOpacity(), 0.75);
+    QCOMPARE(controller.defaultFontFamily(), QStringLiteral("serif"));
+    QCOMPARE(controller.defaultFontSize(), 25);
+    QCOMPARE(controller.defaultBorderRadius(), 15);
+    
+    QVariantMap s1; s1[QStringLiteral("type")] = QStringLiteral("rectangle");
+    QVariantMap s2; s2[QStringLiteral("type")] = QStringLiteral("ellipse");
+    QVariantMap s3; s3[QStringLiteral("type")] = QStringLiteral("text");
+    controller.addShape(s1);
+    controller.addShape(s2);
+    controller.addShape(s3);
+    
+    controller.selectShape(0, false);
+    controller.selectShape(1, true);
+    
+    QVariantMap updates;
+    updates[QStringLiteral("color")] = QStringLiteral("#ff00ff");
+    updates[QStringLiteral("strokeWidth")] = 10;
+    updates[QStringLiteral("opacity")] = 0.4;
+    updates[QStringLiteral("borderRadius")] = 30;
+    
+    controller.updateProperties(updates);
+    
+    QVariantMap shape0 = controller.shapesModel()->shapes().at(0);
+    QVariantMap shape1 = controller.shapesModel()->shapes().at(1);
+    QVariantMap shape2 = controller.shapesModel()->shapes().at(2);
+    
+    QCOMPARE(shape0[QStringLiteral("color")].toString(), QStringLiteral("#ff00ff"));
+    QCOMPARE(shape0[QStringLiteral("strokeWidth")].toInt(), 10);
+    QCOMPARE(shape0[QStringLiteral("opacity")].toDouble(), 0.4);
+    QCOMPARE(shape0[QStringLiteral("borderRadius")].toInt(), 30);
+    
+    QCOMPARE(shape1[QStringLiteral("color")].toString(), QStringLiteral("#ff00ff"));
+    QCOMPARE(shape1[QStringLiteral("strokeWidth")].toInt(), 10);
+    QCOMPARE(shape1[QStringLiteral("opacity")].toDouble(), 0.4);
+    QCOMPARE(shape1[QStringLiteral("borderRadius")].toInt(), 30);
+    
+    QVERIFY(shape2[QStringLiteral("color")].toString() != QStringLiteral("#ff00ff"));
+    
+    QCOMPARE(controller.defaultColor(), QStringLiteral("#ff00ff"));
+    QCOMPARE(controller.defaultStrokeWidth(), 10);
+    QCOMPARE(controller.defaultOpacity(), 0.4);
+    QCOMPARE(controller.defaultBorderRadius(), 30);
+}
+
+void ShapesModelTest::testMultiSelectionDragDelete()
+{
+    OverlayController controller;
+    
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("x")] = 10.0; rect[QStringLiteral("y")] = 15.0;
+    
+    QVariantMap ellipse;
+    ellipse[QStringLiteral("type")] = QStringLiteral("ellipse");
+    ellipse[QStringLiteral("x")] = 20.0; ellipse[QStringLiteral("y")] = 25.0;
+    
+    QVariantMap text;
+    text[QStringLiteral("type")] = QStringLiteral("text");
+    text[QStringLiteral("x")] = 30.0; text[QStringLiteral("y")] = 35.0;
+    
+    QVariantMap line;
+    line[QStringLiteral("type")] = QStringLiteral("line");
+    line[QStringLiteral("fromX")] = 5.0; line[QStringLiteral("fromY")] = 10.0;
+    line[QStringLiteral("toX")] = 50.0; line[QStringLiteral("toY")] = 60.0;
+    
+    QVariantMap arrow;
+    arrow[QStringLiteral("type")] = QStringLiteral("arrow");
+    arrow[QStringLiteral("fromX")] = 15.0; arrow[QStringLiteral("fromY")] = 20.0;
+    arrow[QStringLiteral("toX")] = 70.0; arrow[QStringLiteral("toY")] = 80.0;
+    
+    QVariantMap freehand;
+    freehand[QStringLiteral("type")] = QStringLiteral("freehand");
+    QVariantList pts;
+    pts.append(QPointF(0.0, 1.0));
+    pts.append(QPointF(10.0, 12.0));
+    freehand[QStringLiteral("points")] = pts;
+    
+    QVariantMap freehandMap;
+    freehandMap[QStringLiteral("type")] = QStringLiteral("freehand");
+    QVariantList ptsMap;
+    ptsMap.append(QVariantMap{{QStringLiteral("x"), 100.0}, {QStringLiteral("y"), 150.0}});
+    ptsMap.append(QVariantMap{{QStringLiteral("x"), 110.0}, {QStringLiteral("y"), 165.0}});
+    freehandMap[QStringLiteral("points")] = ptsMap;
+    
+    controller.addShape(rect);
+    controller.addShape(ellipse);
+    controller.addShape(text);
+    controller.addShape(line);
+    controller.addShape(arrow);
+    controller.addShape(freehand);
+    controller.addShape(freehandMap);
+    
+    QCOMPARE(controller.shapesModel()->rowCount(), 7);
+    
+    controller.setSelectedIndex(-1);
+    for (int i = 0; i < 7; ++i) {
+        controller.selectShape(i, true);
+    }
+    QCOMPARE(controller.hasMultiSelection(), true);
+    
+    controller.beginEdit();
+    controller.dragSelected(10.0, 20.0);
+    controller.endEdit();
+    
+    QVariantMap r_rect = controller.shapesModel()->shapes().at(0);
+    QCOMPARE(r_rect[QStringLiteral("x")].toDouble(), 20.0);
+    QCOMPARE(r_rect[QStringLiteral("y")].toDouble(), 35.0);
+    
+    QVariantMap r_ellipse = controller.shapesModel()->shapes().at(1);
+    QCOMPARE(r_ellipse[QStringLiteral("x")].toDouble(), 30.0);
+    QCOMPARE(r_ellipse[QStringLiteral("y")].toDouble(), 45.0);
+    
+    QVariantMap r_text = controller.shapesModel()->shapes().at(2);
+    QCOMPARE(r_text[QStringLiteral("x")].toDouble(), 40.0);
+    QCOMPARE(r_text[QStringLiteral("y")].toDouble(), 55.0);
+    
+    QVariantMap r_line = controller.shapesModel()->shapes().at(3);
+    QCOMPARE(r_line[QStringLiteral("fromX")].toDouble(), 15.0);
+    QCOMPARE(r_line[QStringLiteral("fromY")].toDouble(), 30.0);
+    QCOMPARE(r_line[QStringLiteral("toX")].toDouble(), 60.0);
+    QCOMPARE(r_line[QStringLiteral("toY")].toDouble(), 80.0);
+    
+    QVariantMap r_arrow = controller.shapesModel()->shapes().at(4);
+    QCOMPARE(r_arrow[QStringLiteral("fromX")].toDouble(), 25.0);
+    QCOMPARE(r_arrow[QStringLiteral("fromY")].toDouble(), 40.0);
+    QCOMPARE(r_arrow[QStringLiteral("toX")].toDouble(), 80.0);
+    QCOMPARE(r_arrow[QStringLiteral("toY")].toDouble(), 100.0);
+    
+    QVariantMap r_freehand = controller.shapesModel()->shapes().at(5);
+    QVariantList r_pts = r_freehand[QStringLiteral("points")].toList();
+    QCOMPARE(r_pts.at(0).toPointF().x(), 10.0);
+    QCOMPARE(r_pts.at(0).toPointF().y(), 21.0);
+    QCOMPARE(r_pts.at(1).toPointF().x(), 20.0);
+    QCOMPARE(r_pts.at(1).toPointF().y(), 32.0);
+    
+    QVariantMap r_freehandMap = controller.shapesModel()->shapes().at(6);
+    QVariantList r_ptsMap = r_freehandMap[QStringLiteral("points")].toList();
+    QCOMPARE(r_ptsMap.at(0).toPointF().x(), 110.0);
+    QCOMPARE(r_ptsMap.at(0).toPointF().y(), 170.0);
+    QCOMPARE(r_ptsMap.at(1).toPointF().x(), 120.0);
+    QCOMPARE(r_ptsMap.at(1).toPointF().y(), 185.0);
+    
+    controller.deleteSelected();
+    QCOMPARE(controller.shapesModel()->rowCount(), 0);
+}
+
+void ShapesModelTest::testExcalidrawSchemaEdgeCases()
+{
+    OverlayController controller;
+    
+    // 1. Opacity scaling (0..1 vs 0..100)
+    QJsonObject excalObj;
+    excalObj.insert(QStringLiteral("type"), QStringLiteral("rectangle"));
+    excalObj.insert(QStringLiteral("opacity"), 75.0);
+    excalObj.insert(QStringLiteral("strokeWidth"), 2.0);
+    excalObj.insert(QStringLiteral("strokeColor"), QStringLiteral("#e63946"));
+    
+    QJsonObject clipboardObj;
+    clipboardObj.insert(QStringLiteral("type"), QStringLiteral("excalidraw/clipboard"));
+    QJsonArray elements;
+    elements.append(excalObj);
+    clipboardObj.insert(QStringLiteral("elements"), elements);
+    
+    QJsonDocument doc(clipboardObj);
+    QGuiApplication::clipboard()->setText(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+    
+    controller.pasteFromClipboard(0.0, 0.0);
+    QCOMPARE(controller.shapesModel()->rowCount(), 1);
+    QVariantMap pastedRect = controller.shapesModel()->shapes().at(0);
+    QCOMPARE(pastedRect[QStringLiteral("opacity")].toDouble(), 0.75);
+    
+    controller.copySelected();
+    QString cbText = QGuiApplication::clipboard()->text();
+    QJsonDocument docOut = QJsonDocument::fromJson(cbText.toUtf8());
+    QJsonObject rectObj = docOut.object().value(QStringLiteral("elements")).toArray().at(0).toObject();
+    QCOMPARE(rectObj.value(QStringLiteral("opacity")).toDouble(), 75.0);
+    
+    // 2. Roundness translation
+    controller.clear();
+    
+    QJsonObject rectWithRoundness;
+    rectWithRoundness.insert(QStringLiteral("type"), QStringLiteral("rectangle"));
+    rectWithRoundness.insert(QStringLiteral("strokeWidth"), 2.0);
+    
+    QJsonObject roundnessObj;
+    roundnessObj.insert(QStringLiteral("type"), 3);
+    roundnessObj.insert(QStringLiteral("value"), 18);
+    rectWithRoundness.insert(QStringLiteral("roundness"), roundnessObj);
+    
+    QJsonArray elements2;
+    elements2.append(rectWithRoundness);
+    QJsonObject clipboardObj2;
+    clipboardObj2.insert(QStringLiteral("type"), QStringLiteral("excalidraw/clipboard"));
+    clipboardObj2.insert(QStringLiteral("elements"), elements2);
+    
+    QGuiApplication::clipboard()->setText(QString::fromUtf8(QJsonDocument(clipboardObj2).toJson(QJsonDocument::Compact)));
+    
+    controller.pasteFromClipboard(0.0, 0.0);
+    QVariantMap pastedRect2 = controller.shapesModel()->shapes().at(0);
+    QCOMPARE(pastedRect2[QStringLiteral("borderRadius")].toInt(), 18);
+    
+    controller.clear();
+    rectWithRoundness.insert(QStringLiteral("roundness"), QJsonValue::Null);
+    elements2.removeAt(0);
+    elements2.append(rectWithRoundness);
+    clipboardObj2.insert(QStringLiteral("elements"), elements2);
+    QGuiApplication::clipboard()->setText(QString::fromUtf8(QJsonDocument(clipboardObj2).toJson(QJsonDocument::Compact)));
+    
+    controller.pasteFromClipboard(0.0, 0.0);
+    QVariantMap pastedRect3 = controller.shapesModel()->shapes().at(0);
+    QCOMPARE(pastedRect3[QStringLiteral("borderRadius")].toInt(), 0);
+    
+    controller.updateProperties({{QStringLiteral("borderRadius"), 22}});
+    controller.copySelected();
+    QString cbText3 = QGuiApplication::clipboard()->text();
+    QJsonObject rectObj3 = QJsonDocument::fromJson(cbText3.toUtf8()).object().value(QStringLiteral("elements")).toArray().at(0).toObject();
+    QJsonObject ro = rectObj3.value(QStringLiteral("roundness")).toObject();
+    QCOMPARE(ro.value(QStringLiteral("type")).toInt(), 3);
+    QCOMPARE(ro.value(QStringLiteral("value")).toInt(), 22);
+    
+    controller.updateProperties({{QStringLiteral("borderRadius"), 0}});
+    controller.copySelected();
+    QString cbText4 = QGuiApplication::clipboard()->text();
+    QJsonObject rectObj4 = QJsonDocument::fromJson(cbText4.toUtf8()).object().value(QStringLiteral("elements")).toArray().at(0).toObject();
+    QVERIFY(rectObj4.value(QStringLiteral("roundness")).isNull());
+}
+
+void ShapesModelTest::testAppletBackendIntegration()
+{
+    OverlayController controller;
+    
+    QVERIFY(QDBusConnection::sessionBus().registerService(QStringLiteral("org.kde.scribbleway")));
+    QVERIFY(QDBusConnection::sessionBus().registerObject(
+        QStringLiteral("/Overlay"),
+        &controller,
+        QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals
+    ));
+    
+    AppletBackend backend;
+    QTest::qWait(150);
+    
+    QVERIFY(backend.overlayConnected());
+    
+    QCOMPARE(backend.hasSelection(), false);
+    QCOMPARE(backend.selectedColor(), QStringLiteral("#e63946"));
+    QCOMPARE(backend.selectedStrokeWidth(), 2);
+    QCOMPARE(backend.selectedOpacity(), 1.0);
+    QCOMPARE(backend.currentMode(), QStringLiteral("passthrough"));
+    QCOMPARE(backend.activeTool(), QStringLiteral("freehand"));
+    
+    QVariantMap update;
+    update[QStringLiteral("color")] = QStringLiteral("#00ffff");
+    update[QStringLiteral("strokeWidth")] = 5;
+    update[QStringLiteral("opacity")] = 0.5;
+    controller.updateProperties(update);
+    QTest::qWait(50);
+    
+    QCOMPARE(backend.selectedColor(), QStringLiteral("#00ffff"));
+    QCOMPARE(backend.selectedStrokeWidth(), 5);
+    QCOMPARE(backend.selectedOpacity(), 0.5);
+    
+    controller.setTool(QStringLiteral("ellipse"));
+    QTest::qWait(50);
+    QCOMPARE(backend.activeTool(), QStringLiteral("ellipse"));
+    QCOMPARE(backend.currentMode(), QStringLiteral("draw"));
+    
+    backend.setTargetScreen(QStringLiteral("CustomScreen"));
+    QTest::qWait(50);
+    QCOMPARE(backend.targetScreen(), QStringLiteral("CustomScreen"));
+    
+    QVERIFY(!backend.screenNames().isEmpty());
+    
+    backend.setTool(QStringLiteral("rectangle"));
+    QTest::qWait(50);
+    QCOMPARE(controller.activeTool(), QStringLiteral("rectangle"));
+    QCOMPARE(controller.currentMode(), QStringLiteral("draw"));
+    
+    backend.setColor(QStringLiteral("#112233"));
+    backend.setStrokeWidth(8);
+    backend.setOpacity(0.25);
+    QTest::qWait(50);
+    QCOMPARE(controller.defaultColor(), QStringLiteral("#112233"));
+    QCOMPARE(controller.defaultStrokeWidth(), 8);
+    QCOMPARE(controller.defaultOpacity(), 0.25);
+    
+    QVariantMap shape1;
+    shape1[QStringLiteral("type")] = QStringLiteral("rectangle");
+    controller.addShape(shape1);
+    QTest::qWait(50);
+    
+    QVERIFY(backend.hasSelection());
+    QCOMPARE(backend.selectedShapeIndex(), 0);
+    
+    QVariantMap shape2;
+    shape2[QStringLiteral("type")] = QStringLiteral("ellipse");
+    controller.addShape(shape2);
+    QTest::qWait(50);
+    
+    QCOMPARE(backend.selectedShapeIndex(), 1);
+    
+    backend.lowerSelected();
+    QTest::qWait(50);
+    QCOMPARE(controller.selectedIndex(), 0);
+    QCOMPARE(backend.selectedShapeIndex(), 0);
+    
+    backend.raiseSelected();
+    QTest::qWait(50);
+    QCOMPARE(controller.selectedIndex(), 1);
+    QCOMPARE(backend.selectedShapeIndex(), 1);
+    
+    backend.toggleLock();
+    QTest::qWait(50);
+    QVERIFY(controller.shapesModel()->shapes().at(1)[QStringLiteral("locked")].toBool());
+    QCOMPARE(backend.hasSelection(), false);
+    
+    backend.setShapeLocked(1, false);
+    QTest::qWait(50);
+    QVERIFY(!controller.shapesModel()->shapes().at(1)[QStringLiteral("locked")].toBool());
+    
+    backend.selectShape(1);
+    QTest::qWait(50);
+    QCOMPARE(controller.selectedIndex(), 1);
+    QVERIFY(backend.hasSelection());
+    
+    backend.deleteSelected();
+    QTest::qWait(50);
+    QCOMPARE(controller.shapesModel()->rowCount(), 1);
+    
+    backend.deleteShape(0);
+    QTest::qWait(50);
+    QCOMPARE(controller.shapesModel()->rowCount(), 0);
+    
+    controller.addShape(shape1);
+    QTest::qWait(50);
+    QCOMPARE(controller.shapesModel()->rowCount(), 1);
+    backend.clear();
+    QTest::qWait(50);
+    QCOMPARE(controller.shapesModel()->rowCount(), 0);
+    
+    controller.addShape(shape1);
+    QTest::qWait(50);
+    QCOMPARE(controller.shapesModel()->rowCount(), 1);
+    backend.undo();
+    QTest::qWait(50);
+    QCOMPARE(controller.shapesModel()->rowCount(), 0);
+    
+    backend.enterSelectMode();
+    QTest::qWait(50);
+    QCOMPARE(controller.currentMode(), QStringLiteral("select"));
+    
+    backend.enterPassthroughMode();
+    QTest::qWait(50);
+    QCOMPARE(controller.currentMode(), QStringLiteral("passthrough"));
+    
+    QAction action(&controller);
+    action.setObjectName(QStringLiteral("action_test"));
+    controller.registerAction(&action, QStringLiteral("action_test"), QStringLiteral("Test Action"));
+    backend.changeShortcut(QStringLiteral("action_test"), QStringLiteral("Ctrl+Shift+D"));
+    QTest::qWait(50);
+    QList<QKeySequence> seqs = KGlobalAccel::self()->shortcut(&action);
+    QVERIFY(!seqs.isEmpty());
+    QCOMPARE(seqs.first().toString(), QStringLiteral("Ctrl+Shift+D"));
+    
+    QString formatted = backend.formatKeySequence(Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier);
+    QCOMPARE(formatted, QStringLiteral("Ctrl+Shift+K"));
+    
+    QDBusConnection::sessionBus().unregisterObject(QStringLiteral("/Overlay"));
+    QDBusConnection::sessionBus().unregisterService(QStringLiteral("org.kde.scribbleway"));
+}
 
 QTEST_MAIN(ShapesModelTest)
 #include "shapesmodeltest.moc"

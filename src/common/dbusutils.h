@@ -5,19 +5,11 @@
 #include <QVariantMap>
 #include <QDBusArgument>
 #include <QDBusVariant>
-#include <QFontDatabase>
 #include <QStringList>
 #include <QString>
 
 namespace DBusUtils {
 
-inline QString defaultFontFamily() {
-    const QStringList families = QFontDatabase::families();
-    if (families.contains(QStringLiteral("Cascadia Code"), Qt::CaseInsensitive)) {
-        return QStringLiteral("Cascadia Code");
-    }
-    return QStringLiteral("monospace");
-}
 
 inline QVariant demarshal(const QVariant &var) {
     if (var.userType() == qMetaTypeId<QDBusArgument>()) {

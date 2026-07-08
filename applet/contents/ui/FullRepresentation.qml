@@ -108,10 +108,10 @@ ColumnLayout {
                 icon.name: "draw-freehand"
                 text: "Draw"
                 checkable: true
-                checked: root.backend.isDrawMode
+                checked: root.backend.currentMode === "draw"
                 Layout.fillWidth: true
                 onClicked: {
-                    if (root.backend.isDrawMode) {
+                    if (root.backend.currentMode === "draw") {
                         root.backend.enterPassthroughMode()
                     } else {
                         root.backend.setTool(fullRoot.currentToolName)
@@ -123,10 +123,10 @@ ColumnLayout {
                 icon.name: "edit-select"
                 text: "Select"
                 checkable: true
-                checked: root.backend.isSelectMode
+                checked: root.backend.currentMode === "select"
                 Layout.fillWidth: true
                 onClicked: {
-                    if (root.backend.isSelectMode) {
+                    if (root.backend.currentMode === "select") {
                         root.backend.enterPassthroughMode()
                     } else {
                         root.backend.enterSelectMode()
@@ -384,8 +384,8 @@ ColumnLayout {
                 
                 Controls.ComboBox {
                     Layout.fillWidth: true
-                    model: root.backend.systemFonts
-                    currentIndex: model.indexOf(root.backend.selectedFontFamily)
+                    model: Qt.fontFamilies()
+                    currentIndex: Qt.fontFamilies().indexOf(root.backend.selectedFontFamily)
                     onActivated: {
                         root.backend.setFontFamily(currentValue)
                     }

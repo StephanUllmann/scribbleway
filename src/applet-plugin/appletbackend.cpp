@@ -1,6 +1,5 @@
 #include "appletbackend.h"
 
-#include <QFontDatabase>
 #include <QDBusConnectionInterface>
 #include <QDBusServiceWatcher>
 #include <QDBusReply>
@@ -18,10 +17,8 @@ AppletBackend::AppletBackend(QObject *parent)
     if (auto *primary = QGuiApplication::primaryScreen()) {
         m_targetScreen = primary->name();
     }
-    // Fetch system fonts
-    m_systemFonts = QFontDatabase::families();
     
-    m_selectedFontFamily = DBusUtils::defaultFontFamily();
+    m_selectedFontFamily = QStringLiteral("monospace");
     
     // Watch for the overlay D-Bus service
     auto *watcher = new QDBusServiceWatcher(
@@ -42,12 +39,6 @@ AppletBackend::AppletBackend(QObject *parent)
     }
 }
 
-AppletBackend::~AppletBackend()
-{
-    if (m_dbusInterface) {
-        delete m_dbusInterface;
-    }
-}
 
 bool AppletBackend::overlayConnected() const
 {
@@ -94,10 +85,6 @@ bool AppletBackend::selectedLocked() const
     return m_selectedLocked;
 }
 
-QStringList AppletBackend::systemFonts() const
-{
-    return m_systemFonts;
-}
 
 QVariantList AppletBackend::shapesList() const
 {
@@ -119,15 +106,6 @@ QString AppletBackend::currentMode() const
     return m_currentMode;
 }
 
-bool AppletBackend::isDrawMode() const
-{
-    return m_currentMode == QStringLiteral("draw");
-}
-
-bool AppletBackend::isSelectMode() const
-{
-    return m_currentMode == QStringLiteral("select");
-}
 
 QString AppletBackend::activeTool() const
 {

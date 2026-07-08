@@ -19,13 +19,10 @@ class AppletBackend : public QObject
     Q_PROPERTY(QString selectedFontFamily READ selectedFontFamily NOTIFY selectionChanged)
     Q_PROPERTY(int selectedFontSize READ selectedFontSize NOTIFY selectionChanged)
     Q_PROPERTY(bool selectedLocked READ selectedLocked NOTIFY selectionChanged)
-    Q_PROPERTY(QStringList systemFonts READ systemFonts CONSTANT)
     Q_PROPERTY(QVariantList shapesList READ shapesList NOTIFY shapesListChanged)
     Q_PROPERTY(int selectedShapeIndex READ selectedShapeIndex NOTIFY selectionChanged)
     Q_PROPERTY(int selectedBorderRadius READ selectedBorderRadius NOTIFY selectionChanged)
     Q_PROPERTY(QString currentMode READ currentMode NOTIFY modeChanged)
-    Q_PROPERTY(bool isDrawMode READ isDrawMode NOTIFY modeChanged)
-    Q_PROPERTY(bool isSelectMode READ isSelectMode NOTIFY modeChanged)
     Q_PROPERTY(QString activeTool READ activeTool NOTIFY activeToolChanged)
     Q_PROPERTY(QStringList screenNames READ screenNames CONSTANT)
     Q_PROPERTY(QString targetScreen READ targetScreen WRITE setTargetScreen NOTIFY targetScreenChanged)
@@ -33,7 +30,6 @@ class AppletBackend : public QObject
 
 public:
     explicit AppletBackend(QObject *parent = nullptr);
-    ~AppletBackend() override;
 
     bool overlayConnected() const;
     bool hasSelection() const;
@@ -44,13 +40,10 @@ public:
     QString selectedFontFamily() const;
     int selectedFontSize() const;
     bool selectedLocked() const;
-    QStringList systemFonts() const;
     QVariantList shapesList() const;
     int selectedShapeIndex() const;
     int selectedBorderRadius() const;
     QString currentMode() const;
-    bool isDrawMode() const;
-    bool isSelectMode() const;
     QString activeTool() const;
 
     QStringList screenNames() const;
@@ -120,7 +113,6 @@ private:
     QVariantList m_shortcuts;
 
     QDBusInterface *m_dbusInterface = nullptr;
-    QStringList m_systemFonts;
     QString m_targetScreen;
     QString m_activeTool;
 };
