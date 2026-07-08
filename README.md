@@ -29,13 +29,27 @@ Scribbleway allows you to draw shapes, lines, arrows, and text directly over you
 
 ## Build & Installation
 
-### Dependencies
+### Requirements & Dependencies
 
-Ensure you have the following development libraries installed:
-- **Qt 6** (Core, Gui, Qml, Quick, DBus)
-- **KDE Frameworks 6** (ECM, GlobalAccel, DBusAddons)
-- **Plasma 6** (Plasma library headers)
-- **LayerShellQt**
+**KDE Plasma 6 and Qt 6 are strictly required.** Scribbleway is built specifically for Qt 6 and KDE Plasma 6; older versions (such as Qt 5 or Plasma 5) are not supported.
+
+Install the appropriate system package dependencies for your distribution below:
+
+#### Arch Linux
+```bash
+sudo pacman -S extra-cmake-modules plasma-desktop layer-shell-qt kglobalaccel kdbusaddons qt6-declarative qt6-base
+```
+
+#### Fedora
+```bash
+sudo dnf install extra-cmake-modules kf6-kglobalaccel-devel kf6-kdbusaddons-devel plasma-devel layer-shell-qt-devel qt6-qtbase-devel qt6-qtdeclarative-devel
+```
+
+#### Ubuntu / Debian / KDE Neon
+```bash
+sudo apt install extra-cmake-modules libkf6globalaccel-dev libkf6dbusaddons-dev libplasma-dev liblayershellqtinterface-dev qt6-base-dev qt6-declarative-dev
+# Note: On some Debian/Ubuntu/Neon versions, libplasma-dev may be packaged as libplasma6-dev instead.
+```
 
 ### Building from Source
 
