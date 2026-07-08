@@ -51,31 +51,84 @@ sudo apt install extra-cmake-modules libkf6globalaccel-dev libkf6dbusaddons-dev 
 # Note: On some Debian/Ubuntu/Neon versions, libplasma-dev may be packaged as libplasma6-dev instead.
 ```
 
-### Building from Source
+### Installation
+
+#### 1. Quick Installation (User-Local)
+You can build and install Scribbleway user-locally under `~/.local/` using the automated installation script:
 
 ```bash
-# 1. Create and enter build directory
-mkdir build && cd build
+chmod +x install.sh
+./install.sh
+```
 
-# 2. Configure the project
-cmake ..
+To run the installation script unattended (automatically configuring shell profiles without prompts):
+```bash
+./install.sh --yes
+```
 
-# 3. Compile the binaries and plugins
-make
+#### 2. Manual Building & Installation
+To build and install the project manually:
+
+```bash
+# 1. Configure the build
+cmake -B build -S . -DCMAKE_INSTALL_PREFIX="$HOME/.local" -DCMAKE_BUILD_TYPE=Release
+
+# 2. Compile the binaries and plugins
+cmake --build build -j$(nproc)
+
+# 3. Install
+cmake --install build
+```
+
+*Note: For manual installations, you may need to export the following environment variables in your `~/.bashrc` or `~/.profile` for the QML plugin to load correctly:*
+```bash
+export QML2_IMPORT_PATH="$HOME/.local/lib/qml:$HOME/.local/lib/x86_64-linux-gnu/qml${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}"
+export QT_PLUGIN_PATH="$HOME/.local/lib/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
+```
+
+#### 3. Uninstallation
+To completely revert a user-local installation and clean up desktop shortcuts/autostart files:
+```bash
+chmod +x uninstall.sh
+./uninstall.sh
+```
+
+To run the uninstallation unattended:
+```bash
+./uninstall.sh --yes
+```
+
+### Packaging
+
+#### Arch Linux (AUR)
+A `PKGBUILD` is provided under `packaging/arch/` for packaging Scribbleway as an AUR package. To build and install:
+```bash
+cd packaging/arch
+makepkg -si
+```
+
+#### Debian / Ubuntu
+Standard Debian packaging files are located in the `debian/` directory. To build the `.deb` package:
+```bash
+dpkg-buildpackage -us -uc -b
 ```
 
 ### Running the Daemon
 
-Launch the overlay helper daemon manually from your build tree:
+If `$HOME/.local/bin` is in your `PATH`, you can launch the overlay helper daemon using:
 ```bash
-./src/overlay/scribbleway-overlay
+scribbleway-overlay
+```
+
+Or manually from your build tree:
+```bash
+./build/src/overlay/scribbleway-overlay
 ```
 
 To run unit tests:
 ```bash
-ctest
+ctest --test-dir build --output-on-failure
 ```
-
 ---
 
 ## Default Keyboard Shortcuts
