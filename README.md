@@ -113,6 +113,19 @@ Standard Debian packaging files are located in the `debian/` directory. To build
 dpkg-buildpackage -us -uc -b
 ```
 
+#### Flatpak
+A Flatpak manifest ships the **overlay daemon only** (`scribbleway-overlay`). The Plasma applet and QML backend remain host packages (`install.sh`, `.deb`, or Arch `PKGBUILD`) because plasmoids load from the host Plasma shell.
+
+Prerequisites: `flatpak`, `flatpak-builder`, and Flathub access.
+
+```bash
+./packaging/build_flatpak.sh           # build and install for current user
+./packaging/build_flatpak.sh --bundle  # also produce scribbleway.flatpak
+flatpak run org.kde.scribbleway
+```
+
+Global shortcut (`Meta+Shift+X`) needs host `plasma-kglobalaccel`. Host-installed applet can talk to the Flatpak daemon over D-Bus (`org.kde.scribbleway`). Autostart is not provided by the Flatpak; start the daemon manually or keep the native autostart desktop file from a host install.
+
 ### Running the Daemon
 
 If `$HOME/.local/bin` is in your `PATH`, you can launch the overlay helper daemon using:

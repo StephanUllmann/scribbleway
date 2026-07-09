@@ -1,7 +1,12 @@
 build/
+build-deb/
 learning-records/
 lessons/
 MISSION.md
 NOTES.md
 RESOURCES.md
 .worktrees/
+build-flatpak/
+.flatpak-builder/
+repo-flatpak/
+scribbleway.flatpak

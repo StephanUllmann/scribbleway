@@ -14,7 +14,6 @@ set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(KDEInstallDirs)
 include(KDECMakeSettings)
 include(KDECompilerSettings NO_POLICY_SCOPE)
-include(ECMQmlModule)
 
 # Find Qt6 components
 find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
@@ -25,27 +24,55 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     DBus
 )
 
-# Find KDE Frameworks 6 components
+include(ECMQmlModule)
+
 find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS
     GlobalAccel
     DBusAddons
 )
 
+option(BUILD_PLASMA_APPLET "Build Plasma applet package and QML backend plugin" ON)
+
 # Find Plasma 6
-find_package(Plasma REQUIRED)
+if(BUILD_PLASMA_APPLET)
+    find_package(Plasma REQUIRED)
+endif()
 
 # Find LayerShellQt
 find_package(LayerShellQt REQUIRED)
 
 # Add subdirectories
-add_subdirectory(src/applet-plugin)
+if(BUILD_PLASMA_APPLET)
+    add_subdirectory(src/applet-plugin)
+endif()
 add_subdirectory(src/overlay)
 enable_testing()
 add_subdirectory(tests)
 
 # Install the applet package
-plasma_install_package(applet org.kde.scribbleway)
+if(BUILD_PLASMA_APPLET)
+    plasma_install_package(applet org.kde.scribbleway)
+endif()
 
 # Install desktop file for shortcuts configuration and autostart
 install(FILES scribbleway.desktop DESTINATION ${KDE_INSTALL_APPDIR})
 install(FILES scribbleway-autostart.desktop DESTINATION ${KDE_INSTALL_AUTOSTARTDIR})
+
+# Automatically rebuild the .deb package after a successful build
+option(BUILD_DEB_PACKAGE "Automatically rebuild the .deb package after a successful build" ON)
+
+if(BUILD_DEB_PACKAGE)
+    if(NOT DEFINED ENV{DEB_BUILD_ARCH} AND NOT DEFINED ENV{DPKG_RUNNING_VERSION})
+        set(_deb_depends scribbleway-overlay)
+        if(BUILD_PLASMA_APPLET)
+            list(APPEND _deb_depends scribblewaybackend)
+        endif()
+        add_custom_target(rebuild_debian_package ALL
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/packaging/build_deb.sh ${CMAKE_BINARY_DIR}
+            DEPENDS ${_deb_depends}
+            COMMENT "Building Debian package (.deb) from build outputs"
+            VERBATIM
+        )
+    endif()
+endif()
+
