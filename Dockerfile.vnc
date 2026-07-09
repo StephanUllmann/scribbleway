@@ -1,0 +1,22 @@
+FROM scribbleway-test:latest
+
+USER root
+
+# Install TigerVNC, xauth, and KDE X11 session packages
+RUN pacman -Sy --noconfirm tigervnc xorg-xauth plasma-x11-session kwin-x11
+
+# Create a custom Xsession desktop entry that launches the manual startup script under a dbus session
+RUN mkdir -p /usr/share/xsessions && \
+    echo -e "[Desktop Entry]\nName=Custom Plasma X11\nComment=Start KDE manually under dbus-run-session\nExec=dbus-run-session /home/builduser/start-kde-manual.sh\nType=Application\nDesktopNames=KDE" > /usr/share/xsessions/custom.desktop
+USER builduser
+WORKDIR /home/builduser
+
+# Copy the manual startup and VNC entrypoint scripts
+COPY --chown=builduser:builduser start-kde-manual.sh /home/builduser/start-kde-manual.sh
+COPY --chown=builduser:builduser entrypoint-vnc.sh /home/builduser/entrypoint-vnc.sh
+RUN chmod +x /home/builduser/start-kde-manual.sh /home/builduser/entrypoint-vnc.sh
+
+EXPOSE 5901
+
+# Start the VNC server entrypoint
+ENTRYPOINT ["/home/builduser/entrypoint-vnc.sh"]

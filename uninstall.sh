@@ -102,6 +102,22 @@ for file in \
     fi
 done
 
+# 4. Delete systemd environment configuration
+if [ -f "$HOME/.config/environment.d/10-scribbleway.conf" ]; then
+    echo "Removing systemd environment configuration..."
+    rm -f "$HOME/.config/environment.d/10-scribbleway.conf"
+    
+    # Remove instantly from running session
+    if command -v systemctl &>/dev/null; then
+        if systemctl --user is-systemd-running &>/dev/null; then
+            echo "Removing environment variables instantly from running systemd session..."
+            systemctl --user unset-environment QML2_IMPORT_PATH QT_PLUGIN_PATH
+            if command -v dbus-update-activation-environment &>/dev/null; then
+                dbus-update-activation-environment --systemd QML2_IMPORT_PATH QT_PLUGIN_PATH &>/dev/null || true
+            fi
+        fi
+    fi
+fi
 # Clean up empty parent directories
 for dir in \
     "$HOME/.local/lib/qml/org/kde" \
@@ -114,7 +130,8 @@ for dir in \
     "$HOME/.local/share/plasma" \
     "$HOME/.local/etc/xdg/autostart" \
     "$HOME/.local/etc/xdg" \
-    "$HOME/.local/etc"; do
+    "$HOME/.local/etc" \
+    "$HOME/.config/environment.d"; do
     remove_empty_dir "$dir"
 done
 

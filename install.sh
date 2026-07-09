@@ -123,6 +123,7 @@ apply_env_updates() {
         touch "$HOME/.profile"
     fi
 
+    # 1. Update shell profiles
     for file in "$HOME/.bashrc" "$HOME/.profile"; do
         if [ -f "$file" ]; then
             if grep -q "Added by Scribbleway installer" "$file"; then
@@ -139,9 +140,39 @@ EOF
             fi
         fi
     done
+
+    # 2. Configure systemd user session environment (for plasmashell and widgets)
+    local env_dir="$HOME/.config/environment.d"
+    local env_file="$env_dir/10-scribbleway.conf"
+    
+    mkdir -p "$env_dir"
+    if [ -f "$env_file" ] && grep -q "Added by Scribbleway installer" "$env_file"; then
+        echo "Systemd environment already configured in $env_file."
+    else
+        echo "Configuring systemd user session environment variables..."
+        cat << EOF > "$env_file"
+# Added by Scribbleway installer
+QML2_IMPORT_PATH="$HOME/.local/lib/qml:$HOME/.local/lib/x86_64-linux-gnu/qml:\${QML2_IMPORT_PATH}"
+QT_PLUGIN_PATH="$HOME/.local/lib/plugins:\${QT_PLUGIN_PATH}"
+EOF
+        applied=true
+    fi
+
+    # 3. Apply changes instantly to currently running systemd user session & DBus
+    if command -v systemctl &>/dev/null; then
+        if systemctl --user is-systemd-running &>/dev/null; then
+            echo "Applying environment variables instantly to running systemd session..."
+            systemctl --user set-environment QML2_IMPORT_PATH="$HOME/.local/lib/qml:$HOME/.local/lib/x86_64-linux-gnu/qml${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}"
+            systemctl --user set-environment QT_PLUGIN_PATH="$HOME/.local/lib/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
+            if command -v dbus-update-activation-environment &>/dev/null; then
+                dbus-update-activation-environment --systemd QML2_IMPORT_PATH QT_PLUGIN_PATH &>/dev/null || true
+            fi
+        fi
+    fi
+
     if [ "$applied" = true ]; then
-        echo "Environment variables added successfully to shell profiles."
-        echo "Please restart your terminal or run: source ~/.profile"
+        echo "Environment variables added successfully!"
+        echo "Please restart your desktop session or log out/in for changes to fully propagate."
     fi
 }
 

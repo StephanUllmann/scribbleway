@@ -1,0 +1,23 @@
+FROM archlinux:latest
+
+# Update keyring first to avoid signature verification issues, then system packages and dependencies
+RUN pacman -Sy --noconfirm archlinux-keyring && \
+    pacman -Syu --noconfirm && \
+    pacman -S --noconfirm base-devel git cmake extra-cmake-modules plasma-desktop layer-shell-qt kglobalaccel kdbusaddons qt6-declarative qt6-base
+
+# Create a non-root builduser with sudo privileges
+RUN useradd -m -G wheel builduser && \
+    echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+USER builduser
+WORKDIR /home/builduser/scribbleway
+
+# Copy local source files
+COPY --chown=builduser:builduser . .
+
+# Run user-local installation script in non-interactive mode
+RUN ./install.sh --yes
+
+# Run the project unit tests under dbus-run-session with offscreen Qt platform
+ENV QT_QPA_PLATFORM=offscreen
+RUN dbus-run-session -- sh -c "/usr/lib/kglobalacceld & sleep 1 && ctest --test-dir build --output-on-failure"
