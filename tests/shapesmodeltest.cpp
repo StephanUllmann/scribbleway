@@ -796,21 +796,21 @@ void ShapesModelTest::testToolModeTransitions()
     controller.addShape(shape);
     QCOMPARE(controller.selectedIndex(), 0);
     
-    controller.setTool(QStringLiteral("rectangle"));
+    controller.setActiveTool(QStringLiteral("rectangle"));
     QCOMPARE(controller.activeTool(), QStringLiteral("rectangle"));
     QCOMPARE(controller.currentMode(), QStringLiteral("draw"));
     QCOMPARE(controller.selectedIndex(), -1);
     
-    controller.setTool(QString());
+    controller.setActiveTool(QString());
     QCOMPARE(controller.activeTool(), QString());
     QCOMPARE(controller.currentMode(), QStringLiteral("passthrough"));
     
-    controller.setTool(QStringLiteral("ellipse"));
+    controller.setActiveTool(QStringLiteral("ellipse"));
     controller.enterSelectMode();
     QCOMPARE(controller.currentMode(), QStringLiteral("select"));
     QCOMPARE(controller.activeTool(), QString());
     
-    controller.setTool(QStringLiteral("ellipse"));
+    controller.setActiveTool(QStringLiteral("ellipse"));
     controller.enterPassthroughMode();
     QCOMPARE(controller.currentMode(), QStringLiteral("passthrough"));
     QCOMPARE(controller.activeTool(), QString());
@@ -1094,7 +1094,7 @@ void ShapesModelTest::testAppletBackendIntegration()
     QCOMPARE(backend.selectedStrokeWidth(), 5);
     QCOMPARE(backend.selectedOpacity(), 0.5);
     
-    controller.setTool(QStringLiteral("ellipse"));
+    controller.setActiveTool(QStringLiteral("ellipse"));
     QTest::qWait(50);
     QCOMPARE(backend.activeTool(), QStringLiteral("ellipse"));
     QCOMPARE(backend.currentMode(), QStringLiteral("draw"));

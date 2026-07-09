@@ -114,7 +114,7 @@ QString AppletBackend::activeTool() const
 
 void AppletBackend::setTool(const QString &tool)
 {
-    sendDBus(QStringLiteral("setTool"), {tool});
+    sendDBus(QStringLiteral("setActiveTool"), {tool});
 }
 
 void AppletBackend::setColor(const QString &color)
@@ -299,7 +299,7 @@ void AppletBackend::connectToOverlay()
         );
         
         // Request initial state asynchronously or synchronously
-        QDBusReply<QVariantList> shapesReply = m_dbusInterface->call(QStringLiteral("getShapesMetadata"));
+        QDBusReply<QVariantList> shapesReply = m_dbusInterface->call(QStringLiteral("shapesMetadata"));
         if (shapesReply.isValid()) {
             m_shapesList = DBusUtils::demarshal(shapesReply.value()).toList();
             Q_EMIT shapesListChanged();
@@ -310,7 +310,7 @@ void AppletBackend::connectToOverlay()
             onSelectionChanged(selReply.value());
         }
 
-        QDBusReply<QString> toolReply = m_dbusInterface->call(QStringLiteral("getActiveTool"));
+        QDBusReply<QString> toolReply = m_dbusInterface->call(QStringLiteral("activeTool"));
         if (toolReply.isValid()) {
             m_activeTool = toolReply.value();
             Q_EMIT activeToolChanged();

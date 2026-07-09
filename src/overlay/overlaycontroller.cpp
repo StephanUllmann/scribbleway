@@ -231,10 +231,7 @@ void OverlayController::setDefaultBorderRadius(int radius)
 
 void OverlayController::addShape(const QVariantMap &shape)
 {
-    QVariantMap demarshalledShape;
-    for (auto it = shape.begin(); it != shape.end(); ++it) {
-        demarshalledShape.insert(it.key(), DBusUtils::demarshal(it.value()));
-    }
+    QVariantMap demarshalledShape = DBusUtils::demarshal(shape).toMap();
     qDebug() << "OverlayController::addShape - demarshalled shape:" << demarshalledShape;
     m_shapesModel.beginEdit();
     m_shapesModel.addShape(demarshalledShape);
@@ -253,10 +250,7 @@ QVariantMap OverlayController::getShape(int index) const
 
 void OverlayController::updateShape(int index, const QVariantMap &properties)
 {
-    QVariantMap demarshalledProps;
-    for (auto it = properties.begin(); it != properties.end(); ++it) {
-        demarshalledProps.insert(it.key(), DBusUtils::demarshal(it.value()));
-    }
+    QVariantMap demarshalledProps = DBusUtils::demarshal(properties).toMap();
     m_shapesModel.updateShape(index, demarshalledProps);
     notifyShapesChanged();
     
@@ -339,10 +333,6 @@ void OverlayController::updateInputMask(const QVariantList &rects)
 }
 
 // DBus Slots
-QVariantList OverlayController::getShapesMetadata()
-{
-    return shapesMetadata();
-}
 
 QVariantMap OverlayController::getSelectionState()
 {
@@ -374,15 +364,7 @@ QVariantMap OverlayController::getSelectionState()
     return state;
 }
 
-void OverlayController::setTool(const QString &tool)
-{
-    setActiveTool(tool);
-}
 
-QString OverlayController::getActiveTool()
-{
-    return m_activeTool;
-}
 
 void OverlayController::updateProperties(const QVariantMap &properties)
 {
@@ -717,6 +699,7 @@ QVariantList OverlayController::getShortcuts()
 
 void OverlayController::changeShortcut(const QString &actionId, const QString &shortcutString)
 {
+    QSettings settings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
     QKeySequence newSequence(shortcutString);
     bool isGlobal = false;
     for (const auto &sa : m_shortcutActions) {
@@ -745,7 +728,6 @@ void OverlayController::changeShortcut(const QString &actionId, const QString &s
             for (auto &ls : m_localShortcuts) {
                 if (QKeySequence(ls.currentSequence) == newSequence) {
                     ls.currentSequence = QString();
-                    QSettings settings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
                     settings.setValue(QStringLiteral("local/") + ls.id, ls.currentSequence);
                     localConflictFound = true;
                 }
@@ -773,7 +755,6 @@ void OverlayController::changeShortcut(const QString &actionId, const QString &s
             for (auto &ls : m_localShortcuts) {
                 if (ls.id != actionId && QKeySequence(ls.currentSequence) == newSequence) {
                     ls.currentSequence = QString();
-                    QSettings settings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
                     settings.setValue(QStringLiteral("local/") + ls.id, ls.currentSequence);
                 }
             }
@@ -793,7 +774,6 @@ void OverlayController::changeShortcut(const QString &actionId, const QString &s
         for (auto &ls : m_localShortcuts) {
             if (ls.id == actionId) {
                 ls.currentSequence = shortcutString;
-                QSettings settings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
                 settings.setValue(QStringLiteral("local/") + ls.id, ls.currentSequence);
                 break;
             }

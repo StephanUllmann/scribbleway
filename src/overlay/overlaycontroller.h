@@ -49,12 +49,9 @@ public:
     QQuickWindow* window() const;
     void setWindow(QQuickWindow *window);
 
-    QVariantList shapesMetadata() const;
     int selectedIndex() const;
     bool hasMultiSelection() const;
 
-    QString activeTool() const;
-    void setActiveTool(const QString &tool);
 
     QString currentMode() const;
 
@@ -101,15 +98,15 @@ public:
 
     // DBus-invokable slots (also used in C++)
 public Q_SLOTS:
+    QVariantList shapesMetadata() const;
+    QString activeTool() const;
+    void setActiveTool(const QString &tool);
     QVariantList getShortcuts();
     void changeShortcut(const QString &actionId, const QString &shortcutString);
 
     void addShape(const QVariantMap &shape);
     void updateShape(int index, const QVariantMap &properties);
-    QVariantList getShapesMetadata();
     QVariantMap getSelectionState();
-    void setTool(const QString &tool);
-    QString getActiveTool();
     void updateProperties(const QVariantMap &properties);
     void undo();
     void clear();
