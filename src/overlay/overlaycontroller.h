@@ -18,6 +18,13 @@ struct ShortcutAction {
     QString displayName;
 };
 
+struct LocalShortcutDef {
+    QString id;
+    QString displayName;
+    QString defaultSequence;
+    QString currentSequence;
+};
+
 class OverlayController : public QObject
 {
     Q_OBJECT
@@ -34,6 +41,7 @@ class OverlayController : public QObject
     Q_PROPERTY(int defaultFontSize READ defaultFontSize WRITE setDefaultFontSize NOTIFY defaultFontSizeChanged)
     Q_PROPERTY(int defaultBorderRadius READ defaultBorderRadius WRITE setDefaultBorderRadius NOTIFY defaultBorderRadiusChanged)
     Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
+    Q_PROPERTY(QVariantMap localShortcutSequences READ localShortcutSequences NOTIFY localShortcutsChanged)
 
 public:
     explicit OverlayController(QObject *parent = nullptr);
@@ -69,6 +77,7 @@ public:
     void setDefaultBorderRadius(int radius);
 
     ShapesModel* shapesModel();
+    QVariantMap localShortcutSequences() const;
 
     void registerAction(QAction *action, const QString &actionId, const QString &displayName);
 
@@ -88,6 +97,7 @@ public:
     Q_INVOKABLE void cycleColor();
     Q_INVOKABLE void growSelected();
     Q_INVOKABLE void shrinkSelected();
+    Q_INVOKABLE void selectPresetColor(int index);
 
     // DBus-invokable slots (also used in C++)
 public Q_SLOTS:
@@ -132,6 +142,7 @@ Q_SIGNALS:
     void shapesMetadataChanged(const QVariantList &metadata);
     void modeChanged(const QString &mode);
     void shortcutsChanged(const QVariantList &shortcuts);
+    void localShortcutsChanged();
 
     // Command signals to QML
     void enterSelectModeRequested();
@@ -145,6 +156,7 @@ private:
     QVariantMap convertFromExcalidraw(const QJsonObject &elem);
 
     QList<ShortcutAction> m_shortcutActions;
+    QList<LocalShortcutDef> m_localShortcuts;
 
     QQuickWindow *m_window = nullptr;
     ShapesModel m_shapesModel;

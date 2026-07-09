@@ -568,7 +568,7 @@ ColumnLayout {
 
             Controls.ScrollView {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Kirigami.Units.gridUnit * 6
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 12
                 clip: true
 
                 ColumnLayout {
@@ -578,88 +578,104 @@ ColumnLayout {
                     Repeater {
                         model: root.backend.shortcuts
 
-                        delegate: RowLayout {
+                        delegate: ColumnLayout {
                             Layout.fillWidth: true
                             spacing: Kirigami.Units.smallSpacing
 
                             PlasmaComponents.Label {
-                                text: modelData.name
                                 Layout.fillWidth: true
-                                elide: Text.ElideRight
+                                text: modelData.type === "global" ? "Global Shortcuts" : "Local Shortcuts (draw/select mode)"
+                                font.bold: true
+                                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+                                color: Kirigami.Theme.disabledTextColor
+                                visible: index === 0 || root.backend.shortcuts[index - 1].type !== modelData.type
+                                Layout.topMargin: (index > 0 && root.backend.shortcuts[index - 1].type !== modelData.type) ? Kirigami.Units.smallSpacing * 1.5 : 0
                             }
 
-                            PlasmaComponents.Button {
-                                id: shortcutButton
-                                text: {
-                                    if (recordingActionId === modelData.id) {
-                                        return "Press keys..."
-                                    }
-                                    return modelData.shortcut !== "" ? modelData.shortcut : "None"
-                                }
-                                font.bold: recordingActionId === modelData.id
-                                font.capitalization: Font.MixedCase
-                                checkable: true
-                                checked: recordingActionId === modelData.id
-                                
-                                onClicked: {
-                                    if (recordingActionId === modelData.id) {
-                                        recordingActionId = ""
-                                    } else {
-                                        recordingActionId = modelData.id
-                                        shortcutButton.forceActiveFocus()
-                                    }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
+
+                                PlasmaComponents.Label {
+                                    text: modelData.name
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
                                 }
 
-                                Keys.onPressed: (event) => {
-                                    if (recordingActionId !== modelData.id) return;
-                                    
-                                    // Cancel on Escape
-                                    if (event.key === Qt.Key_Escape) {
-                                        recordingActionId = "";
-                                        event.accepted = true;
-                                        return;
+                                PlasmaComponents.Button {
+                                    id: shortcutButton
+                                    text: {
+                                        if (recordingActionId === modelData.id) {
+                                            return "Press keys..."
+                                        }
+                                        return modelData.shortcut !== "" ? modelData.shortcut : "None"
                                     }
+                                    font.bold: recordingActionId === modelData.id
+                                    font.capitalization: Font.MixedCase
+                                    checkable: true
+                                    checked: recordingActionId === modelData.id
                                     
-                                    // Ignore solo modifier presses
-                                    let key = event.key;
-                                    if (key === Qt.Key_Control || key === Qt.Key_Shift || key === Qt.Key_Alt || key === Qt.Key_Meta ||
-                                        key === Qt.Key_Super_L || key === Qt.Key_Super_R || key === Qt.Key_AltGr ||
-                                        key === Qt.Key_Hyper_L || key === Qt.Key_Hyper_R) {
-                                        event.accepted = true;
-                                        return;
-                                    }
-                                    
-                                    let newSeqString = root.backend.formatKeySequence(event.key, event.modifiers);
-                                    let prevActionName = "";
-                                    for (let i = 0; i < root.backend.shortcuts.length; ++i) {
-                                        let s = root.backend.shortcuts[i];
-                                        if (s.shortcut === newSeqString && s.id !== recordingActionId) {
-                                            prevActionName = s.name;
-                                            break;
+                                    onClicked: {
+                                        if (recordingActionId === modelData.id) {
+                                            recordingActionId = ""
+                                        } else {
+                                            recordingActionId = modelData.id
+                                            shortcutButton.forceActiveFocus()
                                         }
                                     }
-                                    
-                                    root.backend.changeShortcut(recordingActionId, newSeqString);
-                                    
-                                    if (prevActionName !== "") {
-                                        reassignmentNoticeText = "Reassigned from " + prevActionName;
-                                        reassignmentNoticeTimer.restart();
-                                    } else {
-                                        reassignmentNoticeText = "";
-                                    }
-                                    
-                                    recordingActionId = "";
-                                    event.accepted = true;
-                                }
-                            }
 
-                            PlasmaComponents.ToolButton {
-                                icon.name: "edit-clear"
-                                Controls.ToolTip.text: "Reset to default"
-                                Controls.ToolTip.visible: hovered
-                                enabled: modelData.shortcut !== modelData.defaultShortcut
-                                onClicked: {
-                                    root.backend.changeShortcut(modelData.id, modelData.defaultShortcut)
+                                    Keys.onPressed: (event) => {
+                                        if (recordingActionId !== modelData.id) return;
+                                        
+                                        // Cancel on Escape
+                                        // Use Qt.Key_Escape, etc.
+                                        if (event.key === Qt.Key_Escape) {
+                                            recordingActionId = "";
+                                            event.accepted = true;
+                                            return;
+                                        }
+                                        
+                                        // Ignore solo modifier presses
+                                        let key = event.key;
+                                        if (key === Qt.Key_Control || key === Qt.Key_Shift || key === Qt.Key_Alt || key === Qt.Key_Meta ||
+                                            key === Qt.Key_Super_L || key === Qt.Key_Super_R || key === Qt.Key_AltGr ||
+                                            key === Qt.Key_Hyper_L || key === Qt.Key_Hyper_R) {
+                                            event.accepted = true;
+                                            return;
+                                        }
+                                        
+                                        let newSeqString = root.backend.formatKeySequence(event.key, event.modifiers);
+                                        let prevActionName = "";
+                                        for (let i = 0; i < root.backend.shortcuts.length; ++i) {
+                                            let s = root.backend.shortcuts[i];
+                                            if (s.shortcut === newSeqString && s.id !== recordingActionId) {
+                                                prevActionName = s.name;
+                                                break;
+                                            }
+                                        }
+                                        
+                                        root.backend.changeShortcut(recordingActionId, newSeqString);
+                                        
+                                        if (prevActionName !== "") {
+                                            reassignmentNoticeText = "Reassigned from " + prevActionName;
+                                            reassignmentNoticeTimer.restart();
+                                        } else {
+                                            reassignmentNoticeText = "";
+                                        }
+                                        
+                                        recordingActionId = "";
+                                        event.accepted = true;
+                                    }
+                                }
+
+                                PlasmaComponents.ToolButton {
+                                    icon.name: "edit-clear"
+                                    Controls.ToolTip.text: "Reset to default"
+                                    Controls.ToolTip.visible: hovered
+                                    enabled: modelData.shortcut !== modelData.defaultShortcut
+                                    onClicked: {
+                                        root.backend.changeShortcut(modelData.id, modelData.defaultShortcut)
+                                    }
                                 }
                             }
                         }

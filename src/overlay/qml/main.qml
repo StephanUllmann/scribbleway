@@ -594,64 +594,94 @@ Window {
     }
     // Modal unmodified-key and action shortcuts, enabled via shortcutGuard
     Shortcut {
-        sequence: "A"
+        sequence: controller.localShortcutSequences["tool_arrow"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.toggleTool("arrow")
     }
     Shortcut {
-        sequence: "V"
+        sequence: controller.localShortcutSequences["tool_rectangle"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.toggleTool("rectangle")
     }
     Shortcut {
-        sequence: "F"
+        sequence: controller.localShortcutSequences["tool_freehand"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.toggleTool("freehand")
     }
     Shortcut {
-        sequence: "E"
+        sequence: controller.localShortcutSequences["tool_ellipse"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.toggleTool("ellipse")
     }
     Shortcut {
-        sequence: "L"
+        sequence: controller.localShortcutSequences["tool_line"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.toggleTool("line")
     }
     Shortcut {
-        sequence: "T"
+        sequence: controller.localShortcutSequences["tool_text"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.toggleTool("text")
     }
     Shortcut {
-        sequence: "Q"
+        sequence: controller.localShortcutSequences["color_cycle"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.cycleColor()
     }
     Shortcut {
-        sequence: "Ü"
+        sequence: controller.localShortcutSequences["action_grow"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.growSelected()
     }
     Shortcut {
-        sequence: "Ö"
+        sequence: controller.localShortcutSequences["action_shrink"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.shrinkSelected()
     }
     Shortcut {
-        sequence: "S"
+        sequence: controller.localShortcutSequences["action_select"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.enterSelectMode()
     }
     Shortcut {
-        sequence: "Ctrl+Z"
+        sequence: controller.localShortcutSequences["action_undo"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.undo()
     }
     Shortcut {
-        sequence: "Ctrl+Delete"
+        sequence: controller.localShortcutSequences["action_clear"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.clear()
+    }
+    Shortcut {
+        sequence: controller.localShortcutSequences["color_1"]
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.selectPresetColor(0)
+    }
+    Shortcut {
+        sequence: controller.localShortcutSequences["color_2"]
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.selectPresetColor(1)
+    }
+    Shortcut {
+        sequence: controller.localShortcutSequences["color_3"]
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.selectPresetColor(2)
+    }
+    Shortcut {
+        sequence: controller.localShortcutSequences["color_4"]
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.selectPresetColor(3)
+    }
+    Shortcut {
+        sequence: controller.localShortcutSequences["color_5"]
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.selectPresetColor(4)
+    }
+    Shortcut {
+        sequence: controller.localShortcutSequences["color_6"]
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.selectPresetColor(5)
     }
 
 

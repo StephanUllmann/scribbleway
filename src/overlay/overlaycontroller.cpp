@@ -1,4 +1,15 @@
 #include "overlaycontroller.h"
+#include <QSettings>
+#include <QStringList>
+
+static const QStringList presetColors = {
+    QStringLiteral("#e63946"),
+    QStringLiteral("#f4a261"),
+    QStringLiteral("#e9c46a"),
+    QStringLiteral("#2a9d8f"),
+    QStringLiteral("#457b9d"),
+    QStringLiteral("#8338ec")
+};
 #include <QDebug>
 #include <LayerShellQt/Window>
 #include <QScreen>
@@ -24,6 +35,35 @@ OverlayController::OverlayController(QObject *parent)
 {
     m_defaultFontFamily = QStringLiteral("monospace");
     m_shapesModel.setParent(this);
+
+    m_localShortcuts = {
+        {QStringLiteral("tool_arrow"), QStringLiteral("Arrow"), QStringLiteral("A"), QStringLiteral("A")},
+        {QStringLiteral("tool_rectangle"), QStringLiteral("Rectangle"), QStringLiteral("R"), QStringLiteral("R")},
+        {QStringLiteral("tool_freehand"), QStringLiteral("Freehand"), QStringLiteral("F"), QStringLiteral("F")},
+        {QStringLiteral("tool_ellipse"), QStringLiteral("Ellipse"), QStringLiteral("E"), QStringLiteral("E")},
+        {QStringLiteral("tool_line"), QStringLiteral("Line"), QStringLiteral("L"), QStringLiteral("L")},
+        {QStringLiteral("tool_text"), QStringLiteral("Text"), QStringLiteral("T"), QStringLiteral("T")},
+        {QStringLiteral("color_cycle"), QStringLiteral("Cycle Color"), QStringLiteral("Q"), QStringLiteral("Q")},
+        {QStringLiteral("color_1"), QStringLiteral("Red"), QStringLiteral("1"), QStringLiteral("1")},
+        {QStringLiteral("color_2"), QStringLiteral("Orange"), QStringLiteral("2"), QStringLiteral("2")},
+        {QStringLiteral("color_3"), QStringLiteral("Yellow"), QStringLiteral("3"), QStringLiteral("3")},
+        {QStringLiteral("color_4"), QStringLiteral("Green"), QStringLiteral("4"), QStringLiteral("4")},
+        {QStringLiteral("color_5"), QStringLiteral("Blue"), QStringLiteral("5"), QStringLiteral("5")},
+        {QStringLiteral("color_6"), QStringLiteral("Violet"), QStringLiteral("6"), QStringLiteral("6")},
+        {QStringLiteral("action_grow"), QStringLiteral("Grow"), QStringLiteral("+"), QStringLiteral("+")},
+        {QStringLiteral("action_shrink"), QStringLiteral("Shrink"), QStringLiteral("-"), QStringLiteral("-")},
+        {QStringLiteral("action_select"), QStringLiteral("Select Mode"), QStringLiteral("S"), QStringLiteral("S")},
+        {QStringLiteral("action_undo"), QStringLiteral("Undo"), QStringLiteral("Ctrl+Z"), QStringLiteral("Ctrl+Z")},
+        {QStringLiteral("action_clear"), QStringLiteral("Clear All"), QStringLiteral("Ctrl+Delete"), QStringLiteral("Ctrl+Delete")}
+    };
+
+    QSettings settings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
+    for (auto &def : m_localShortcuts) {
+        QString key = QStringLiteral("local/") + def.id;
+        if (settings.contains(key)) {
+            def.currentSequence = settings.value(key).toString();
+        }
+    }
 }
 
 QQuickWindow* OverlayController::window() const
@@ -659,6 +699,17 @@ QVariantList OverlayController::getShortcuts()
         
         map.insert(QStringLiteral("shortcut"), shortcutStr);
         map.insert(QStringLiteral("defaultShortcut"), defaultStr);
+        map.insert(QStringLiteral("type"), QStringLiteral("global"));
+        list.append(map);
+    }
+
+    for (const auto &ls : m_localShortcuts) {
+        QVariantMap map;
+        map.insert(QStringLiteral("id"), ls.id);
+        map.insert(QStringLiteral("name"), ls.displayName);
+        map.insert(QStringLiteral("shortcut"), ls.currentSequence);
+        map.insert(QStringLiteral("defaultShortcut"), ls.defaultSequence);
+        map.insert(QStringLiteral("type"), QStringLiteral("local"));
         list.append(map);
     }
     return list;
@@ -667,35 +718,107 @@ QVariantList OverlayController::getShortcuts()
 void OverlayController::changeShortcut(const QString &actionId, const QString &shortcutString)
 {
     QKeySequence newSequence(shortcutString);
-    
-    // Auto-reassignment conflict resolution:
-    // If the sequence is not empty, check if another action uses this shortcut.
-    if (!newSequence.isEmpty()) {
-        for (auto &sa : m_shortcutActions) {
-            if (sa.id != actionId && sa.action) {
-                QList<QKeySequence> existing = KGlobalAccel::self()->shortcut(sa.action);
-                if (!existing.isEmpty() && existing.first() == newSequence) {
-                    // Clear it from the existing conflicting action
-                    KGlobalAccel::self()->setShortcut(sa.action, QList<QKeySequence>(), KGlobalAccel::NoAutoloading);
-                }
-            }
-        }
-    }
-    
-    // Assign to the target action
-    for (auto &sa : m_shortcutActions) {
-        if (sa.id == actionId && sa.action) {
-            QList<QKeySequence> shortcuts;
-            if (!newSequence.isEmpty()) {
-                shortcuts.append(newSequence);
-            }
-            KGlobalAccel::self()->setShortcut(sa.action, shortcuts, KGlobalAccel::NoAutoloading);
+    bool isGlobal = false;
+    for (const auto &sa : m_shortcutActions) {
+        if (sa.id == actionId) {
+            isGlobal = true;
             break;
         }
     }
-    
+
+    if (isGlobal) {
+        // Auto-reassignment conflict resolution:
+        // If the sequence is not empty, check if another action uses this shortcut.
+        if (!newSequence.isEmpty()) {
+            for (auto &sa : m_shortcutActions) {
+                if (sa.id != actionId && sa.action) {
+                    QList<QKeySequence> existing = KGlobalAccel::self()->shortcut(sa.action);
+                    if (!existing.isEmpty() && existing.first() == newSequence) {
+                        // Clear it from the existing conflicting action
+                        KGlobalAccel::self()->setShortcut(sa.action, QList<QKeySequence>(), KGlobalAccel::NoAutoloading);
+                    }
+                }
+            }
+
+            // Cross-domain conflict: check if a local shortcut uses the new sequence
+            bool localConflictFound = false;
+            for (auto &ls : m_localShortcuts) {
+                if (QKeySequence(ls.currentSequence) == newSequence) {
+                    ls.currentSequence = QString();
+                    QSettings settings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
+                    settings.setValue(QStringLiteral("local/") + ls.id, ls.currentSequence);
+                    localConflictFound = true;
+                }
+            }
+            if (localConflictFound) {
+                Q_EMIT localShortcutsChanged();
+            }
+        }
+
+        // Assign to the target action
+        for (auto &sa : m_shortcutActions) {
+            if (sa.id == actionId && sa.action) {
+                QList<QKeySequence> shortcuts;
+                if (!newSequence.isEmpty()) {
+                    shortcuts.append(newSequence);
+                }
+                KGlobalAccel::self()->setShortcut(sa.action, shortcuts, KGlobalAccel::NoAutoloading);
+                break;
+            }
+        }
+    } else {
+        // Local shortcut
+        if (!newSequence.isEmpty()) {
+            // Check if another local shortcut uses the sequence
+            for (auto &ls : m_localShortcuts) {
+                if (ls.id != actionId && QKeySequence(ls.currentSequence) == newSequence) {
+                    ls.currentSequence = QString();
+                    QSettings settings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
+                    settings.setValue(QStringLiteral("local/") + ls.id, ls.currentSequence);
+                }
+            }
+
+            // Check if a global shortcut uses the sequence
+            for (auto &sa : m_shortcutActions) {
+                if (sa.action) {
+                    QList<QKeySequence> existing = KGlobalAccel::self()->shortcut(sa.action);
+                    if (!existing.isEmpty() && existing.first() == newSequence) {
+                        KGlobalAccel::self()->setShortcut(sa.action, QList<QKeySequence>(), KGlobalAccel::NoAutoloading);
+                    }
+                }
+            }
+        }
+
+        // Update the target local shortcut
+        for (auto &ls : m_localShortcuts) {
+            if (ls.id == actionId) {
+                ls.currentSequence = shortcutString;
+                QSettings settings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
+                settings.setValue(QStringLiteral("local/") + ls.id, ls.currentSequence);
+                break;
+            }
+        }
+        Q_EMIT localShortcutsChanged();
+    }
+
     // Notify all listeners
     Q_EMIT shortcutsChanged(getShortcuts());
+}
+
+QVariantMap OverlayController::localShortcutSequences() const
+{
+    QVariantMap map;
+    for (const auto &ls : m_localShortcuts) {
+        map.insert(ls.id, ls.currentSequence);
+    }
+    return map;
+}
+
+void OverlayController::selectPresetColor(int index)
+{
+    if (index >= 0 && index < presetColors.size()) {
+        updateProperties({{QStringLiteral("color"), presetColors[index]}});
+    }
 }
 
 void OverlayController::toggleTool(const QString &tool)
@@ -709,14 +832,6 @@ void OverlayController::toggleTool(const QString &tool)
 
 void OverlayController::cycleColor()
 {
-    static const QStringList presetColors = {
-        QStringLiteral("#e63946"),
-        QStringLiteral("#f4a261"),
-        QStringLiteral("#e9c46a"),
-        QStringLiteral("#2a9d8f"),
-        QStringLiteral("#457b9d"),
-        QStringLiteral("#8338ec"),
-    };
     QVariantMap state = getSelectionState();
     QString currentColor = state.value(QStringLiteral("color")).toString().toLower();
     int idx = presetColors.indexOf(currentColor);

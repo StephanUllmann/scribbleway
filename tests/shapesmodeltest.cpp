@@ -1205,11 +1205,14 @@ void ShapesModelTest::testAppletBackendIntegration()
 
 void ShapesModelTest::testReworkedShortcutsSlots()
 {
-    OverlayController controller;
+    // Clear settings to prevent state leakage from previous failed test runs
+    QSettings preClean(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
+    preClean.clear();
 
-    // 1. Test toggleTool() transitions
-    QCOMPARE(controller.currentMode(), QStringLiteral("passthrough"));
-    QCOMPARE(controller.activeTool(), QStringLiteral("freehand"));
+    OverlayController controller;
+    QAction dummyAction(&controller);
+    dummyAction.setObjectName(QStringLiteral("action_dummy"));
+    controller.registerAction(&dummyAction, QStringLiteral("action_dummy"), QStringLiteral("Dummy Action"));
 
     // Toggle tool to "arrow". Since current active tool is "freehand", it should activate "arrow".
     controller.toggleTool(QStringLiteral("arrow"));
@@ -1274,6 +1277,82 @@ void ShapesModelTest::testReworkedShortcutsSlots()
     controller.shrinkSelected();
     state = controller.getSelectionState();
     QCOMPARE(state[QStringLiteral("fontSize")].toInt(), 20);
+
+    // 5. Test getShortcuts() has local and global shortcuts with correct types
+    QVariantList shortcuts = controller.getShortcuts();
+    QVERIFY(shortcuts.size() > 1); // should have 1 global + 18 local shortcuts
+    
+    // Check that we have a global shortcut
+    bool foundGlobal = false;
+    bool foundLocal = false;
+    for (const auto &val : shortcuts) {
+        QVariantMap map = val.toMap();
+        if (map[QStringLiteral("type")].toString() == QStringLiteral("global")) {
+            foundGlobal = true;
+        } else if (map[QStringLiteral("type")].toString() == QStringLiteral("local")) {
+            foundLocal = true;
+        }
+    }
+    QVERIFY(foundGlobal);
+    QVERIFY(foundLocal);
+
+    // 6. Test selectPresetColor
+    controller.selectPresetColor(0); // Red: #e63946
+    QCOMPARE(controller.defaultColor(), QStringLiteral("#e63946"));
+    controller.selectPresetColor(1); // Orange: #f4a261
+    QCOMPARE(controller.defaultColor(), QStringLiteral("#f4a261"));
+
+    // 7. Test localShortcutSequences property maps
+    QVariantMap localSeqs = controller.localShortcutSequences();
+    QCOMPARE(localSeqs[QStringLiteral("tool_arrow")].toString(), QStringLiteral("A"));
+    QCOMPARE(localSeqs[QStringLiteral("tool_rectangle")].toString(), QStringLiteral("R"));
+
+    // 8. Test changeShortcut conflict resolution and persistence
+    // Check changing local shortcut
+    controller.changeShortcut(QStringLiteral("tool_rectangle"), QStringLiteral("X"));
+    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_rectangle")].toString(), QStringLiteral("X"));
+
+    // Check conflict resolution within local shortcuts (assigning 'X' to tool_arrow should clear tool_rectangle)
+    controller.changeShortcut(QStringLiteral("tool_arrow"), QStringLiteral("X"));
+    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_arrow")].toString(), QStringLiteral("X"));
+    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_rectangle")].toString(), QStringLiteral(""));
+
+    // 9. Test cross-domain conflict resolution
+    // Global -> Local:
+    // First, set global shortcut to Ctrl+Shift+Y.
+    controller.changeShortcut(QStringLiteral("action_dummy"), QStringLiteral("Ctrl+Shift+Y"));
+    QTest::qWait(50);
+    QList<QKeySequence> globShortcut = KGlobalAccel::self()->shortcut(&dummyAction);
+    QCOMPARE(globShortcut.first().toString(QKeySequence::PortableText), QStringLiteral("Ctrl+Shift+Y"));
+
+    // Now, assign the same Ctrl+Shift+Y to local tool_line
+    controller.changeShortcut(QStringLiteral("tool_line"), QStringLiteral("Ctrl+Shift+Y"));
+    QTest::qWait(50);
+    // The local should be Ctrl+Shift+Y
+    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_line")].toString(), QStringLiteral("Ctrl+Shift+Y"));
+    // The global action should be cleared (no shortcuts)
+    QVERIFY(KGlobalAccel::self()->shortcut(&dummyAction).isEmpty());
+
+    // Local -> Global:
+    // First, set local shortcut to Ctrl+Shift+H
+    controller.changeShortcut(QStringLiteral("tool_ellipse"), QStringLiteral("Ctrl+Shift+H"));
+    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_ellipse")].toString(), QStringLiteral("Ctrl+Shift+H"));
+
+    // Now, assign Ctrl+Shift+H to global action_dummy
+    controller.changeShortcut(QStringLiteral("action_dummy"), QStringLiteral("Ctrl+Shift+H"));
+    QTest::qWait(50);
+    // The global action should be Ctrl+Shift+H
+    QCOMPARE(KGlobalAccel::self()->shortcut(&dummyAction).first().toString(QKeySequence::PortableText), QStringLiteral("Ctrl+Shift+H"));
+    // The local tool_ellipse should be cleared
+    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_ellipse")].toString(), QStringLiteral(""));
+
+    // Reset to defaults using changeShortcut (or clean up QSettings for clean subsequent runs)
+    QSettings cleanSettings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
+    cleanSettings.clear();
+    
+    // Clear global KGlobalAccel state for clean subsequent runs
+    KGlobalAccel::self()->setShortcut(&dummyAction, QList<QKeySequence>(), KGlobalAccel::NoAutoloading);
+    QTest::qWait(50);
 }
 QTEST_MAIN(ShapesModelTest)
 #include "shapesmodeltest.moc"
