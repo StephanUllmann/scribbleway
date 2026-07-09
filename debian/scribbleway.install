@@ -1,5 +1,5 @@
 usr/bin/scribbleway-overlay
 usr/share/plasma/plasmoids/org.kde.scribbleway/*
 usr/lib/*/qt6/qml/org/kde/scribbleway/backend/*
-usr/share/applications/scribbleway.desktop
-etc/xdg/autostart/scribbleway-autostart.desktop
+usr/share/applications/org.kde.scribbleway.desktop
+etc/xdg/autostart/org.kde.scribbleway-autostart.desktop

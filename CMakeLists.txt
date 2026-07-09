@@ -55,8 +55,8 @@ if(BUILD_PLASMA_APPLET)
 endif()
 
 # Install desktop file for shortcuts configuration and autostart
-install(FILES scribbleway.desktop DESTINATION ${KDE_INSTALL_APPDIR})
-install(FILES scribbleway-autostart.desktop DESTINATION ${KDE_INSTALL_AUTOSTARTDIR})
+install(FILES org.kde.scribbleway.desktop DESTINATION ${KDE_INSTALL_APPDIR})
+install(FILES org.kde.scribbleway-autostart.desktop DESTINATION ${KDE_INSTALL_AUTOSTARTDIR})
 
 # Automatically rebuild the .deb package after a successful build
 option(BUILD_DEB_PACKAGE "Automatically rebuild the .deb package after a successful build" ON)

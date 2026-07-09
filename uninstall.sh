@@ -93,9 +93,9 @@ done
 
 # 3. Delete desktop entries and autostart files
 for file in \
-    "$HOME/.local/share/applications/scribbleway.desktop" \
-    "$HOME/.local/etc/xdg/autostart/scribbleway-autostart.desktop" \
-    "$HOME/.config/autostart/scribbleway-autostart.desktop"; do
+    "$HOME/.local/share/applications/org.kde.scribbleway.desktop" \
+    "$HOME/.local/etc/xdg/autostart/org.kde.scribbleway-autostart.desktop" \
+    "$HOME/.config/autostart/org.kde.scribbleway-autostart.desktop"; do
     if [ -f "$file" ] || [ -L "$file" ]; then
         echo "Removing file: $file"
         rm -f "$file"

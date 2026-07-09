@@ -44,12 +44,12 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Check for existence of required desktop files (Fail Fast)
-if [ ! -f scribbleway.desktop ]; then
-    echo "Error: scribbleway.desktop not found in current directory." >&2
+if [ ! -f org.kde.scribbleway.desktop ]; then
+    echo "Error: org.kde.scribbleway.desktop not found in current directory." >&2
     exit 1
 fi
-if [ ! -f scribbleway-autostart.desktop ]; then
-    echo "Error: scribbleway-autostart.desktop not found in current directory." >&2
+if [ ! -f org.kde.scribbleway-autostart.desktop ]; then
+    echo "Error: org.kde.scribbleway-autostart.desktop not found in current directory." >&2
     exit 1
 fi
 
@@ -82,10 +82,10 @@ mkdir -p "$HOME/.config/autostart"
 
 
 # Replace Exec command with the absolute path to scribbleway-overlay in local bin
-sed "s#Exec=scribbleway-overlay#Exec=\"$HOME/.local/bin/scribbleway-overlay\"#g" scribbleway.desktop > "$HOME/.local/share/applications/scribbleway.desktop"
-sed "s#Exec=scribbleway-overlay#Exec=\"$HOME/.local/bin/scribbleway-overlay\"#g" scribbleway-autostart.desktop > "$HOME/.config/autostart/scribbleway-autostart.desktop"
-chmod +x "$HOME/.local/share/applications/scribbleway.desktop"
-chmod +x "$HOME/.config/autostart/scribbleway-autostart.desktop"
+sed "s#Exec=scribbleway-overlay#Exec=\"$HOME/.local/bin/scribbleway-overlay\"#g" org.kde.scribbleway.desktop > "$HOME/.local/share/applications/org.kde.scribbleway.desktop"
+sed "s#Exec=scribbleway-overlay#Exec=\"$HOME/.local/bin/scribbleway-overlay\"#g" org.kde.scribbleway-autostart.desktop > "$HOME/.config/autostart/org.kde.scribbleway-autostart.desktop"
+chmod +x "$HOME/.local/share/applications/org.kde.scribbleway.desktop"
+chmod +x "$HOME/.config/autostart/org.kde.scribbleway-autostart.desktop"
 
 echo "Desktop files successfully configured."
 
