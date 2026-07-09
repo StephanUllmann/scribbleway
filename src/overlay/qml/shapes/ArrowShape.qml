@@ -1,9 +1,10 @@
 import QtQuick
 import QtQuick.Shapes
 import "RoughPathGenerator.js" as RoughPathGenerator
+
 BaseShape {
     id: root
-    
+
     mode: "line"
     shapeIndex: index
     shapeFromX: model.fromX
@@ -78,23 +79,15 @@ BaseShape {
         }
     }
 
-    Repeater {
-        model: RoughPathGenerator.getSketchyArrow(root.shapeFromX, root.shapeFromY, root.shapeToX, root.shapeToY, root.modelRoughness, root.modelSeed)
-        
-        Shape {
-            anchors.fill: parent
-            opacity: root.modelOpacity
-            visible: root.modelRoughness > 0
-
-            ShapePath {
-                strokeColor: root.modelColor
-                strokeWidth: root.modelStrokeWidth
-                fillColor: "transparent"
-                
-                PathPolyline {
-                    path: modelData
-                }
-            }
-        }
+    RoughStroke {
+        anchors.fill: parent
+        strokes: root.modelRoughness > 0
+            ? RoughPathGenerator.getSketchyArrow(
+                root.shapeFromX, root.shapeFromY, root.shapeToX, root.shapeToY,
+                root.modelRoughness, root.modelSeed, root.arrowLength)
+            : []
+        strokeColor: root.modelColor
+        strokeWidth: root.modelStrokeWidth
+        strokeOpacity: root.modelOpacity
     }
 }

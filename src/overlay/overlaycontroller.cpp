@@ -379,7 +379,6 @@ QVariantMap OverlayController::getSelectionState()
         state[QStringLiteral("fontSize")] = m_defaultFontSize;
         state[QStringLiteral("borderRadius")] = m_defaultBorderRadius;
         state[QStringLiteral("roughness")] = m_defaultRoughness;
-        state[QStringLiteral("seed")] = 123456;
         state[QStringLiteral("locked")] = false;
         state[QStringLiteral("selectedIndex")] = -1;
     }

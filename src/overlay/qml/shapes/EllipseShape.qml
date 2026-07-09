@@ -1,9 +1,10 @@
 import QtQuick
 import QtQuick.Shapes
 import "RoughPathGenerator.js" as RoughPathGenerator
+
 BaseShape {
     id: root
-    
+
     mode: "rect"
     shapeIndex: index
     shapeX: model.x
@@ -53,23 +54,15 @@ BaseShape {
         }
     }
 
-    Repeater {
-        model: RoughPathGenerator.getSketchyEllipse(root.shapeX, root.shapeY, root.shapeWidth, root.shapeHeight, root.modelRoughness, root.modelSeed)
-        
-        Shape {
-            anchors.fill: parent
-            opacity: root.modelOpacity
-            visible: root.modelRoughness > 0
-
-            ShapePath {
-                strokeColor: root.modelColor
-                strokeWidth: root.modelStrokeWidth
-                fillColor: "transparent"
-                
-                PathPolyline {
-                    path: modelData
-                }
-            }
-        }
+    RoughStroke {
+        anchors.fill: parent
+        strokes: root.modelRoughness > 0
+            ? RoughPathGenerator.getSketchyEllipse(
+                root.shapeX, root.shapeY, root.shapeWidth, root.shapeHeight,
+                root.modelRoughness, root.modelSeed)
+            : []
+        strokeColor: root.modelColor
+        strokeWidth: root.modelStrokeWidth
+        strokeOpacity: root.modelOpacity
     }
 }

@@ -1,9 +1,10 @@
 import QtQuick
 import QtQuick.Shapes
 import "RoughPathGenerator.js" as RoughPathGenerator
+
 BaseShape {
     id: root
-    
+
     mode: "none" // Move only, no resizing
     shapeIndex: index
     // Compute bounding box from point list for selection and drag bounds
@@ -57,7 +58,7 @@ BaseShape {
         anchors.fill: parent
         opacity: root.modelOpacity
         visible: root.modelRoughness === 0
-        
+
         ShapePath {
             strokeColor: root.modelColor
             strokeWidth: root.modelStrokeWidth
@@ -71,25 +72,13 @@ BaseShape {
         }
     }
 
-    Repeater {
-        model: RoughPathGenerator.getSketchyFreehand(root.points, root.modelRoughness, root.modelSeed)
-        
-        Shape {
-            anchors.fill: parent
-            opacity: root.modelOpacity
-            visible: root.modelRoughness > 0
-
-            ShapePath {
-                strokeColor: root.modelColor
-                strokeWidth: root.modelStrokeWidth
-                fillColor: "transparent"
-                capStyle: ShapePath.RoundCap
-                joinStyle: ShapePath.RoundJoin
-                
-                PathPolyline {
-                    path: modelData
-                }
-            }
-        }
+    RoughStroke {
+        anchors.fill: parent
+        strokes: root.modelRoughness > 0
+            ? RoughPathGenerator.getSketchyFreehand(root.points, root.modelRoughness, root.modelSeed)
+            : []
+        strokeColor: root.modelColor
+        strokeWidth: root.modelStrokeWidth
+        strokeOpacity: root.modelOpacity
     }
 }
