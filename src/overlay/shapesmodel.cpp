@@ -201,6 +201,8 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
                 else if (it.key() == QStringLiteral("fontFamily")) changedRoles << FontFamilyRole;
                 else if (it.key() == QStringLiteral("fontSize")) changedRoles << FontSizeRole;
                 else if (it.key() == QStringLiteral("borderRadius")) changedRoles << BorderRadiusRole;
+                else if (it.key() == QStringLiteral("roughness")) changedRoles << RoughnessRole;
+                else if (it.key() == QStringLiteral("seed")) changedRoles << SeedRole;
             }
         }
         if (!changedRoles.isEmpty()) {

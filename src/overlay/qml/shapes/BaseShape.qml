@@ -7,15 +7,15 @@ Item {
     property int index: -1
     property int shapeIndex: index
     property string mode: "rect" // "rect", "line", "none" (freehand)
-    property bool isSelected: typeof selected !== "undefined" ? selected : false
-    property bool isLocked: typeof locked !== "undefined" ? locked : false
+    property bool isSelected: model.selected !== undefined ? model.selected : false
+    property bool isLocked: model.locked !== undefined ? model.locked : false
 
     // Model property aliases to prevent shadowing conflicts in Repeaters
-    property color modelColor: typeof color !== "undefined" ? color : "#000000"
-    property int modelStrokeWidth: typeof strokeWidth !== "undefined" ? strokeWidth : 1
-    property real modelOpacity: typeof opacity !== "undefined" ? opacity : 1.0
-    property int modelRoughness: typeof roughness !== "undefined" ? roughness : 0
-    property int modelSeed: typeof seed !== "undefined" ? seed : 123456
+    property color modelColor: model.color !== undefined ? model.color : "#000000"
+    property int modelStrokeWidth: model.strokeWidth !== undefined ? model.strokeWidth : 1
+    property real modelOpacity: model.opacity !== undefined ? model.opacity : 1.0
+    property int modelRoughness: model.roughness !== undefined ? model.roughness : 0
+    property int modelSeed: model.seed !== undefined ? model.seed : 123456
 
     // Rect-mode properties
     property real shapeX: 0

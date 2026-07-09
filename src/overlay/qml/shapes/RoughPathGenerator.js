@@ -22,7 +22,7 @@ function getSketchyLineWithPRNG(x1, y1, x2, y2, roughness, rand) {
     if (L < 2) return [];
     
     let strokes = [];
-    let roughnessFactor = roughness === 1 ? 3.5 : 7.0;
+    let roughnessFactor = roughness === 1 ? 2.0 : 4.0;
     
     for (let i = 0; i < 2; ++i) {
         let offset = roughnessFactor * (L > 100 ? 1.0 : Math.max(0.3, L / 100.0)) * (0.6 + rand() * 0.8);
@@ -35,15 +35,34 @@ function getSketchyLineWithPRNG(x1, y1, x2, y2, roughness, rand) {
         let os1 = (rand() - 0.5) * 5.0 * (roughnessFactor / 3.0);
         let os2 = (rand() - 0.5) * 5.0 * (roughnessFactor / 3.0);
         
-        let sx = x1 - dirX * os1 + perpX * (rand() - 0.5) * offset;
-        let sy = y1 - dirY * os1 + perpY * (rand() - 0.5) * offset;
-        let ex = x2 + dirX * os2 + perpX * (rand() - 0.5) * offset;
-        let ey = y2 + dirY * os2 + perpY * (rand() - 0.5) * offset;
+        let sx = x1 - dirX * os1 + perpX * (rand() - 0.5) * offset * 0.5;
+        let sy = y1 - dirY * os1 + perpY * (rand() - 0.5) * offset * 0.5;
+        let ex = x2 + dirX * os2 + perpX * (rand() - 0.5) * offset * 0.5;
+        let ey = y2 + dirY * os2 + perpY * (rand() - 0.5) * offset * 0.5;
         
-        let mx = (sx + ex) / 2 + perpX * (rand() - 0.5) * offset * 2.0;
-        let my = (sy + ey) / 2 + perpY * (rand() - 0.5) * offset * 2.0;
+        let p1 = Qt.point(sx, sy);
         
-        strokes.push([Qt.point(sx, sy), Qt.point(mx, my), Qt.point(ex, ey)]);
+        let w2 = (rand() - 0.5) * offset * 0.5;
+        let p2 = Qt.point(
+            x1 + dirX * L * 0.25 + perpX * w2,
+            y1 + dirY * L * 0.25 + perpY * w2
+        );
+        
+        let w3 = (rand() - 0.5) * offset * 0.8;
+        let p3 = Qt.point(
+            x1 + dirX * L * 0.50 + perpX * w3,
+            y1 + dirY * L * 0.50 + perpY * w3
+        );
+        
+        let w4 = (rand() - 0.5) * offset * 0.5;
+        let p4 = Qt.point(
+            x1 + dirX * L * 0.75 + perpX * w4,
+            y1 + dirY * L * 0.75 + perpY * w4
+        );
+        
+        let p5 = Qt.point(ex, ey);
+        
+        strokes.push([p1, p2, p3, p4, p5]);
     }
     return strokes;
 }
@@ -51,7 +70,7 @@ function getSketchyLineWithPRNG(x1, y1, x2, y2, roughness, rand) {
 function getSketchyArc(cx, cy, R, startAngle, endAngle, roughness, rand) {
     if (R <= 0) return [];
     let strokes = [];
-    let roughnessFactor = roughness === 1 ? 3.5 : 7.0;
+    let roughnessFactor = roughness === 1 ? 2.0 : 4.0;
     
     for (let loop = 0; loop < 2; ++loop) {
         let pts = [];
@@ -151,7 +170,7 @@ function getSketchyEllipse(x, y, w, h, roughness, seed) {
     
     let rand = createPRNG(seed);
     let strokes = [];
-    let roughnessFactor = roughness === 1 ? 3.5 : 7.0;
+    let roughnessFactor = roughness === 1 ? 2.0 : 4.0;
     
     for (let loop = 0; loop < 2; ++loop) {
         let pts = [];
@@ -212,7 +231,7 @@ function getSketchyFreehand(points, roughness, seed) {
     
     let rand = createPRNG(seed);
     let strokes = [];
-    let roughnessFactor = roughness === 1 ? 2.5 : 5.0;
+    let roughnessFactor = roughness === 1 ? 1.5 : 3.0;
     
     for (let loop = 0; loop < 2; ++loop) {
         let pts = [];
