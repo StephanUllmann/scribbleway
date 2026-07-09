@@ -41,6 +41,7 @@ Window {
     property real selectX: 0
     property real selectY: 0
     property real selectW: 0
+    readonly property bool shortcutGuard: controller.currentMode !== "passthrough" && !textEditor.visible
     property real selectH: 0
 
     // Connections to C++ controller signals
@@ -61,17 +62,6 @@ Window {
             }
         }
         
-        function onStartDrawingGesture(tool) {
-            if (canvasWindow.isDrawing) {
-                canvasWindow.abortShape();
-            }
-            if (canvasWindow.activeDrawTool === tool) {
-                canvasWindow.activeDrawTool = "";
-            } else {
-                canvasWindow.activeDrawTool = tool;
-            }
-            canvasWindow.requestInputRegionUpdate();
-        }
 
 
         function onEnterSelectModeRequested() {
@@ -601,6 +591,67 @@ Window {
         onActivated: {
             controller.pasteFromClipboard(canvasWindow.lastMousePos.x, canvasWindow.lastMousePos.y);
         }
+    }
+    // Modal unmodified-key and action shortcuts, enabled via shortcutGuard
+    Shortcut {
+        sequence: "A"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.toggleTool("arrow")
+    }
+    Shortcut {
+        sequence: "V"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.toggleTool("rectangle")
+    }
+    Shortcut {
+        sequence: "F"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.toggleTool("freehand")
+    }
+    Shortcut {
+        sequence: "E"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.toggleTool("ellipse")
+    }
+    Shortcut {
+        sequence: "L"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.toggleTool("line")
+    }
+    Shortcut {
+        sequence: "T"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.toggleTool("text")
+    }
+    Shortcut {
+        sequence: "Q"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.cycleColor()
+    }
+    Shortcut {
+        sequence: "Ü"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.growSelected()
+    }
+    Shortcut {
+        sequence: "Ö"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.shrinkSelected()
+    }
+    Shortcut {
+        sequence: "S"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.enterSelectMode()
+    }
+    Shortcut {
+        sequence: "Ctrl+Z"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.undo()
+    }
+    Shortcut {
+        sequence: "Ctrl+Delete"
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.clear()
     }
 
 

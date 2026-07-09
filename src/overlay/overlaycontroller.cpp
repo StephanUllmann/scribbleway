@@ -698,6 +698,59 @@ void OverlayController::changeShortcut(const QString &actionId, const QString &s
     Q_EMIT shortcutsChanged(getShortcuts());
 }
 
+void OverlayController::toggleTool(const QString &tool)
+{
+    if (m_activeTool == tool) {
+        enterSelectMode();
+    } else {
+        setActiveTool(tool);
+    }
+}
+
+void OverlayController::cycleColor()
+{
+    static const QStringList presetColors = {
+        QStringLiteral("#e63946"),
+        QStringLiteral("#f4a261"),
+        QStringLiteral("#e9c46a"),
+        QStringLiteral("#2a9d8f"),
+        QStringLiteral("#457b9d"),
+        QStringLiteral("#8338ec"),
+    };
+    QVariantMap state = getSelectionState();
+    QString currentColor = state.value(QStringLiteral("color")).toString().toLower();
+    int idx = presetColors.indexOf(currentColor);
+    int nextIdx = (idx + 1) % presetColors.size();
+    updateProperties({{QStringLiteral("color"), presetColors[nextIdx]}});
+}
+
+void OverlayController::growSelected()
+{
+    QVariantMap state = getSelectionState();
+    if (!state.value(QStringLiteral("hasSelection")).toBool()) return;
+    QString type = state.value(QStringLiteral("type")).toString();
+    if (type.toLower() == QStringLiteral("text")) {
+        int fontSize = state.value(QStringLiteral("fontSize"), 20).toInt();
+        updateProperties({{QStringLiteral("fontSize"), fontSize + 2}});
+    } else {
+        int strokeWidth = state.value(QStringLiteral("strokeWidth"), 2).toInt();
+        updateProperties({{QStringLiteral("strokeWidth"), qMin(strokeWidth + 1, 15)}});
+    }
+}
+
+void OverlayController::shrinkSelected()
+{
+    QVariantMap state = getSelectionState();
+    if (!state.value(QStringLiteral("hasSelection")).toBool()) return;
+    QString type = state.value(QStringLiteral("type")).toString();
+    if (type.toLower() == QStringLiteral("text")) {
+        int fontSize = state.value(QStringLiteral("fontSize"), 20).toInt();
+        updateProperties({{QStringLiteral("fontSize"), qMax(fontSize - 2, 10)}});
+    } else {
+        int strokeWidth = state.value(QStringLiteral("strokeWidth"), 2).toInt();
+        updateProperties({{QStringLiteral("strokeWidth"), qMax(strokeWidth - 1, 1)}});
+    }
+}
 void OverlayController::copySelected()
 {
     QJsonArray elements;

@@ -84,6 +84,10 @@ public:
     Q_INVOKABLE void selectShapesInRect(double rx, double ry, double rw, double rh, bool shiftHeld);
     Q_INVOKABLE void beginDragSelection(bool shiftHeld);
     Q_INVOKABLE void dragSelected(double dx, double dy);
+    Q_INVOKABLE void toggleTool(const QString &tool);
+    Q_INVOKABLE void cycleColor();
+    Q_INVOKABLE void growSelected();
+    Q_INVOKABLE void shrinkSelected();
 
     // DBus-invokable slots (also used in C++)
 public Q_SLOTS:
@@ -130,7 +134,6 @@ Q_SIGNALS:
     void shortcutsChanged(const QVariantList &shortcuts);
 
     // Command signals to QML
-    void startDrawingGesture(const QString &tool);
     void enterSelectModeRequested();
     void enterPassthroughModeRequested();
 

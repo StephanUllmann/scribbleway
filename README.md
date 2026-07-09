@@ -133,16 +133,26 @@ ctest --test-dir build --output-on-failure
 
 ## Default Keyboard Shortcuts
 
-| Tool / Action | Global Hotkey |
-| :--- | :--- |
-| **Draw Freehand** | `Meta` + `Shift` + `F` |
-| **Draw Arrow** | `Meta` + `Shift` + `A` |
-| **Draw Rectangle** | `Meta` + `Shift` + `V` |
-| **Draw Ellipse** | `Meta` + `Shift` + `E` |
-| **Draw Line** | `Meta` + `Shift` + `L` |
-| **Draw Text** | `Meta` + `Shift` + `T` |
-| **Toggle Select Mode** | `Meta` + `Shift` + `S` |
-| **Undo Last Shape** | `Meta` + `Ctrl` + `Z` |
-| **Clear All Shapes** | `Meta` + `Ctrl` + `Delete` |
+Scribbleway uses a two-tier modal shortcut model. A single global shortcut opens the overlay, after which you can use simple unmodified keys to activate tools:
 
-*(Note: Shortcuts can be rebound dynamically in the Plasma applet settings).*
+### Global Shortcut
+- Toggle Overlay: `Meta` + `Shift` + `X` (Enters select mode or returns to passthrough).
+
+### Overlay Local Hotkeys (active when overlay is open)
+| Tool / Action | Hotkey |
+| :--- | :--- |
+| **Draw Arrow** | `A` |
+| **Draw Rectangle** | `V` |
+| **Draw Freehand** | `F` |
+| **Draw Ellipse** | `E` |
+| **Draw Line** | `L` |
+| **Draw Text** | `T` |
+| **Select Mode (no tool)** | `S` |
+| **Cycle Preset Color** | `Q` |
+| **Grow Selected (Size/Stroke)**| `Ü` |
+| **Shrink Selected (Size/Stroke)**| `Ö` |
+| **Undo Last Shape** | `Ctrl` + `Z` |
+| **Clear All Shapes** | `Ctrl` + `Delete` |
+| **Exit Overlay (Passthrough)** | `Escape` |
+
+*(Note: The global overlay toggle shortcut can be rebound dynamically in the Plasma applet settings).*

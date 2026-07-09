@@ -42,6 +42,7 @@ private Q_SLOTS:
     void testMultiSelectionDragDelete();
     void testExcalidrawSchemaEdgeCases();
     void testAppletBackendIntegration();
+    void testReworkedShortcutsSlots();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -1202,5 +1203,77 @@ void ShapesModelTest::testAppletBackendIntegration()
     QDBusConnection::sessionBus().unregisterService(QStringLiteral("org.kde.scribbleway"));
 }
 
+void ShapesModelTest::testReworkedShortcutsSlots()
+{
+    OverlayController controller;
+
+    // 1. Test toggleTool() transitions
+    QCOMPARE(controller.currentMode(), QStringLiteral("passthrough"));
+    QCOMPARE(controller.activeTool(), QStringLiteral("freehand"));
+
+    // Toggle tool to "arrow". Since current active tool is "freehand", it should activate "arrow".
+    controller.toggleTool(QStringLiteral("arrow"));
+    QCOMPARE(controller.activeTool(), QStringLiteral("arrow"));
+    QCOMPARE(controller.currentMode(), QStringLiteral("draw"));
+
+    // Toggle "arrow" again. Since it is active, it should return to select mode.
+    controller.toggleTool(QStringLiteral("arrow"));
+    QCOMPARE(controller.activeTool(), QStringLiteral(""));
+    QCOMPARE(controller.currentMode(), QStringLiteral("select"));
+
+    // Toggle "rectangle". Since active is "", it should activate "rectangle".
+    controller.toggleTool(QStringLiteral("rectangle"));
+    QCOMPARE(controller.activeTool(), QStringLiteral("rectangle"));
+    QCOMPARE(controller.currentMode(), QStringLiteral("draw"));
+
+    // Toggle "arrow". Since "rectangle" was active, it should switch to "arrow".
+    controller.toggleTool(QStringLiteral("arrow"));
+    QCOMPARE(controller.activeTool(), QStringLiteral("arrow"));
+    QCOMPARE(controller.currentMode(), QStringLiteral("draw"));
+
+    // 2. Test cycleColor()
+    QCOMPARE(controller.defaultColor(), QStringLiteral("#e63946"));
+    controller.cycleColor();
+    QCOMPARE(controller.defaultColor(), QStringLiteral("#f4a261"));
+    controller.cycleColor();
+    QCOMPARE(controller.defaultColor(), QStringLiteral("#e9c46a"));
+
+    // 3. Test growSelected() and shrinkSelected() with rectangle shape
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("strokeWidth")] = 2;
+    controller.addShape(rect); // This also selects it!
+    QCOMPARE(controller.selectedIndex(), 0);
+
+    QVariantMap state = controller.getSelectionState();
+    QCOMPARE(state[QStringLiteral("strokeWidth")].toInt(), 2);
+
+    controller.growSelected();
+    state = controller.getSelectionState();
+    QCOMPARE(state[QStringLiteral("strokeWidth")].toInt(), 3);
+
+    controller.shrinkSelected();
+    state = controller.getSelectionState();
+    QCOMPARE(state[QStringLiteral("strokeWidth")].toInt(), 2);
+
+    // 4. Test growSelected() and shrinkSelected() with text shape
+    QVariantMap text;
+    text[QStringLiteral("type")] = QStringLiteral("text");
+    text[QStringLiteral("fontSize")] = 20;
+    controller.addShape(text); // This selects it, moving selectedIndex to 1
+    QCOMPARE(controller.selectedIndex(), 1);
+
+    state = controller.getSelectionState();
+    QCOMPARE(text.value(QStringLiteral("fontSize")).toInt(), 20); // wait, let's verify selected state properties
+    QCOMPARE(state[QStringLiteral("fontSize")].toInt(), 20);
+
+    controller.growSelected();
+    state = controller.getSelectionState();
+    QCOMPARE(state[QStringLiteral("fontSize")].toInt(), 22);
+
+    controller.shrinkSelected();
+    state = controller.getSelectionState();
+    QCOMPARE(state[QStringLiteral("fontSize")].toInt(), 20);
+}
 QTEST_MAIN(ShapesModelTest)
 #include "shapesmodeltest.moc"
