@@ -123,7 +123,9 @@ Window {
             "strokeWidth": controller.defaultStrokeWidth,
             "opacity": controller.defaultOpacity,
             "selected": false,
-            "locked": false
+            "locked": false,
+            "roughness": controller.defaultRoughness,
+            "seed": Math.floor(Math.random() * 1000000) + 1
         };
 
         if (activeDrawTool === "freehand") {
@@ -642,6 +644,11 @@ Window {
         sequence: controller.localShortcutSequences["action_select"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.enterSelectMode()
+    }
+    Shortcut {
+        sequence: controller.localShortcutSequences["action_cycle_roughness"]
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.cycleRoughness()
     }
     Shortcut {
         sequence: controller.localShortcutSequences["action_undo"]

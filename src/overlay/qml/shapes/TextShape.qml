@@ -19,10 +19,10 @@ BaseShape {
         x: root.shapeX + 5
         y: root.shapeY + 5
         text: model.text || ""
-        color: model.color
-        opacity: model.opacity
-        font.family: model.fontFamily || controller.defaultFontFamily
-        font.pixelSize: model.fontSize || 20
+        color: root.modelColor
+        opacity: root.modelOpacity
+        font.family: typeof fontFamily !== "undefined" ? fontFamily : controller.defaultFontFamily
+        font.pixelSize: typeof fontSize !== "undefined" ? fontSize : 20
 
         // Sync size changes to the shape model
         onImplicitWidthChanged: syncSize()

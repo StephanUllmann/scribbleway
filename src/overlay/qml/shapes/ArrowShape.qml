@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
-
+import "RoughPathGenerator.js" as RoughPathGenerator
 BaseShape {
     id: root
     
@@ -17,7 +17,7 @@ BaseShape {
 
     // Geometry math for arrowhead
     readonly property real lineAngle: Math.atan2(shapeToY - shapeFromY, shapeToX - shapeFromX)
-    readonly property real arrowLength: 10 + model.strokeWidth * 1.5
+    readonly property real arrowLength: 10 + root.modelStrokeWidth * 1.5
     readonly property real arrowHalfAngle: Math.PI / 6 // 30 degrees
 
     readonly property real arrowLeftX: shapeToX - arrowLength * Math.cos(lineAngle - arrowHalfAngle)
@@ -34,13 +34,14 @@ BaseShape {
 
     Shape {
         anchors.fill: parent
-        opacity: model.opacity
+        opacity: root.modelOpacity
         preferredRendererType: Shape.CurveRenderer
+        visible: root.modelRoughness === 0
 
         // Arrow Stem (Line)
         ShapePath {
-            strokeColor: model.color
-            strokeWidth: model.strokeWidth
+            strokeColor: root.modelColor
+            strokeWidth: root.modelStrokeWidth
             fillColor: "transparent"
 
             startX: root.shapeFromX
@@ -55,7 +56,7 @@ BaseShape {
         // Arrowhead (Solid Triangle)
         ShapePath {
             strokeColor: "transparent"
-            fillColor: model.color
+            fillColor: root.modelColor
 
             startX: root.shapeToX
             startY: root.shapeToY
@@ -73,6 +74,26 @@ BaseShape {
             PathLine {
                 x: root.shapeToX
                 y: root.shapeToY
+            }
+        }
+    }
+
+    Repeater {
+        model: RoughPathGenerator.getSketchyArrow(root.shapeFromX, root.shapeFromY, root.shapeToX, root.shapeToY, root.modelRoughness, root.modelSeed)
+        
+        Shape {
+            anchors.fill: parent
+            opacity: root.modelOpacity
+            visible: root.modelRoughness > 0
+
+            ShapePath {
+                strokeColor: root.modelColor
+                strokeWidth: root.modelStrokeWidth
+                fillColor: "transparent"
+                
+                PathPolyline {
+                    path: modelData
+                }
             }
         }
     }

@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
-
+import "RoughPathGenerator.js" as RoughPathGenerator
 BaseShape {
     id: root
     
@@ -17,11 +17,12 @@ BaseShape {
 
     Shape {
         anchors.fill: parent
-        opacity: model.opacity
+        opacity: root.modelOpacity
+        visible: root.modelRoughness === 0
 
         ShapePath {
-            strokeColor: model.color
-            strokeWidth: model.strokeWidth
+            strokeColor: root.modelColor
+            strokeWidth: root.modelStrokeWidth
             fillColor: "transparent"
 
             startX: root.shapeFromX
@@ -30,6 +31,26 @@ BaseShape {
             PathLine {
                 x: root.shapeToX
                 y: root.shapeToY
+            }
+        }
+    }
+
+    Repeater {
+        model: RoughPathGenerator.getSketchyLine(root.shapeFromX, root.shapeFromY, root.shapeToX, root.shapeToY, root.modelRoughness, root.modelSeed)
+        
+        Shape {
+            anchors.fill: parent
+            opacity: root.modelOpacity
+            visible: root.modelRoughness > 0
+
+            ShapePath {
+                strokeColor: root.modelColor
+                strokeWidth: root.modelStrokeWidth
+                fillColor: "transparent"
+                
+                PathPolyline {
+                    path: modelData
+                }
             }
         }
     }

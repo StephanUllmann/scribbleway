@@ -155,15 +155,16 @@ Scribbleway uses a two-tier modal shortcut model. A single global shortcut opens
 | Tool / Action | Hotkey |
 | :--- | :--- |
 | **Draw Arrow** | `A` |
-| **Draw Rectangle** | `V` |
+| **Draw Rectangle** | `R` |
 | **Draw Freehand** | `F` |
 | **Draw Ellipse** | `E` |
 | **Draw Line** | `L` |
 | **Draw Text** | `T` |
-| **Select Mode (no tool)** | `S` |
+| **Select Mode** | `X` |
+| **Cycle Roughness** | `S` |
 | **Cycle Preset Color** | `Q` |
-| **Grow Selected (Size/Stroke)**| `Ü` |
-| **Shrink Selected (Size/Stroke)**| `Ö` |
+| **Grow Selected (Size/Stroke)**| `+` |
+| **Shrink Selected (Size/Stroke)**| `-` |
 | **Undo Last Shape** | `Ctrl` + `Z` |
 | **Clear All Shapes** | `Ctrl` + `Delete` |
 | **Exit Overlay (Passthrough)** | `Escape` |

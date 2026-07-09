@@ -40,6 +40,7 @@ class OverlayController : public QObject
     Q_PROPERTY(QString defaultFontFamily READ defaultFontFamily WRITE setDefaultFontFamily NOTIFY defaultFontFamilyChanged)
     Q_PROPERTY(int defaultFontSize READ defaultFontSize WRITE setDefaultFontSize NOTIFY defaultFontSizeChanged)
     Q_PROPERTY(int defaultBorderRadius READ defaultBorderRadius WRITE setDefaultBorderRadius NOTIFY defaultBorderRadiusChanged)
+    Q_PROPERTY(int defaultRoughness READ defaultRoughness WRITE setDefaultRoughness NOTIFY defaultRoughnessChanged)
     Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
     Q_PROPERTY(QVariantMap localShortcutSequences READ localShortcutSequences NOTIFY localShortcutsChanged)
 
@@ -71,6 +72,9 @@ public:
     void setDefaultFontSize(int size);
     
     int defaultBorderRadius() const;
+
+    int defaultRoughness() const;
+    void setDefaultRoughness(int roughness);
     void setDefaultBorderRadius(int radius);
 
     ShapesModel* shapesModel();
@@ -94,6 +98,7 @@ public:
     Q_INVOKABLE void cycleColor();
     Q_INVOKABLE void growSelected();
     Q_INVOKABLE void shrinkSelected();
+    Q_INVOKABLE void cycleRoughness();
     Q_INVOKABLE void selectPresetColor(int index);
 
     // DBus-invokable slots (also used in C++)
@@ -132,6 +137,7 @@ Q_SIGNALS:
     void defaultFontFamilyChanged();
     void defaultFontSizeChanged();
     void defaultBorderRadiusChanged();
+    void defaultRoughnessChanged();
     
     // DBus signals (matched by AppletBackend slots)
     void selectionChanged(const QVariantMap &selectionState);
@@ -169,6 +175,7 @@ private:
     QString m_defaultFontFamily;
     int m_defaultFontSize = 20;
     int m_defaultBorderRadius = 8;
+    int m_defaultRoughness = 1;
 
     QRegion m_lastInputMask;
 };

@@ -21,6 +21,7 @@ qt_add_qml_module(scribbleway-overlay
         qml/shapes/ArrowShape.qml
         qml/shapes/FreehandShape.qml
         qml/shapes/TextShape.qml
+        qml/shapes/RoughPathGenerator.js
 )
 
 target_link_libraries(scribbleway-overlay PRIVATE

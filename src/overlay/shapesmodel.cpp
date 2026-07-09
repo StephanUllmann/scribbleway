@@ -60,6 +60,8 @@ QVariant ShapesModel::data(const QModelIndex &index, int role) const
         case FontFamilyRole: return shape.value(QStringLiteral("fontFamily"));
         case FontSizeRole: return shape.value(QStringLiteral("fontSize"));
         case BorderRadiusRole: return shape.value(QStringLiteral("borderRadius"));
+        case RoughnessRole: return shape.value(QStringLiteral("roughness"));
+        case SeedRole: return shape.value(QStringLiteral("seed"));
         default: return QVariant();
     }
 }
@@ -87,6 +89,8 @@ QHash<int, QByteArray> ShapesModel::roleNames() const
     roles[FontFamilyRole] = "fontFamily";
     roles[FontSizeRole] = "fontSize";
     roles[BorderRadiusRole] = "borderRadius";
+    roles[RoughnessRole] = "roughness";
+    roles[SeedRole] = "seed";
     return roles;
 }
 

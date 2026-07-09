@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
-
+import "RoughPathGenerator.js" as RoughPathGenerator
 BaseShape {
     id: root
     
@@ -17,7 +17,7 @@ BaseShape {
     shapeWidth: calculatedWidth
     shapeHeight: calculatedHeight
 
-    property var points: model.points || []
+    property var points: model && model.points !== undefined ? model.points : []
     onPointsChanged: recalculateBounds()
 
     onRectGeometryChanged: (nx, ny, nw, nh) => {
@@ -55,17 +55,40 @@ BaseShape {
 
     Shape {
         anchors.fill: parent
-        opacity: model.opacity
+        opacity: root.modelOpacity
+        visible: root.modelRoughness === 0
         
         ShapePath {
-            strokeColor: model.color
-            strokeWidth: model.strokeWidth
+            strokeColor: root.modelColor
+            strokeWidth: root.modelStrokeWidth
             fillColor: "transparent"
             capStyle: ShapePath.RoundCap
             joinStyle: ShapePath.RoundJoin
 
             PathPolyline {
                 path: root.points || []
+            }
+        }
+    }
+
+    Repeater {
+        model: RoughPathGenerator.getSketchyFreehand(root.points, root.modelRoughness, root.modelSeed)
+        
+        Shape {
+            anchors.fill: parent
+            opacity: root.modelOpacity
+            visible: root.modelRoughness > 0
+
+            ShapePath {
+                strokeColor: root.modelColor
+                strokeWidth: root.modelStrokeWidth
+                fillColor: "transparent"
+                capStyle: ShapePath.RoundCap
+                joinStyle: ShapePath.RoundJoin
+                
+                PathPolyline {
+                    path: modelData
+                }
             }
         }
     }

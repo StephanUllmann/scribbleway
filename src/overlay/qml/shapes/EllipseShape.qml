@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
-
+import "RoughPathGenerator.js" as RoughPathGenerator
 BaseShape {
     id: root
     
@@ -17,13 +17,13 @@ BaseShape {
 
     Shape {
         anchors.fill: parent
-        opacity: model.opacity
+        opacity: root.modelOpacity
 
         ShapePath {
-            strokeColor: model.color
-            strokeWidth: model.strokeWidth
+            strokeColor: root.modelRoughness === 0 ? root.modelColor : "transparent"
+            strokeWidth: root.modelStrokeWidth
             fillColor: {
-                let c = Qt.color(model.color);
+                let c = Qt.color(root.modelColor);
                 return Qt.rgba(c.r, c.g, c.b, 0.12);
             }
 
@@ -49,6 +49,26 @@ BaseShape {
                 radiusY: root.shapeHeight / 2
                 useLargeArc: false
                 direction: PathArc.Clockwise
+            }
+        }
+    }
+
+    Repeater {
+        model: RoughPathGenerator.getSketchyEllipse(root.shapeX, root.shapeY, root.shapeWidth, root.shapeHeight, root.modelRoughness, root.modelSeed)
+        
+        Shape {
+            anchors.fill: parent
+            opacity: root.modelOpacity
+            visible: root.modelRoughness > 0
+
+            ShapePath {
+                strokeColor: root.modelColor
+                strokeWidth: root.modelStrokeWidth
+                fillColor: "transparent"
+                
+                PathPolyline {
+                    path: modelData
+                }
             }
         }
     }

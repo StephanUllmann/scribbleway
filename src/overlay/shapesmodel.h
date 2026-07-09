@@ -30,7 +30,9 @@ public:
         TextRole,
         FontFamilyRole,
         FontSizeRole,
-        BorderRadiusRole
+        BorderRadiusRole,
+        RoughnessRole,
+        SeedRole
     };
     Q_ENUM(ShapeRoles)
 
