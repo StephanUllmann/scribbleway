@@ -72,7 +72,7 @@ if [ "$MODE" = "install" ]; then
 elif [ "$MODE" = "bundle" ]; then
     echo "=== Step 5: Exporting Flatpak to a single-file bundle ==="
     flatpak-builder --repo="$REPO_DIR_FLATPAK" --force-clean "$BUILD_DIR" "$MANIFEST"
-    flatpak build-bundle "$REPO_DIR_FLATPAK" "scribbleway.flatpak" "$APP_ID"
+    flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo "$REPO_DIR_FLATPAK" "scribbleway.flatpak" "$APP_ID"
     echo "Flatpak bundle successfully created: scribbleway.flatpak"
 elif [ "$MODE" = "build-only" ]; then
     echo "=== Step 5: Build-only mode selected. Skipping install and bundle export ==="
