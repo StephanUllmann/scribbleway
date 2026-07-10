@@ -170,12 +170,12 @@ function getSketchyArc(cx, cy, R, startAngle, endAngle, roughness, rand) {
         }
 
         points.push(Qt.point(
-            cx + R * Math.cos(endAngle),
-            cy + R * Math.sin(endAngle)
+            _offsetOpt(offsetScale, roughness, rand) + cx + R * Math.cos(endAngle),
+            _offsetOpt(offsetScale, roughness, rand) + cy + R * Math.sin(endAngle)
         ));
         points.push(Qt.point(
-            cx + R * Math.cos(endAngle),
-            cy + R * Math.sin(endAngle)
+            _offsetOpt(offsetScale, roughness, rand) + cx + R * Math.cos(endAngle),
+            _offsetOpt(offsetScale, roughness, rand) + cy + R * Math.sin(endAngle)
         ));
 
         let pts = evaluateCatmullRomSplineDirect(points, 8);
@@ -299,10 +299,11 @@ function getSketchyFreehand(points, roughness, seed) {
         let offsetScale = (loop === 0) ? 1.0 : 1.5;
         let pts = [];
         for (let i = 0; i < points.length; ++i) {
-            let offset = _offsetOpt(offsetScale * 1.5, roughness, rand);
+            let offsetX = _offsetOpt(offsetScale * 1.5, roughness, rand);
+            let offsetY = _offsetOpt(offsetScale * 1.5, roughness, rand);
             pts.push(Qt.point(
-                points[i].x + offset,
-                points[i].y + offset
+                points[i].x + offsetX,
+                points[i].y + offsetY
             ));
         }
         let strokePts = evaluateCatmullRomSpline(pts, 8);
