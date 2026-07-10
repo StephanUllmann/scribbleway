@@ -9,6 +9,4 @@ RESOURCES.md
 build-flatpak/
 .flatpak-builder/
 repo-flatpak/
-scribbleway.flatpak
-*.deb
 build-flatpak-cache/
