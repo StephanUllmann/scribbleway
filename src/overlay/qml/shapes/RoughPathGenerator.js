@@ -77,12 +77,12 @@ function getSketchyLine(x1, y1, x2, y2, roughness, seed) {
     return getSketchyLineWithPRNG(x1, y1, x2, y2, roughness, createPRNG(seed));
 }
 
-function getSketchyLineWithPRNG(x1, y1, x2, y2, roughness, rand) {
+function getSketchyLineWithPRNG(x1, y1, x2, y2, roughness, rand, forceReturnStrokes) {
     if (roughness === 0) return [];
 
     let lengthSq = (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
     let length = Math.sqrt(lengthSq);
-    if (length < 2) return [];
+    if (length < 2 && !forceReturnStrokes) return [];
 
     let roughnessGain = 1.0;
     if (length < 200) {
@@ -145,6 +145,13 @@ function getSketchyArc(cx, cy, R, startAngle, endAngle, roughness, rand) {
         let temp = startAngle;
         startAngle = endAngle;
         endAngle = temp;
+    }
+    if (endAngle - startAngle < 0.001) {
+        return getSketchyLineWithPRNG(
+            cx + R * Math.cos(startAngle), cy + R * Math.sin(startAngle),
+            cx + R * Math.cos(endAngle), cy + R * Math.sin(endAngle),
+            roughness, rand, true
+        );
     }
     let strokes = [];
 
