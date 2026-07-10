@@ -1472,6 +1472,49 @@ void ShapesModelTest::testRoughPathGenerator()
         int strokeLen = stroke.property(QStringLiteral("length")).toInt();
         QCOMPARE(strokeLen, 13);
     }
+
+    // Test getSketchyEllipse(10, 20, 100, 200, 1.5, 42)
+    QJSValue getSketchyEllipse = engine.globalObject().property(QStringLiteral("getSketchyEllipse"));
+    QVERIFY(getSketchyEllipse.isCallable());
+    QJSValueList ellipseArgs;
+    ellipseArgs << 10 << 20 << 100 << 200 << 1.5 << 42;
+    QJSValue ellipseResult = getSketchyEllipse.call(ellipseArgs);
+    QVERIFY(!ellipseResult.isError());
+    QVERIFY(ellipseResult.isArray());
+    int ellipseLen = ellipseResult.property(QStringLiteral("length")).toInt();
+    QCOMPARE(ellipseLen, 2);
+
+    // Test getSketchyRectangle(10, 20, 100, 200, 1.5, 42, 10) (rounded rectangle)
+    QJSValue getSketchyRectangle = engine.globalObject().property(QStringLiteral("getSketchyRectangle"));
+    QVERIFY(getSketchyRectangle.isCallable());
+    QJSValueList rectArgs;
+    rectArgs << 10 << 20 << 100 << 200 << 1.5 << 42 << 10;
+    QJSValue rectResult = getSketchyRectangle.call(rectArgs);
+    QVERIFY(!rectResult.isError());
+    QVERIFY(rectResult.isArray());
+    int rectLen = rectResult.property(QStringLiteral("length")).toInt();
+    QCOMPARE(rectLen, 16); // 4 sides * 2 + 4 corners * 2 = 16 strokes
+
+    // Test getSketchyFreehand
+    QJSValue getSketchyFreehand = engine.globalObject().property(QStringLiteral("getSketchyFreehand"));
+    QVERIFY(getSketchyFreehand.isCallable());
+    QJSValue pointsArray = engine.newArray();
+    QJSValue p1 = engine.newObject();
+    p1.setProperty(QStringLiteral("x"), 10);
+    p1.setProperty(QStringLiteral("y"), 20);
+    QJSValue p2 = engine.newObject();
+    p2.setProperty(QStringLiteral("x"), 100);
+    p2.setProperty(QStringLiteral("y"), 200);
+    pointsArray.setProperty(0, p1);
+    pointsArray.setProperty(1, p2);
+
+    QJSValueList freehandArgs;
+    freehandArgs << pointsArray << 1.5 << 42;
+    QJSValue freehandResult = getSketchyFreehand.call(freehandArgs);
+    QVERIFY(!freehandResult.isError());
+    QVERIFY(freehandResult.isArray());
+    int freehandLen = freehandResult.property(QStringLiteral("length")).toInt();
+    QCOMPARE(freehandLen, 2);
 }
 
 QTEST_MAIN(ShapesModelTest)

@@ -147,25 +147,38 @@ function getSketchyLineWithPRNG(x1, y1, x2, y2, roughness, rand) {
 function getSketchyArc(cx, cy, R, startAngle, endAngle, roughness, rand) {
     if (R <= 0 || roughness === 0) return [];
     let strokes = [];
-    let roughnessFactor = factor(roughness);
+
+    let curveStepCount = 9;
+    let ellipseInc = (Math.PI * 2.0) / curveStepCount;
+    let arcInc = Math.min(ellipseInc / 2.0, (endAngle - startAngle) / 2.0);
 
     for (let loop = 0; loop < 2; ++loop) {
-        let pts = [];
-        let steps = 8;
-        let phase = rand() * 2 * Math.PI;
-        for (let i = 0; i <= steps; ++i) {
-            let t = i / steps;
-            let theta = startAngle + t * (endAngle - startAngle);
-            let offset = roughnessFactor * (0.6 + rand() * 0.8);
-            let rVar = R + Math.sin(theta * 2 + phase) * offset * 0.8;
+        let offsetScale = (loop === 0) ? 1.0 : 1.5;
+        let radOffset = startAngle + _offsetOpt(0.1, roughness, rand);
+        let points = [];
 
-            let jx = (rand() - 0.5) * offset * 0.3;
-            let jy = (rand() - 0.5) * offset * 0.3;
+        points.push(Qt.point(
+            _offsetOpt(offsetScale, roughness, rand) + cx + 0.9 * R * Math.cos(radOffset - arcInc),
+            _offsetOpt(offsetScale, roughness, rand) + cy + 0.9 * R * Math.sin(radOffset - arcInc)
+        ));
 
-            let px = cx + rVar * Math.cos(theta) + jx;
-            let py = cy + rVar * Math.sin(theta) + jy;
-            pts.push(Qt.point(px, py));
+        for (let angle = radOffset; angle <= endAngle; angle += arcInc) {
+            points.push(Qt.point(
+                _offsetOpt(offsetScale, roughness, rand) + cx + R * Math.cos(angle),
+                _offsetOpt(offsetScale, roughness, rand) + cy + R * Math.sin(angle)
+            ));
         }
+
+        points.push(Qt.point(
+            cx + R * Math.cos(endAngle),
+            cy + R * Math.sin(endAngle)
+        ));
+        points.push(Qt.point(
+            cx + R * Math.cos(endAngle),
+            cy + R * Math.sin(endAngle)
+        ));
+
+        let pts = evaluateCatmullRomSplineDirect(points, 8);
         strokes.push(pts);
     }
     return strokes;
@@ -190,46 +203,64 @@ function getSketchyRectangle(x, y, w, h, roughness, seed, borderRadius) {
     strokes = strokes.concat(getSketchyLineWithPRNG(x + w - R, y + h, x + R, y + h, roughness, rand));
     strokes = strokes.concat(getSketchyLineWithPRNG(x, y + h - R, x, y + R, roughness, rand));
 
-    strokes = strokes.concat(getSketchyArc(x + w - R, y + R, R, -Math.PI / 2, 0, roughness, rand));
-    strokes = strokes.concat(getSketchyArc(x + w - R, y + h - R, R, 0, Math.PI / 2, roughness, rand));
-    strokes = strokes.concat(getSketchyArc(x + R, y + h - R, R, Math.PI / 2, Math.PI, roughness, rand));
-    strokes = strokes.concat(getSketchyArc(x + R, y + R, R, Math.PI, 3 * Math.PI / 2, roughness, rand));
+    strokes = strokes.concat(getSketchyArc(x + w - R, y + R, R, -Math.PI / 2.0, 0, roughness, rand));
+    strokes = strokes.concat(getSketchyArc(x + w - R, y + h - R, R, 0, Math.PI / 2.0, roughness, rand));
+    strokes = strokes.concat(getSketchyArc(x + R, y + h - R, R, Math.PI / 2.0, Math.PI, roughness, rand));
+    strokes = strokes.concat(getSketchyArc(x + R, y + R, R, Math.PI, 3.0 * Math.PI / 2.0, roughness, rand));
 
     return strokes;
 }
 
 function getSketchyEllipse(x, y, w, h, roughness, seed) {
     if (roughness === 0) return [];
-    let cx = x + w / 2;
-    let cy = y + h / 2;
-    let rx = w / 2;
-    let ry = h / 2;
+    let cx = x + w / 2.0;
+    let cy = y + h / 2.0;
+    let rx = Math.abs(w / 2.0);
+    let ry = Math.abs(h / 2.0);
     if (rx < 1 || ry < 1) return [];
 
     let rand = createPRNG(seed);
     let strokes = [];
-    let roughnessFactor = factor(roughness);
+
+    let psq = Math.sqrt(Math.PI * 2.0 * Math.sqrt((rx * rx + ry * ry) / 2.0));
+    let stepCount = Math.ceil(Math.max(9, (9 / Math.sqrt(200.0)) * psq));
+    let increment = (Math.PI * 2.0) / stepCount;
+
+    let overlap = increment * _offset(0.1, _offset(0.4, 1.0, roughness, rand), roughness, rand);
 
     for (let loop = 0; loop < 2; ++loop) {
-        let pts = [];
-        let steps = 32;
-        let phaseX = rand() * 2 * Math.PI;
-        let phaseY = rand() * 2 * Math.PI;
+        let offsetScale = (loop === 0) ? 1.0 : 1.5;
+        let radOffset = _offsetOpt(0.5, roughness, rand) - (Math.PI / 2.0);
 
-        let extraSteps = 3;
-        for (let i = 0; i <= steps + extraSteps; ++i) {
-            let theta = (i / steps) * 2 * Math.PI;
-            let offset = roughnessFactor * (0.6 + rand() * 0.8);
-            let rxVar = rx + Math.sin(theta * 2 + phaseX) * offset * 1.5;
-            let ryVar = ry + Math.cos(theta * 2 + phaseY) * offset * 1.5;
+        let points = [];
 
-            let jx = (rand() - 0.5) * offset * 0.3;
-            let jy = (rand() - 0.5) * offset * 0.3;
+        points.push(Qt.point(
+            _offsetOpt(offsetScale, roughness, rand) + cx + 0.9 * rx * Math.cos(radOffset - increment),
+            _offsetOpt(offsetScale, roughness, rand) + cy + 0.9 * ry * Math.sin(radOffset - increment)
+        ));
 
-            let px = cx + rxVar * Math.cos(theta) + jx;
-            let py = cy + ryVar * Math.sin(theta) + jy;
-            pts.push(Qt.point(px, py));
+        let endAngle = Math.PI * 2.0 + radOffset - 0.01;
+        for (let angle = radOffset; angle < endAngle; angle += increment) {
+            points.push(Qt.point(
+                _offsetOpt(offsetScale, roughness, rand) + cx + rx * Math.cos(angle),
+                _offsetOpt(offsetScale, roughness, rand) + cy + ry * Math.sin(angle)
+            ));
         }
+
+        points.push(Qt.point(
+            _offsetOpt(offsetScale, roughness, rand) + cx + rx * Math.cos(radOffset + Math.PI * 2.0 + overlap * 0.5),
+            _offsetOpt(offsetScale, roughness, rand) + cy + ry * Math.sin(radOffset + Math.PI * 2.0 + overlap * 0.5)
+        ));
+        points.push(Qt.point(
+            _offsetOpt(offsetScale, roughness, rand) + cx + 0.98 * rx * Math.cos(radOffset + overlap),
+            _offsetOpt(offsetScale, roughness, rand) + cy + 0.98 * ry * Math.sin(radOffset + overlap)
+        ));
+        points.push(Qt.point(
+            _offsetOpt(offsetScale, roughness, rand) + cx + 0.9 * rx * Math.cos(radOffset + overlap * 0.5),
+            _offsetOpt(offsetScale, roughness, rand) + cy + 0.9 * ry * Math.sin(radOffset + overlap * 0.5)
+        ));
+
+        let pts = evaluateCatmullRomSplineDirect(points, 8);
         strokes.push(pts);
     }
     return strokes;
@@ -263,18 +294,19 @@ function getSketchyFreehand(points, roughness, seed) {
 
     let rand = createPRNG(seed);
     let strokes = [];
-    let roughnessFactor = factor(roughness, 1.5);
 
     for (let loop = 0; loop < 2; ++loop) {
+        let offsetScale = (loop === 0) ? 1.0 : 1.5;
         let pts = [];
-        let phase = rand() * 2 * Math.PI;
         for (let i = 0; i < points.length; ++i) {
-            let offset = roughnessFactor * (0.5 + rand() * 0.5);
-            let jx = Math.sin(i * 0.5 + phase) * offset * 0.7 + (rand() - 0.5) * offset * 0.3;
-            let jy = Math.cos(i * 0.5 + phase) * offset * 0.7 + (rand() - 0.5) * offset * 0.3;
-            pts.push(Qt.point(points[i].x + jx, points[i].y + jy));
+            let offset = _offsetOpt(offsetScale * 1.5, roughness, rand);
+            pts.push(Qt.point(
+                points[i].x + offset,
+                points[i].y + offset
+            ));
         }
-        strokes.push(pts);
+        let strokePts = evaluateCatmullRomSpline(pts, 8);
+        strokes.push(strokePts);
     }
     return strokes;
 }
