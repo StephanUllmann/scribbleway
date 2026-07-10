@@ -1,0 +1,23 @@
+FROM archlinux:latest
+
+# Update keyring first to avoid signature verification issues, then system packages and dependencies
+RUN pacman -Sy --noconfirm archlinux-keyring && \
+    pacman -Syu --noconfirm && \
+    pacman -S --noconfirm base-devel git cmake extra-cmake-modules plasma-desktop layer-shell-qt kglobalaccel kdbusaddons qt6-declarative qt6-base
+
+# Create a non-root builduser with sudo privileges
+RUN useradd -m -G wheel builduser && \
+    echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+USER builduser
+WORKDIR /home/builduser/scribbleway
+
+# Copy local source files
+COPY --chown=builduser:builduser . .
+
+# Adjust PKGBUILD to build from the local copied repository's git directory
+RUN sed -i 's|source=(.*)|source=("scribbleway::git+file:///home/builduser/scribbleway")|' packaging/arch/PKGBUILD
+
+# Build the package
+WORKDIR /home/builduser/scribbleway/packaging/arch
+RUN makepkg -s --noconfirm
