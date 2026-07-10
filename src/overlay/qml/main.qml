@@ -641,6 +641,16 @@ Window {
         onActivated: controller.shrinkSelected()
     }
     Shortcut {
+        sequence: controller.localShortcutSequences["action_increase_border_radius"]
+        enabled: canvasWindow.shortcutGuard && controller.selectedShapeType === "rectangle"
+        onActivated: controller.increaseBorderRadius()
+    }
+    Shortcut {
+        sequence: controller.localShortcutSequences["action_decrease_border_radius"]
+        enabled: canvasWindow.shortcutGuard && controller.selectedShapeType === "rectangle"
+        onActivated: controller.decreaseBorderRadius()
+    }
+    Shortcut {
         sequence: controller.localShortcutSequences["action_select"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.enterSelectMode()

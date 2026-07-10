@@ -493,6 +493,49 @@ void ShapesModelTest::testBorderRadius()
 
     QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 20);
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 20);
+
+    // Test selectedShapeType() when shape is selected
+    QCOMPARE(controller.selectedShapeType(), QStringLiteral("rectangle"));
+
+    // Test increaseBorderRadius()
+    controller.increaseBorderRadius();
+    QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 22);
+    QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 22);
+    QCOMPARE(controller.defaultBorderRadius(), 22);
+
+    // Test decreaseBorderRadius()
+    controller.decreaseBorderRadius();
+    QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 20);
+    QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 20);
+    QCOMPARE(controller.defaultBorderRadius(), 20);
+
+    // Decrease below 0
+    for (int i = 0; i < 12; ++i) {
+        controller.decreaseBorderRadius();
+    }
+    QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 0);
+    QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 0);
+    QCOMPARE(controller.defaultBorderRadius(), 0);
+
+    // Deselect and verify selectedShapeType() is empty
+    controller.setSelectedIndex(-1);
+    QCOMPARE(controller.selectedShapeType(), QString());
+
+    // Test increaseBorderRadius() when no shape is selected (should do nothing)
+    controller.increaseBorderRadius();
+    QCOMPARE(controller.defaultBorderRadius(), 0); // remains 0
+
+    // Add a non-rectangle shape and select it
+    QVariantMap lineShape;
+    lineShape[QStringLiteral("type")] = QStringLiteral("line");
+    controller.addShape(lineShape); // selects it automatically
+
+    QCOMPARE(controller.selectedShapeType(), QStringLiteral("line"));
+
+    // increaseBorderRadius() on line should do nothing
+    controller.increaseBorderRadius();
+    // Default border radius shouldn't change
+    QCOMPARE(controller.defaultBorderRadius(), 0);
 }
 
 void ShapesModelTest::testRoughness()
@@ -1355,6 +1398,8 @@ void ShapesModelTest::testReworkedShortcutsSlots()
     QVariantMap localSeqs = controller.localShortcutSequences();
     QCOMPARE(localSeqs[QStringLiteral("tool_arrow")].toString(), QStringLiteral("A"));
     QCOMPARE(localSeqs[QStringLiteral("tool_rectangle")].toString(), QStringLiteral("R"));
+    QCOMPARE(localSeqs[QStringLiteral("action_increase_border_radius")].toString(), QStringLiteral("ü"));
+    QCOMPARE(localSeqs[QStringLiteral("action_decrease_border_radius")].toString(), QStringLiteral("ä"));
 
     // 8. Test changeShortcut conflict resolution and persistence
     // Check changing local shortcut

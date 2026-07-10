@@ -42,6 +42,7 @@ class OverlayController : public QObject
     Q_PROPERTY(int defaultBorderRadius READ defaultBorderRadius WRITE setDefaultBorderRadius NOTIFY defaultBorderRadiusChanged)
     Q_PROPERTY(int defaultRoughness READ defaultRoughness WRITE setDefaultRoughness NOTIFY defaultRoughnessChanged)
     Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
+    Q_PROPERTY(QString selectedShapeType READ selectedShapeType NOTIFY selectionChanged)
     Q_PROPERTY(QVariantMap localShortcutSequences READ localShortcutSequences NOTIFY localShortcutsChanged)
 
 public:
@@ -52,7 +53,7 @@ public:
 
     int selectedIndex() const;
     bool hasMultiSelection() const;
-
+    QString selectedShapeType() const;
 
     QString currentMode() const;
 
@@ -98,6 +99,8 @@ public:
     Q_INVOKABLE void cycleColor();
     Q_INVOKABLE void growSelected();
     Q_INVOKABLE void shrinkSelected();
+    Q_INVOKABLE void increaseBorderRadius();
+    Q_INVOKABLE void decreaseBorderRadius();
     Q_INVOKABLE void cycleRoughness();
     Q_INVOKABLE void selectPresetColor(int index);
 

@@ -55,7 +55,9 @@ OverlayController::OverlayController(QObject *parent)
         {QStringLiteral("action_select"), QStringLiteral("Select Mode"), QStringLiteral("X"), QStringLiteral("X")},
         {QStringLiteral("action_cycle_roughness"), QStringLiteral("Cycle Roughness"), QStringLiteral("S"), QStringLiteral("S")},
         {QStringLiteral("action_undo"), QStringLiteral("Undo"), QStringLiteral("Ctrl+Z"), QStringLiteral("Ctrl+Z")},
-        {QStringLiteral("action_clear"), QStringLiteral("Clear All"), QStringLiteral("Ctrl+Delete"), QStringLiteral("Ctrl+Delete")}
+        {QStringLiteral("action_clear"), QStringLiteral("Clear All"), QStringLiteral("Ctrl+Delete"), QStringLiteral("Ctrl+Delete")},
+        {QStringLiteral("action_increase_border_radius"), QStringLiteral("Increase Border Radius"), QStringLiteral("ü"), QStringLiteral("ü")},
+        {QStringLiteral("action_decrease_border_radius"), QStringLiteral("Decrease Border Radius"), QStringLiteral("ä"), QStringLiteral("ä")}
     };
 
     QSettings settings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
@@ -891,6 +893,28 @@ void OverlayController::shrinkSelected()
         updateProperties({{QStringLiteral("strokeWidth"), qMax(strokeWidth - 1, 1)}});
     }
 }
+
+void OverlayController::increaseBorderRadius()
+{
+    QVariantMap state = getSelectionState();
+    if (!state.value(QStringLiteral("hasSelection")).toBool()) return;
+    QString type = state.value(QStringLiteral("type")).toString();
+    if (type.toLower() == QStringLiteral("rectangle")) {
+        int borderRadius = state.value(QStringLiteral("borderRadius"), m_defaultBorderRadius).toInt();
+        updateProperties({{QStringLiteral("borderRadius"), borderRadius + 2}});
+    }
+}
+
+void OverlayController::decreaseBorderRadius()
+{
+    QVariantMap state = getSelectionState();
+    if (!state.value(QStringLiteral("hasSelection")).toBool()) return;
+    QString type = state.value(QStringLiteral("type")).toString();
+    if (type.toLower() == QStringLiteral("rectangle")) {
+        int borderRadius = state.value(QStringLiteral("borderRadius"), m_defaultBorderRadius).toInt();
+        updateProperties({{QStringLiteral("borderRadius"), qMax(borderRadius - 2, 0)}});
+    }
+}
 void OverlayController::copySelected()
 {
     QJsonArray elements;
@@ -1288,6 +1312,14 @@ bool OverlayController::hasMultiSelection() const
         }
     }
     return false;
+}
+
+QString OverlayController::selectedShapeType() const
+{
+    if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
+        return m_shapesModel.shapes()[m_selectedIndex].value(QStringLiteral("type")).toString();
+    }
+    return QString();
 }
 
 void OverlayController::beginDragSelection(bool shiftHeld)
