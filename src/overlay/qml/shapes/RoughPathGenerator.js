@@ -8,11 +8,6 @@ function createPRNG(seed) {
     };
 }
 
-function factor(roughness, base) {
-    // base: default 2 for lines/arcs/ellipses; freehand uses 1.5
-    let b = base === undefined ? 2.0 : base;
-    return roughness === 1 ? b : b * 2.0;
-}
 
 function _offset(min, max, roughness, rand, roughnessGain) {
     let rGain = roughnessGain === undefined ? 1.0 : roughnessGain;
@@ -146,11 +141,19 @@ function getSketchyLineWithPRNG(x1, y1, x2, y2, roughness, rand) {
 
 function getSketchyArc(cx, cy, R, startAngle, endAngle, roughness, rand) {
     if (R <= 0 || roughness === 0) return [];
+    if (endAngle < startAngle) {
+        let temp = startAngle;
+        startAngle = endAngle;
+        endAngle = temp;
+    }
     let strokes = [];
 
     let curveStepCount = 9;
     let ellipseInc = (Math.PI * 2.0) / curveStepCount;
     let arcInc = Math.min(ellipseInc / 2.0, (endAngle - startAngle) / 2.0);
+    if (arcInc <= 0) {
+        arcInc = 0.001;
+    }
 
     for (let loop = 0; loop < 2; ++loop) {
         let offsetScale = (loop === 0) ? 1.0 : 1.5;
@@ -178,7 +181,7 @@ function getSketchyArc(cx, cy, R, startAngle, endAngle, roughness, rand) {
             _offsetOpt(offsetScale, roughness, rand) + cy + R * Math.sin(endAngle)
         ));
 
-        let pts = evaluateCatmullRomSplineDirect(points, 8);
+        let pts = (points.length < 4) ? points : evaluateCatmullRomSplineDirect(points, 8);
         strokes.push(pts);
     }
     return strokes;

@@ -1515,6 +1515,49 @@ void ShapesModelTest::testRoughPathGenerator()
     QVERIFY(freehandResult.isArray());
     int freehandLen = freehandResult.property(QStringLiteral("length")).toInt();
     QCOMPARE(freehandLen, 2);
+
+    // Test getSketchyArc with various angles
+    QJSValue createPRNG = engine.globalObject().property(QStringLiteral("createPRNG"));
+    QVERIFY(createPRNG.isCallable());
+    QJSValueList prngArgs;
+    prngArgs << 42;
+    QJSValue rand = createPRNG.call(prngArgs);
+    QVERIFY(rand.isCallable());
+
+    QJSValue getSketchyArc = engine.globalObject().property(QStringLiteral("getSketchyArc"));
+    QVERIFY(getSketchyArc.isCallable());
+
+    // 1. Normal arc angles
+    QJSValueList arcArgsNormal;
+    arcArgsNormal << 100 << 100 << 50 << 0.0 << 1.57 << 1.5 << rand;
+    QJSValue arcResultNormal = getSketchyArc.call(arcArgsNormal);
+    QVERIFY(!arcResultNormal.isError());
+    QVERIFY(arcResultNormal.isArray());
+    QCOMPARE(arcResultNormal.property(QStringLiteral("length")).toInt(), 2);
+
+    // 2. Swapped arc angles (endAngle < startAngle)
+    QJSValueList arcArgsSwapped;
+    arcArgsSwapped << 100 << 100 << 50 << 1.57 << 0.0 << 1.5 << rand;
+    QJSValue arcResultSwapped = getSketchyArc.call(arcArgsSwapped);
+    QVERIFY(!arcResultSwapped.isError());
+    QVERIFY(arcResultSwapped.isArray());
+    QCOMPARE(arcResultSwapped.property(QStringLiteral("length")).toInt(), 2);
+
+    // 3. Tiny arc angles (difference extremely small)
+    QJSValueList arcArgsTiny;
+    arcArgsTiny << 100 << 100 << 50 << 0.0 << 0.00001 << 1.5 << rand;
+    QJSValue arcResultTiny = getSketchyArc.call(arcArgsTiny);
+    QVERIFY(!arcResultTiny.isError());
+    QVERIFY(arcResultTiny.isArray());
+    QCOMPARE(arcResultTiny.property(QStringLiteral("length")).toInt(), 2);
+
+    // 4. Zero-length arc angle
+    QJSValueList arcArgsZero;
+    arcArgsZero << 100 << 100 << 50 << 0.0 << 0.0 << 1.5 << rand;
+    QJSValue arcResultZero = getSketchyArc.call(arcArgsZero);
+    QVERIFY(!arcResultZero.isError());
+    QVERIFY(arcResultZero.isArray());
+    QCOMPARE(arcResultZero.property(QStringLiteral("length")).toInt(), 2);
 }
 
 QTEST_MAIN(ShapesModelTest)
