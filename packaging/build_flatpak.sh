@@ -62,16 +62,17 @@ echo "=== Step 3: Installing KDE 6.10 Platform and SDK if missing ==="
 flatpak install -y --user flathub "$RUNTIME" "$SDK"
 
 echo "=== Step 4: Building Flatpak package ==="
-flatpak-builder --force-clean --ccache "$BUILD_DIR" "$MANIFEST"
+# ponytail: disable rofiles-fuse because user namespace fchown fails in sandbox/unprivileged environments
+flatpak-builder --force-clean --ccache --disable-rofiles-fuse "$BUILD_DIR" "$MANIFEST"
 
 if [ "$MODE" = "install" ]; then
     echo "=== Step 5: Installing Flatpak package for current user ==="
-    flatpak-builder --user --install --force-clean "$BUILD_DIR" "$MANIFEST"
+    flatpak-builder --user --install --force-clean --disable-rofiles-fuse "$BUILD_DIR" "$MANIFEST"
     echo "Flatpak successfully built and installed."
     echo "To run: flatpak run $APP_ID"
 elif [ "$MODE" = "bundle" ]; then
     echo "=== Step 5: Exporting Flatpak to a single-file bundle ==="
-    flatpak-builder --repo="$REPO_DIR_FLATPAK" --force-clean "$BUILD_DIR" "$MANIFEST"
+    flatpak-builder --repo="$REPO_DIR_FLATPAK" --force-clean --disable-rofiles-fuse "$BUILD_DIR" "$MANIFEST"
     flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo "$REPO_DIR_FLATPAK" "scribbleway.flatpak" "$APP_ID"
     echo "Flatpak bundle successfully created: scribbleway.flatpak"
 elif [ "$MODE" = "build-only" ]; then
