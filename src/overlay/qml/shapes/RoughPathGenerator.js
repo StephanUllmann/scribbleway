@@ -14,6 +14,69 @@ function factor(roughness, base) {
     return roughness === 1 ? b : b * 2.0;
 }
 
+function _offset(min, max, roughness, rand, roughnessGain) {
+    let rGain = roughnessGain === undefined ? 1.0 : roughnessGain;
+    return roughness * rGain * (rand() * (max - min) + min);
+}
+
+function _offsetOpt(x, roughness, rand, roughnessGain) {
+    return _offset(-x, x, roughness, rand, roughnessGain);
+}
+
+function evaluateBezier(p0, p1, p2, p3, t) {
+    let t1 = 1.0 - t;
+    let x = t1 * t1 * t1 * p0.x + 3.0 * t1 * t1 * t * p1.x + 3.0 * t1 * t * t * p2.x + t * t * t * p3.x;
+    let y = t1 * t1 * t1 * p0.y + 3.0 * t1 * t1 * t * p1.y + 3.0 * t1 * t * t * p2.y + t * t * t * p3.y;
+    return Qt.point(x, y);
+}
+
+function evaluateBezierCurve(p0, p1, p2, p3, steps) {
+    let pts = [];
+    for (let i = 0; i <= steps; ++i) {
+        pts.push(evaluateBezier(p0, p1, p2, p3, i / steps));
+    }
+    return pts;
+}
+
+function evaluateCatmullRomSplineDirect(points, steps, tightness) {
+    if (points.length < 4) return [];
+    let s = 1.0 - (tightness === undefined ? 0.0 : tightness);
+
+    let pts = [];
+    pts.push(points[1]);
+    for (let i = 1; i < points.length - 2; ++i) {
+        let p0 = points[i - 1];
+        let p1 = points[i];
+        let p2 = points[i + 1];
+        let p3 = points[i + 2];
+
+        let cp1 = Qt.point(
+            p1.x + (s * p2.x - s * p0.x) / 6.0,
+            p1.y + (s * p2.y - s * p0.y) / 6.0
+        );
+        let cp2 = Qt.point(
+            p2.x + (s * p1.x - s * p3.x) / 6.0,
+            p2.y + (s * p1.y - s * p3.y) / 6.0
+        );
+
+        for (let j = 1; j <= steps; ++j) {
+            pts.push(evaluateBezier(p1, cp1, cp2, p2, j / steps));
+        }
+    }
+    return pts;
+}
+
+function evaluateCatmullRomSpline(points, steps, tightness) {
+    if (points.length < 2) return [];
+    let ps = [];
+    ps.push(points[0]);
+    for (let i = 0; i < points.length; ++i) {
+        ps.push(points[i]);
+    }
+    ps.push(points[points.length - 1]);
+    return evaluateCatmullRomSplineDirect(ps, steps, tightness);
+}
+
 function getSketchyLine(x1, y1, x2, y2, roughness, seed) {
     if (roughness === 0) return [];
     return getSketchyLineWithPRNG(x1, y1, x2, y2, roughness, createPRNG(seed));
