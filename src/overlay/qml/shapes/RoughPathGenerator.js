@@ -85,51 +85,61 @@ function getSketchyLine(x1, y1, x2, y2, roughness, seed) {
 function getSketchyLineWithPRNG(x1, y1, x2, y2, roughness, rand) {
     if (roughness === 0) return [];
 
-    let L = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-    if (L < 2) return [];
+    let lengthSq = (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
+    let length = Math.sqrt(lengthSq);
+    if (length < 2) return [];
+
+    let roughnessGain = 1.0;
+    if (length < 200) {
+        roughnessGain = 1.0;
+    } else if (length > 500) {
+        roughnessGain = 0.4;
+    } else {
+        roughnessGain = (-0.0016668) * length + 1.233334;
+    }
+
+    let offset = 2.0;
+    if ((offset * offset * 100) > lengthSq) {
+        offset = length / 10.0;
+    }
+    let halfOffset = offset / 2.0;
 
     let strokes = [];
-    let roughnessFactor = factor(roughness);
 
-    for (let i = 0; i < 2; ++i) {
-        let offset = roughnessFactor * (L > 100 ? 1.0 : Math.max(0.3, L / 100.0)) * (0.6 + rand() * 0.8);
+    for (let loop = 0; loop < 2; ++loop) {
+        let isOverlay = (loop === 1);
+        let currentOffset = isOverlay ? halfOffset : offset;
 
-        let dirX = (x2 - x1) / L;
-        let dirY = (y2 - y1) / L;
-        let perpX = -dirY;
-        let perpY = dirX;
+        let bowing = 1.0;
+        let midDispX = bowing * offset * (y2 - y1) / 200.0;
+        let midDispY = bowing * offset * (x1 - x2) / 200.0;
+        midDispX = _offsetOpt(midDispX, roughness, rand, roughnessGain);
+        midDispY = _offsetOpt(midDispY, roughness, rand, roughnessGain);
 
-        let os1 = (rand() - 0.5) * 5.0 * (roughnessFactor / 3.0);
-        let os2 = (rand() - 0.5) * 5.0 * (roughnessFactor / 3.0);
+        let divergePoint = 0.2 + rand() * 0.2;
 
-        let sx = x1 - dirX * os1 + perpX * (rand() - 0.5) * offset * 0.5;
-        let sy = y1 - dirY * os1 + perpY * (rand() - 0.5) * offset * 0.5;
-        let ex = x2 + dirX * os2 + perpX * (rand() - 0.5) * offset * 0.5;
-        let ey = y2 + dirY * os2 + perpY * (rand() - 0.5) * offset * 0.5;
-
-        let p1 = Qt.point(sx, sy);
-
-        let w2 = (rand() - 0.5) * offset * 0.5;
-        let p2 = Qt.point(
-            x1 + dirX * L * 0.25 + perpX * w2,
-            y1 + dirY * L * 0.25 + perpY * w2
+        let startPoint = Qt.point(
+            x1 + _offsetOpt(currentOffset, roughness, rand, roughnessGain),
+            y1 + _offsetOpt(currentOffset, roughness, rand, roughnessGain)
         );
 
-        let w3 = (rand() - 0.5) * offset * 0.8;
-        let p3 = Qt.point(
-            x1 + dirX * L * 0.50 + perpX * w3,
-            y1 + dirY * L * 0.50 + perpY * w3
+        let cp1 = Qt.point(
+            midDispX + x1 + (x2 - x1) * divergePoint + _offsetOpt(currentOffset, roughness, rand, roughnessGain),
+            midDispY + y1 + (y2 - y1) * divergePoint + _offsetOpt(currentOffset, roughness, rand, roughnessGain)
         );
 
-        let w4 = (rand() - 0.5) * offset * 0.5;
-        let p4 = Qt.point(
-            x1 + dirX * L * 0.75 + perpX * w4,
-            y1 + dirY * L * 0.75 + perpY * w4
+        let cp2 = Qt.point(
+            midDispX + x1 + 2.0 * (x2 - x1) * divergePoint + _offsetOpt(currentOffset, roughness, rand, roughnessGain),
+            midDispY + y1 + 2.0 * (y2 - y1) * divergePoint + _offsetOpt(currentOffset, roughness, rand, roughnessGain)
         );
 
-        let p5 = Qt.point(ex, ey);
+        let endPoint = Qt.point(
+            x2 + _offsetOpt(currentOffset, roughness, rand, roughnessGain),
+            y2 + _offsetOpt(currentOffset, roughness, rand, roughnessGain)
+        );
 
-        strokes.push([p1, p2, p3, p4, p5]);
+        let pts = evaluateBezierCurve(startPoint, cp1, cp2, endPoint, 12);
+        strokes.push(pts);
     }
     return strokes;
 }
@@ -233,8 +243,8 @@ function getSketchyArrow(fromX, fromY, toX, toY, roughness, seed, arrowLength) {
     strokes = strokes.concat(getSketchyLineWithPRNG(fromX, fromY, toX, toY, roughness, rand));
 
     let lineAngle = Math.atan2(toY - fromY, toX - fromX);
-    let len = arrowLength === undefined ? 12 : arrowLength;
-    let arrowHalfAngle = Math.PI / 6;
+    let len = arrowLength === undefined ? 12.0 : arrowLength;
+    let arrowHalfAngle = Math.PI / 6.0;
 
     let arrowLeftX = toX - len * Math.cos(lineAngle - arrowHalfAngle);
     let arrowLeftY = toY - len * Math.sin(lineAngle - arrowHalfAngle);

@@ -15,6 +15,8 @@
 #include <QFontDatabase>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJSEngine>
+#include <QFile>
 
 class ShapesModelTest : public QObject
 {
@@ -44,6 +46,7 @@ private Q_SLOTS:
     void testExcalidrawSchemaEdgeCases();
     void testAppletBackendIntegration();
     void testReworkedShortcutsSlots();
+    void testRoughPathGenerator();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -1400,5 +1403,76 @@ void ShapesModelTest::testReworkedShortcutsSlots()
     KGlobalAccel::self()->setShortcut(&dummyAction, QList<QKeySequence>(), KGlobalAccel::NoAutoloading);
     QTest::qWait(50);
 }
+void ShapesModelTest::testRoughPathGenerator()
+{
+    QJSEngine engine;
+
+    // Evaluate Qt mock to satisfy Qt.point()
+    QJSValue qtMock = engine.newObject();
+    qtMock.setProperty(QStringLiteral("point"), engine.evaluate(QStringLiteral("(function(x, y) { return { x: x, y: y }; })")));
+    engine.globalObject().setProperty(QStringLiteral("Qt"), qtMock);
+
+    // Read and evaluate RoughPathGenerator.js
+    QFile file(QStringLiteral("src/overlay/qml/shapes/RoughPathGenerator.js"));
+    if (!file.exists()) {
+        file.setFileName(QStringLiteral("../src/overlay/qml/shapes/RoughPathGenerator.js"));
+    }
+    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    QString jsCode = QString::fromUtf8(file.readAll());
+    file.close();
+
+    QJSValue result = engine.evaluate(jsCode);
+    QVERIFY(!result.isError());
+
+    // Now get the functions
+    QJSValue getSketchyLine = engine.globalObject().property(QStringLiteral("getSketchyLine"));
+    QVERIFY(getSketchyLine.isCallable());
+
+    QJSValue getSketchyArrow = engine.globalObject().property(QStringLiteral("getSketchyArrow"));
+    QVERIFY(getSketchyArrow.isCallable());
+
+    // Test getSketchyLine(10, 20, 100, 200, 1.5, 42)
+    QJSValueList lineArgs;
+    lineArgs << 10 << 20 << 100 << 200 << 1.5 << 42;
+    QJSValue lineResult = getSketchyLine.call(lineArgs);
+    QVERIFY(!lineResult.isError());
+    QVERIFY(lineResult.isArray());
+
+    // The result should contain 2 strokes (since loop goes up to 2)
+    int lineLen = lineResult.property(QStringLiteral("length")).toInt();
+    QCOMPARE(lineLen, 2);
+
+    for (int i = 0; i < lineLen; ++i) {
+        QJSValue stroke = lineResult.property(i);
+        QVERIFY(stroke.isArray());
+        int strokeLen = stroke.property(QStringLiteral("length")).toInt();
+        // Since steps=12, there should be 13 points in the Bezier curve
+        QCOMPARE(strokeLen, 13);
+        for (int j = 0; j < strokeLen; ++j) {
+            QJSValue pt = stroke.property(j);
+            QVERIFY(pt.property(QStringLiteral("x")).isNumber());
+            QVERIFY(pt.property(QStringLiteral("y")).isNumber());
+        }
+    }
+
+    // Test getSketchyArrow(10, 20, 100, 200, 1.5, 42, 15)
+    QJSValueList arrowArgs;
+    arrowArgs << 10 << 20 << 100 << 200 << 1.5 << 42 << 15;
+    QJSValue arrowResult = getSketchyArrow.call(arrowArgs);
+    QVERIFY(!arrowResult.isError());
+    QVERIFY(arrowResult.isArray());
+
+    // Arrow should return 6 strokes (2 for line, 2 for left arrowhead, 2 for right arrowhead)
+    int arrowLen = arrowResult.property(QStringLiteral("length")).toInt();
+    QCOMPARE(arrowLen, 6);
+
+    for (int i = 0; i < arrowLen; ++i) {
+        QJSValue stroke = arrowResult.property(i);
+        QVERIFY(stroke.isArray());
+        int strokeLen = stroke.property(QStringLiteral("length")).toInt();
+        QCOMPARE(strokeLen, 13);
+    }
+}
+
 QTEST_MAIN(ShapesModelTest)
 #include "shapesmodeltest.moc"
