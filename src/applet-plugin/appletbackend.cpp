@@ -202,15 +202,13 @@ void AppletBackend::enterPassthroughMode()
     sendDBus(QStringLiteral("enterPassthroughMode"));
 }
 
-void AppletBackend::onServiceRegistered(const QString &serviceName)
+void AppletBackend::onServiceRegistered(const QString &)
 {
-    Q_UNUSED(serviceName)
     connectToOverlay();
 }
 
-void AppletBackend::onServiceUnregistered(const QString &serviceName)
+void AppletBackend::onServiceUnregistered(const QString &)
 {
-    Q_UNUSED(serviceName)
     m_overlayConnected = false;
     m_hasSelection = false;
     m_selectedShapeIndex = -1;

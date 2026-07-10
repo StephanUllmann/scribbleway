@@ -1302,9 +1302,8 @@ void OverlayController::beginDragSelection(bool shiftHeld)
     }
 }
 
-void OverlayController::selectShapesInRect(double rx, double ry, double rw, double rh, bool shiftHeld)
+void OverlayController::selectShapesInRect(double rx, double ry, double rw, double rh, bool /*shiftHeld*/)
 {
-    Q_UNUSED(shiftHeld);
     QRectF selectRect(rx, ry, rw, rh);
     selectRect = selectRect.normalized();
 

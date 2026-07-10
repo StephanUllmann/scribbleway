@@ -116,10 +116,10 @@ Item {
         // Thin blue border
         Rectangle {
             visible: !isLineOrFreehand
-            x: mode === "line" ? Math.min(shapeFromX, shapeToX) : shapeX
-            y: mode === "line" ? Math.min(shapeFromY, shapeToY) : shapeY
-            width: mode === "line" ? Math.abs(shapeFromX - shapeToX) : shapeWidth
-            height: mode === "line" ? Math.abs(shapeFromY - shapeToY) : shapeHeight
+            x: shapeX
+            y: shapeY
+            width: shapeWidth
+            height: shapeHeight
             color: "transparent"
             border.color: "#3b82f6"
             border.width: 1
