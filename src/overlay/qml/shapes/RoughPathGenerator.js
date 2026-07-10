@@ -197,9 +197,11 @@ function getSketchyArc(cx, cy, R, startAngle, endAngle, roughness, rand) {
 function getSketchyRectangle(x, y, w, h, roughness, seed, borderRadius) {
     if (roughness === 0) return [];
     let R = borderRadius || 0;
+    if (R > 0) {
+        R = Math.min(R, Math.min(w, h) / 2.0);
+    }
     let rand = createPRNG(seed);
     let strokes = [];
-
     if (R <= 0) {
         strokes = strokes.concat(getSketchyLineWithPRNG(x, y, x + w, y, roughness, rand));
         strokes = strokes.concat(getSketchyLineWithPRNG(x + w, y, x + w, y + h, roughness, rand));

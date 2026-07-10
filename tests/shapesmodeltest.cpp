@@ -1417,7 +1417,10 @@ void ShapesModelTest::testRoughPathGenerator()
     if (!file.exists()) {
         file.setFileName(QStringLiteral("../src/overlay/qml/shapes/RoughPathGenerator.js"));
     }
-    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    if (!file.exists()) {
+        file.setFileName(QStringLiteral("../../src/overlay/qml/shapes/RoughPathGenerator.js"));
+    }
+    QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), "Failed to open RoughPathGenerator.js file");
     QString jsCode = QString::fromUtf8(file.readAll());
     file.close();
 
@@ -1450,8 +1453,10 @@ void ShapesModelTest::testRoughPathGenerator()
         QCOMPARE(strokeLen, 13);
         for (int j = 0; j < strokeLen; ++j) {
             QJSValue pt = stroke.property(j);
-            QVERIFY(pt.property(QStringLiteral("x")).isNumber());
-            QVERIFY(pt.property(QStringLiteral("y")).isNumber());
+            double px = pt.property(QStringLiteral("x")).toNumber();
+            double py = pt.property(QStringLiteral("y")).toNumber();
+            QVERIFY2(qIsFinite(px), "Point coordinate x is not a finite number");
+            QVERIFY2(qIsFinite(py), "Point coordinate y is not a finite number");
         }
     }
 
@@ -1483,7 +1488,19 @@ void ShapesModelTest::testRoughPathGenerator()
     QVERIFY(ellipseResult.isArray());
     int ellipseLen = ellipseResult.property(QStringLiteral("length")).toInt();
     QCOMPARE(ellipseLen, 2);
-
+    for (int i = 0; i < ellipseLen; ++i) {
+        QJSValue stroke = ellipseResult.property(i);
+        QVERIFY(stroke.isArray());
+        int strokeLen = stroke.property(QStringLiteral("length")).toInt();
+        QVERIFY(strokeLen > 0);
+        for (int j = 0; j < strokeLen; ++j) {
+            QJSValue pt = stroke.property(j);
+            double px = pt.property(QStringLiteral("x")).toNumber();
+            double py = pt.property(QStringLiteral("y")).toNumber();
+            QVERIFY2(qIsFinite(px), "Ellipse coordinate x is not a finite number");
+            QVERIFY2(qIsFinite(py), "Ellipse coordinate y is not a finite number");
+        }
+    }
     // Test getSketchyRectangle(10, 20, 100, 200, 1.5, 42, 10) (rounded rectangle)
     QJSValue getSketchyRectangle = engine.globalObject().property(QStringLiteral("getSketchyRectangle"));
     QVERIFY(getSketchyRectangle.isCallable());
@@ -1494,7 +1511,19 @@ void ShapesModelTest::testRoughPathGenerator()
     QVERIFY(rectResult.isArray());
     int rectLen = rectResult.property(QStringLiteral("length")).toInt();
     QCOMPARE(rectLen, 16); // 4 sides * 2 + 4 corners * 2 = 16 strokes
-
+    for (int i = 0; i < rectLen; ++i) {
+        QJSValue stroke = rectResult.property(i);
+        QVERIFY(stroke.isArray());
+        int strokeLen = stroke.property(QStringLiteral("length")).toInt();
+        QVERIFY(strokeLen > 0);
+        for (int j = 0; j < strokeLen; ++j) {
+            QJSValue pt = stroke.property(j);
+            double px = pt.property(QStringLiteral("x")).toNumber();
+            double py = pt.property(QStringLiteral("y")).toNumber();
+            QVERIFY2(qIsFinite(px), "Rectangle coordinate x is not a finite number");
+            QVERIFY2(qIsFinite(py), "Rectangle coordinate y is not a finite number");
+        }
+    }
     // Test getSketchyFreehand
     QJSValue getSketchyFreehand = engine.globalObject().property(QStringLiteral("getSketchyFreehand"));
     QVERIFY(getSketchyFreehand.isCallable());
@@ -1515,6 +1544,19 @@ void ShapesModelTest::testRoughPathGenerator()
     QVERIFY(freehandResult.isArray());
     int freehandLen = freehandResult.property(QStringLiteral("length")).toInt();
     QCOMPARE(freehandLen, 2);
+    for (int i = 0; i < freehandLen; ++i) {
+        QJSValue stroke = freehandResult.property(i);
+        QVERIFY(stroke.isArray());
+        int strokeLen = stroke.property(QStringLiteral("length")).toInt();
+        QVERIFY(strokeLen > 0);
+        for (int j = 0; j < strokeLen; ++j) {
+            QJSValue pt = stroke.property(j);
+            double px = pt.property(QStringLiteral("x")).toNumber();
+            double py = pt.property(QStringLiteral("y")).toNumber();
+            QVERIFY2(qIsFinite(px), "Freehand coordinate x is not a finite number");
+            QVERIFY2(qIsFinite(py), "Freehand coordinate y is not a finite number");
+        }
+    }
 
     // Test getSketchyArc with various angles
     QJSValue createPRNG = engine.globalObject().property(QStringLiteral("createPRNG"));
