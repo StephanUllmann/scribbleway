@@ -355,14 +355,14 @@ ColumnLayout {
                 from: 0
                 to: 15
                 stepSize: 1
-                value: root.backend.hasSelection ? root.backend.selectedGlow : 3
+                value: root.backend.selectedGlow
                 onMoved: {
                     root.backend.setGlow(value)
                 }
             }
 
             PlasmaComponents.Label {
-                text: Math.round(root.backend.hasSelection ? root.backend.selectedGlow : 3) + "px"
+                text: Math.round(root.backend.selectedGlow) + "px"
             }
         }
 
