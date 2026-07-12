@@ -22,6 +22,7 @@ class AppletBackend : public QObject
     Q_PROPERTY(QVariantList shapesList READ shapesList NOTIFY shapesListChanged)
     Q_PROPERTY(int selectedShapeIndex READ selectedShapeIndex NOTIFY selectionChanged)
     Q_PROPERTY(int selectedBorderRadius READ selectedBorderRadius NOTIFY selectionChanged)
+    Q_PROPERTY(int selectedGlow READ selectedGlow NOTIFY selectionChanged)
     Q_PROPERTY(QString currentMode READ currentMode NOTIFY modeChanged)
     Q_PROPERTY(QString activeTool READ activeTool NOTIFY activeToolChanged)
     Q_PROPERTY(QStringList screenNames READ screenNames CONSTANT)
@@ -43,6 +44,7 @@ public:
     QVariantList shapesList() const;
     int selectedShapeIndex() const;
     int selectedBorderRadius() const;
+    int selectedGlow() const;
     QString currentMode() const;
     QString activeTool() const;
 
@@ -59,6 +61,7 @@ public:
     Q_INVOKABLE void setFontFamily(const QString &family);
     Q_INVOKABLE void setFontSize(int size);
     Q_INVOKABLE void setBorderRadius(int radius);
+    Q_INVOKABLE void setGlow(int glow);
     Q_INVOKABLE void undo();
     Q_INVOKABLE void clear();
     Q_INVOKABLE void deleteSelected();
@@ -106,6 +109,7 @@ private:
     QString m_selectedFontFamily;
     int m_selectedFontSize = 20;
     int m_selectedBorderRadius = 8;
+    int m_selectedGlow = 3;
     bool m_selectedLocked = false;
     int m_selectedShapeIndex = -1;
     QString m_currentMode = QStringLiteral("passthrough");

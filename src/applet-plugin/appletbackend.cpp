@@ -101,6 +101,11 @@ int AppletBackend::selectedBorderRadius() const
     return m_selectedBorderRadius;
 }
 
+int AppletBackend::selectedGlow() const
+{
+    return m_selectedGlow;
+}
+
 QString AppletBackend::currentMode() const
 {
     return m_currentMode;
@@ -145,6 +150,11 @@ void AppletBackend::setFontSize(int size)
 void AppletBackend::setBorderRadius(int radius)
 {
     sendDBus(QStringLiteral("updateProperties"), { QVariantMap{{QStringLiteral("borderRadius"), radius}} });
+}
+
+void AppletBackend::setGlow(int glow)
+{
+    sendDBus(QStringLiteral("updateProperties"), { QVariantMap{{QStringLiteral("glow"), glow}} });
 }
 
 void AppletBackend::undo()
@@ -349,6 +359,7 @@ void AppletBackend::onSelectionChanged(const QVariantMap &state)
     m_selectedLocked = demarshalled[QStringLiteral("locked")].toBool();
     m_selectedShapeIndex = demarshalled[QStringLiteral("selectedIndex")].toInt();
     m_selectedBorderRadius = demarshalled.value(QStringLiteral("borderRadius"), 8).toInt();
+    m_selectedGlow = demarshalled.value(QStringLiteral("glow"), 3).toInt();
     Q_EMIT selectionChanged();
 }
 
