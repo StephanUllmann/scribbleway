@@ -15,6 +15,7 @@ Item {
     property int modelStrokeWidth: model.strokeWidth !== undefined ? model.strokeWidth : 1
     property real modelOpacity: model.opacity !== undefined ? model.opacity : 1.0
     property int modelRoughness: model.roughness !== undefined ? model.roughness : 0
+    property int modelGlow: model.glow !== undefined ? model.glow : 0
     property int modelSeed: model.seed !== undefined ? model.seed : 123456
 
     // Rect-mode properties

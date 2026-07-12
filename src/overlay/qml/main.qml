@@ -125,6 +125,7 @@ Window {
             "selected": false,
             "locked": false,
             "roughness": controller.defaultRoughness,
+            "glow": controller.defaultGlow,
             "seed": Math.floor(Math.random() * 1000000) + 1
         };
 

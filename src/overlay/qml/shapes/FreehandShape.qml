@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
+import QtQuick.Effects
 import "RoughPathGenerator.js" as RoughPathGenerator
 
 BaseShape {
@@ -54,31 +55,47 @@ BaseShape {
         calculatedHeight = Math.max(5, maxY - minY);
     }
 
-    Shape {
-        anchors.fill: parent
-        opacity: root.modelOpacity
-        visible: root.modelRoughness === 0
+    MultiEffect {
+        id: glowEffect
+        anchors.fill: shapeContent
+        source: shapeContent
+        visible: root.modelGlow > 0
 
-        ShapePath {
-            strokeColor: root.modelColor
-            strokeWidth: root.modelStrokeWidth
-            fillColor: "transparent"
-            capStyle: ShapePath.RoundCap
-            joinStyle: ShapePath.RoundJoin
-
-            PathPolyline {
-                path: root.points || []
-            }
-        }
+        blurEnabled: true
+        blurMax: 15
+        blur: root.modelGlow / 15.0
     }
 
-    RoughStroke {
+    Item {
+        id: shapeContent
         anchors.fill: parent
-        strokes: root.modelRoughness > 0
-            ? RoughPathGenerator.getSketchyFreehand(root.points, root.modelRoughness, root.modelSeed)
-            : []
-        strokeColor: root.modelColor
-        strokeWidth: root.modelStrokeWidth
-        strokeOpacity: root.modelOpacity
+
+        Shape {
+            anchors.fill: parent
+            opacity: root.modelOpacity
+            visible: root.modelRoughness === 0
+
+            ShapePath {
+                strokeColor: root.modelColor
+                strokeWidth: root.modelStrokeWidth
+                fillColor: "transparent"
+                capStyle: ShapePath.RoundCap
+                joinStyle: ShapePath.RoundJoin
+
+                PathPolyline {
+                    path: root.points || []
+                }
+            }
+        }
+
+        RoughStroke {
+            anchors.fill: parent
+            strokes: root.modelRoughness > 0
+                ? RoughPathGenerator.getSketchyFreehand(root.points, root.modelRoughness, root.modelSeed)
+                : []
+            strokeColor: root.modelColor
+            strokeWidth: root.modelStrokeWidth
+            strokeOpacity: root.modelOpacity
+        }
     }
 }

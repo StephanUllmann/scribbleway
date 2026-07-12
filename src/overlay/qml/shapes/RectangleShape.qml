@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import "RoughPathGenerator.js" as RoughPathGenerator
 
 BaseShape {
@@ -15,33 +16,49 @@ BaseShape {
         controller.updateShape(index, { "x": nx, "y": ny, "width": nw, "height": nh });
     }
 
-    Rectangle {
-        x: root.shapeX
-        y: root.shapeY
-        width: root.shapeWidth
-        height: root.shapeHeight
-        opacity: root.modelOpacity
+    MultiEffect {
+        id: glowEffect
+        anchors.fill: shapeContent
+        source: shapeContent
+        visible: root.modelGlow > 0
 
-        border.color: root.modelColor
-        border.width: root.modelRoughness === 0 ? root.modelStrokeWidth : 0
-        // Excalidraw-like premium fill style (stroke color at 12% opacity)
-        color: {
-            let c = Qt.color(root.modelColor);
-            return Qt.rgba(c.r, c.g, c.b, 0.12);
-        }
-        radius: typeof borderRadius !== "undefined" ? borderRadius : 0
+        blurEnabled: true
+        blurMax: 15
+        blur: root.modelGlow / 15.0
     }
 
-    RoughStroke {
+    Item {
+        id: shapeContent
         anchors.fill: parent
-        strokes: root.modelRoughness > 0
-            ? RoughPathGenerator.getSketchyRectangle(
-                root.shapeX, root.shapeY, root.shapeWidth, root.shapeHeight,
-                root.modelRoughness, root.modelSeed,
-                typeof borderRadius !== "undefined" ? borderRadius : 0)
-            : []
-        strokeColor: root.modelColor
-        strokeWidth: root.modelStrokeWidth
-        strokeOpacity: root.modelOpacity
+
+        Rectangle {
+            x: root.shapeX
+            y: root.shapeY
+            width: root.shapeWidth
+            height: root.shapeHeight
+            opacity: root.modelOpacity
+
+            border.color: root.modelColor
+            border.width: root.modelRoughness === 0 ? root.modelStrokeWidth : 0
+            // Excalidraw-like premium fill style (stroke color at 12% opacity)
+            color: {
+                let c = Qt.color(root.modelColor);
+                return Qt.rgba(c.r, c.g, c.b, 0.12);
+            }
+            radius: typeof borderRadius !== "undefined" ? borderRadius : 0
+        }
+
+        RoughStroke {
+            anchors.fill: parent
+            strokes: root.modelRoughness > 0
+                ? RoughPathGenerator.getSketchyRectangle(
+                    root.shapeX, root.shapeY, root.shapeWidth, root.shapeHeight,
+                    root.modelRoughness, root.modelSeed,
+                    typeof borderRadius !== "undefined" ? borderRadius : 0)
+                : []
+            strokeColor: root.modelColor
+            strokeWidth: root.modelStrokeWidth
+            strokeOpacity: root.modelOpacity
+        }
     }
 }

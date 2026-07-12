@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
+import QtQuick.Effects
 import "RoughPathGenerator.js" as RoughPathGenerator
 
 BaseShape {
@@ -33,61 +34,77 @@ BaseShape {
     readonly property real arrowBaseX: shapeFromX + stemLength * Math.cos(lineAngle)
     readonly property real arrowBaseY: shapeFromY + stemLength * Math.sin(lineAngle)
 
-    Shape {
-        anchors.fill: parent
-        opacity: root.modelOpacity
-        preferredRendererType: Shape.CurveRenderer
-        visible: root.modelRoughness === 0
+    MultiEffect {
+        id: glowEffect
+        anchors.fill: shapeContent
+        source: shapeContent
+        visible: root.modelGlow > 0
 
-        // Arrow Stem (Line)
-        ShapePath {
-            strokeColor: root.modelColor
-            strokeWidth: root.modelStrokeWidth
-            fillColor: "transparent"
-
-            startX: root.shapeFromX
-            startY: root.shapeFromY
-
-            PathLine {
-                x: root.arrowBaseX
-                y: root.arrowBaseY
-            }
-        }
-
-        // Arrowhead (Solid Triangle)
-        ShapePath {
-            strokeColor: "transparent"
-            fillColor: root.modelColor
-
-            startX: root.shapeToX
-            startY: root.shapeToY
-
-            PathLine {
-                x: root.arrowLeftX
-                y: root.arrowLeftY
-            }
-
-            PathLine {
-                x: root.arrowRightX
-                y: root.arrowRightY
-            }
-
-            PathLine {
-                x: root.shapeToX
-                y: root.shapeToY
-            }
-        }
+        blurEnabled: true
+        blurMax: 15
+        blur: root.modelGlow / 15.0
     }
 
-    RoughStroke {
+    Item {
+        id: shapeContent
         anchors.fill: parent
-        strokes: root.modelRoughness > 0
-            ? RoughPathGenerator.getSketchyArrow(
-                root.shapeFromX, root.shapeFromY, root.shapeToX, root.shapeToY,
-                root.modelRoughness, root.modelSeed, root.arrowLength)
-            : []
-        strokeColor: root.modelColor
-        strokeWidth: root.modelStrokeWidth
-        strokeOpacity: root.modelOpacity
+
+        Shape {
+            anchors.fill: parent
+            opacity: root.modelOpacity
+            preferredRendererType: Shape.CurveRenderer
+            visible: root.modelRoughness === 0
+
+            // Arrow Stem (Line)
+            ShapePath {
+                strokeColor: root.modelColor
+                strokeWidth: root.modelStrokeWidth
+                fillColor: "transparent"
+
+                startX: root.shapeFromX
+                startY: root.shapeFromY
+
+                PathLine {
+                    x: root.arrowBaseX
+                    y: root.arrowBaseY
+                }
+            }
+
+            // Arrowhead (Solid Triangle)
+            ShapePath {
+                strokeColor: "transparent"
+                fillColor: root.modelColor
+
+                startX: root.shapeToX
+                startY: root.shapeToY
+
+                PathLine {
+                    x: root.arrowLeftX
+                    y: root.arrowLeftY
+                }
+
+                PathLine {
+                    x: root.arrowRightX
+                    y: root.arrowRightY
+                }
+
+                PathLine {
+                    x: root.shapeToX
+                    y: root.shapeToY
+                }
+            }
+        }
+
+        RoughStroke {
+            anchors.fill: parent
+            strokes: root.modelRoughness > 0
+                ? RoughPathGenerator.getSketchyArrow(
+                    root.shapeFromX, root.shapeFromY, root.shapeToX, root.shapeToY,
+                    root.modelRoughness, root.modelSeed, root.arrowLength)
+                : []
+            strokeColor: root.modelColor
+            strokeWidth: root.modelStrokeWidth
+            strokeOpacity: root.modelOpacity
+        }
     }
 }
