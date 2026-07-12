@@ -41,6 +41,7 @@ class OverlayController : public QObject
     Q_PROPERTY(int defaultFontSize READ defaultFontSize WRITE setDefaultFontSize NOTIFY defaultFontSizeChanged)
     Q_PROPERTY(int defaultBorderRadius READ defaultBorderRadius WRITE setDefaultBorderRadius NOTIFY defaultBorderRadiusChanged)
     Q_PROPERTY(int defaultRoughness READ defaultRoughness WRITE setDefaultRoughness NOTIFY defaultRoughnessChanged)
+    Q_PROPERTY(int defaultGlow READ defaultGlow WRITE setDefaultGlow NOTIFY defaultGlowChanged)
     Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
     Q_PROPERTY(QString selectedShapeType READ selectedShapeType NOTIFY selectionChanged)
     Q_PROPERTY(QVariantMap localShortcutSequences READ localShortcutSequences NOTIFY localShortcutsChanged)
@@ -76,6 +77,8 @@ public:
 
     int defaultRoughness() const;
     void setDefaultRoughness(int roughness);
+    int defaultGlow() const;
+    void setDefaultGlow(int glow);
     void setDefaultBorderRadius(int radius);
 
     ShapesModel* shapesModel();
@@ -141,6 +144,7 @@ Q_SIGNALS:
     void defaultFontSizeChanged();
     void defaultBorderRadiusChanged();
     void defaultRoughnessChanged();
+    void defaultGlowChanged();
     
     // DBus signals (matched by AppletBackend slots)
     void selectionChanged(const QVariantMap &selectionState);
@@ -179,6 +183,7 @@ private:
     int m_defaultFontSize = 20;
     int m_defaultBorderRadius = 8;
     int m_defaultRoughness = 1;
+    int m_defaultGlow = 3;
 
     QRegion m_lastInputMask;
 };

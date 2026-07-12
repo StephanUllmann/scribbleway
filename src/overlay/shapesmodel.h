@@ -32,7 +32,8 @@ public:
         FontSizeRole,
         BorderRadiusRole,
         RoughnessRole,
-        SeedRole
+        SeedRole,
+        GlowRole
     };
     Q_ENUM(ShapeRoles)
 

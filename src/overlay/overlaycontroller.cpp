@@ -245,6 +245,19 @@ void OverlayController::setDefaultRoughness(int roughness)
     }
 }
 
+int OverlayController::defaultGlow() const
+{
+    return m_defaultGlow;
+}
+
+void OverlayController::setDefaultGlow(int glow)
+{
+    if (m_defaultGlow != glow) {
+        m_defaultGlow = glow;
+        Q_EMIT defaultGlowChanged();
+    }
+}
+
 void OverlayController::addShape(const QVariantMap &shape)
 {
     QVariantMap demarshalledShape = DBusUtils::demarshal(shape).toMap();
@@ -309,6 +322,9 @@ void OverlayController::setSelectedIndex(int index)
             if (shape.contains(QStringLiteral("roughness"))) {
                 m_defaultRoughness = shape[QStringLiteral("roughness")].toInt();
             }
+            if (shape.contains(QStringLiteral("glow"))) {
+                m_defaultGlow = shape[QStringLiteral("glow")].toInt();
+            }
             Q_EMIT defaultColorChanged();
             Q_EMIT defaultStrokeWidthChanged();
             Q_EMIT defaultOpacityChanged();
@@ -316,6 +332,7 @@ void OverlayController::setSelectedIndex(int index)
             Q_EMIT defaultFontSizeChanged();
             Q_EMIT defaultBorderRadiusChanged();
             Q_EMIT defaultRoughnessChanged();
+            Q_EMIT defaultGlowChanged();
 
             ensureSelectMode();
         }
@@ -368,6 +385,7 @@ QVariantMap OverlayController::getSelectionState()
         state[QStringLiteral("fontSize")] = shape.value(QStringLiteral("fontSize"), m_defaultFontSize).toInt();
         state[QStringLiteral("borderRadius")] = shape.value(QStringLiteral("borderRadius"), m_defaultBorderRadius).toInt();
         state[QStringLiteral("roughness")] = shape.value(QStringLiteral("roughness"), m_defaultRoughness).toInt();
+        state[QStringLiteral("glow")] = shape.value(QStringLiteral("glow"), m_defaultGlow).toInt();
         state[QStringLiteral("seed")] = shape.value(QStringLiteral("seed"), 123456).toInt();
         state[QStringLiteral("locked")] = shape.value(QStringLiteral("locked"), false).toBool();
         state[QStringLiteral("selectedIndex")] = m_selectedIndex;
@@ -381,6 +399,7 @@ QVariantMap OverlayController::getSelectionState()
         state[QStringLiteral("fontSize")] = m_defaultFontSize;
         state[QStringLiteral("borderRadius")] = m_defaultBorderRadius;
         state[QStringLiteral("roughness")] = m_defaultRoughness;
+        state[QStringLiteral("glow")] = m_defaultGlow;
         state[QStringLiteral("locked")] = false;
         state[QStringLiteral("selectedIndex")] = -1;
     }
@@ -412,6 +431,9 @@ void OverlayController::updateProperties(const QVariantMap &properties)
     }
     if (demarshalled.contains(QStringLiteral("roughness"))) {
         setDefaultRoughness(demarshalled[QStringLiteral("roughness")].toInt());
+    }
+    if (demarshalled.contains(QStringLiteral("glow"))) {
+        setDefaultGlow(demarshalled[QStringLiteral("glow")].toInt());
     }
 
     m_shapesModel.beginEdit();
@@ -1101,6 +1123,7 @@ QJsonObject OverlayController::convertToExcalidraw(const QVariantMap &shape)
     elem.insert(QStringLiteral("fillStyle"), QStringLiteral("solid"));
     elem.insert(QStringLiteral("strokeStyle"), QStringLiteral("solid"));
     elem.insert(QStringLiteral("roughness"), shape.value(QStringLiteral("roughness"), 1).toInt());
+    elem.insert(QStringLiteral("glow"), shape.value(QStringLiteral("glow"), 0).toInt()); // Ignore/preserve
     elem.insert(QStringLiteral("angle"), 0.0);
     elem.insert(QStringLiteral("isDeleted"), false);
     elem.insert(QStringLiteral("seed"), shape.value(QStringLiteral("seed"), 123456).toInt());
@@ -1228,6 +1251,7 @@ QVariantMap OverlayController::convertFromExcalidraw(const QJsonObject &elem)
     shape.insert(QStringLiteral("selected"), true);
     shape.insert(QStringLiteral("locked"), false);
     shape.insert(QStringLiteral("roughness"), elem.value(QStringLiteral("roughness")).toInt(1));
+    shape.insert(QStringLiteral("glow"), elem.value(QStringLiteral("glow")).toInt(0)); // Default to 0px
     shape.insert(QStringLiteral("seed"), elem.value(QStringLiteral("seed")).toInt(123456));
 
     if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {

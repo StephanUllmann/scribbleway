@@ -62,6 +62,7 @@ QVariant ShapesModel::data(const QModelIndex &index, int role) const
         case BorderRadiusRole: return shape.value(QStringLiteral("borderRadius"));
         case RoughnessRole: return shape.value(QStringLiteral("roughness"));
         case SeedRole: return shape.value(QStringLiteral("seed"));
+        case GlowRole: return shape.value(QStringLiteral("glow"));
         default: return QVariant();
     }
 }
@@ -91,6 +92,7 @@ QHash<int, QByteArray> ShapesModel::roleNames() const
     roles[BorderRadiusRole] = "borderRadius";
     roles[RoughnessRole] = "roughness";
     roles[SeedRole] = "seed";
+    roles[GlowRole] = "glow";
     return roles;
 }
 
@@ -203,6 +205,7 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
                 else if (it.key() == QStringLiteral("borderRadius")) changedRoles << BorderRadiusRole;
                 else if (it.key() == QStringLiteral("roughness")) changedRoles << RoughnessRole;
                 else if (it.key() == QStringLiteral("seed")) changedRoles << SeedRole;
+                else if (it.key() == QStringLiteral("glow")) changedRoles << GlowRole;
             }
         }
         if (!changedRoles.isEmpty()) {
