@@ -183,7 +183,7 @@ private:
     int m_defaultFontSize = 20;
     int m_defaultBorderRadius = 8;
     int m_defaultRoughness = 1;
-    int m_defaultGlow = 3;
+    int m_defaultGlow = 10;
 
     QRegion m_lastInputMask;
 };

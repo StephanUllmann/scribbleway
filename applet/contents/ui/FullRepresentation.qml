@@ -353,7 +353,7 @@ ColumnLayout {
             PlasmaComponents.Slider {
                 Layout.fillWidth: true
                 from: 0
-                to: 15
+                to: 30
                 stepSize: 1
                 value: root.backend.selectedGlow
                 onMoved: {

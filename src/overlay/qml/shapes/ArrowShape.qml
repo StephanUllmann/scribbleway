@@ -42,7 +42,7 @@ BaseShape {
 
         shadowEnabled: true
         shadowColor: root.modelColor
-        shadowBlur: root.modelGlow / 15.0
+        shadowBlur: root.modelGlow / 30.0
         shadowHorizontalOffset: 0
         shadowVerticalOffset: 0
         autoPaddingEnabled: true

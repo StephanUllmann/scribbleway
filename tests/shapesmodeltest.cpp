@@ -590,15 +590,15 @@ void ShapesModelTest::testGlow()
 {
     OverlayController controller;
 
-    // 1. Check initial default glow is 3
-    QCOMPARE(controller.defaultGlow(), 3);
+    // 1. Check initial default glow is 10
+    QCOMPARE(controller.defaultGlow(), 10);
 
     // 2. Update default glow
     QVariantMap updateProps;
-    updateProps[QStringLiteral("glow")] = 10;
+    updateProps[QStringLiteral("glow")] = 20;
     controller.updateProperties(updateProps);
 
-    QCOMPARE(controller.defaultGlow(), 10);
+    QCOMPARE(controller.defaultGlow(), 20);
 
     // 3. Create a shape and ensure it gets default glow
     QVariantMap shape;
@@ -607,7 +607,7 @@ void ShapesModelTest::testGlow()
     controller.addShape(shape);
 
     QCOMPARE(controller.selectedIndex(), 0);
-    QCOMPARE(controller.getSelectionState()[QStringLiteral("glow")].toInt(), 10);
+    QCOMPARE(controller.getSelectionState()[QStringLiteral("glow")].toInt(), 20);
 }
 
 void ShapesModelTest::testExcalidrawPasteCompatibility()

@@ -109,7 +109,7 @@ private:
     QString m_selectedFontFamily;
     int m_selectedFontSize = 20;
     int m_selectedBorderRadius = 8;
-    int m_selectedGlow = 3;
+    int m_selectedGlow = 10;
     bool m_selectedLocked = false;
     int m_selectedShapeIndex = -1;
     QString m_currentMode = QStringLiteral("passthrough");
