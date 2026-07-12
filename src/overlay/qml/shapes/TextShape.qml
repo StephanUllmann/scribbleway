@@ -21,14 +21,18 @@ BaseShape {
         source: shapeContent
         visible: root.modelGlow > 0
 
-        blurEnabled: true
-        blurMax: 15
-        blur: root.modelGlow / 15.0
+        shadowEnabled: true
+        shadowColor: root.modelColor
+        shadowBlur: root.modelGlow / 15.0
+        shadowHorizontalOffset: 0
+        shadowVerticalOffset: 0
+        autoPaddingEnabled: true
     }
 
     Item {
         id: shapeContent
         anchors.fill: parent
+        visible: root.modelGlow === 0
 
         Text {
             id: textLabel
