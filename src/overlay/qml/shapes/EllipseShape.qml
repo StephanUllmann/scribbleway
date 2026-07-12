@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
-import QtQuick.Effects
 import "RoughPathGenerator.js" as RoughPathGenerator
-
 BaseShape {
     id: root
 
@@ -16,25 +14,6 @@ BaseShape {
     onRectGeometryChanged: (nx, ny, nw, nh) => {
         controller.updateShape(index, { "x": nx, "y": ny, "width": nw, "height": nh });
     }
-
-    MultiEffect {
-        id: glowEffect
-        anchors.fill: shapeContent
-        source: shapeContent
-        visible: root.modelGlow > 0
-
-        shadowEnabled: true
-        shadowColor: root.modelColor
-        shadowBlur: root.modelGlow / 30.0
-        shadowHorizontalOffset: 0
-        shadowVerticalOffset: 0
-        autoPaddingEnabled: true
-    }
-
-    Item {
-        id: shapeContent
-        anchors.fill: parent
-        visible: root.modelGlow === 0
 
         Shape {
             anchors.fill: parent
@@ -85,5 +64,4 @@ BaseShape {
             strokeWidth: root.modelStrokeWidth
             strokeOpacity: root.modelOpacity
         }
-    }
 }

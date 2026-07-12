@@ -1,8 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
-import QtQuick.Effects
 import "RoughPathGenerator.js" as RoughPathGenerator
-
 BaseShape {
     id: root
 
@@ -55,25 +53,6 @@ BaseShape {
         calculatedHeight = Math.max(5, maxY - minY);
     }
 
-    MultiEffect {
-        id: glowEffect
-        anchors.fill: shapeContent
-        source: shapeContent
-        visible: root.modelGlow > 0
-
-        shadowEnabled: true
-        shadowColor: root.modelColor
-        shadowBlur: root.modelGlow / 30.0
-        shadowHorizontalOffset: 0
-        shadowVerticalOffset: 0
-        autoPaddingEnabled: true
-    }
-
-    Item {
-        id: shapeContent
-        anchors.fill: parent
-        visible: root.modelGlow === 0
-
         Shape {
             anchors.fill: parent
             opacity: root.modelOpacity
@@ -101,5 +80,4 @@ BaseShape {
             strokeWidth: root.modelStrokeWidth
             strokeOpacity: root.modelOpacity
         }
-    }
 }

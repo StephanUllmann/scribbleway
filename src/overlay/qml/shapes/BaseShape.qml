@@ -1,8 +1,31 @@
 import QtQuick
+import QtQuick.Effects
 
 Item {
     id: baseShapeRoot
     anchors.fill: parent
+
+    default property alias contentData: shapeContent.data
+
+    MultiEffect {
+        id: glowEffect
+        anchors.fill: shapeContent
+        source: shapeContent
+        visible: baseShapeRoot.modelGlow > 0
+
+        shadowEnabled: true
+        shadowColor: baseShapeRoot.modelColor
+        shadowBlur: baseShapeRoot.modelGlow / 30.0
+        shadowHorizontalOffset: 0
+        shadowVerticalOffset: 0
+        autoPaddingEnabled: true
+    }
+
+    Item {
+        id: shapeContent
+        anchors.fill: parent
+        visible: baseShapeRoot.modelGlow === 0
+    }
 
     property int index: -1
     property int shapeIndex: index
