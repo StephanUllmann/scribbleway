@@ -37,6 +37,7 @@ private Q_SLOTS:
     void testMultiSelection();
     void testBorderRadius();
     void testRoughness();
+    void testGlow();
     void testExcalidrawPasteCompatibility();
     void testZOrder();
     void testShapeLock();
@@ -585,6 +586,30 @@ void ShapesModelTest::testRoughness()
     QCOMPARE(controller.getSelectionState()[QStringLiteral("roughness")].toInt(), 2);
 }
 
+void ShapesModelTest::testGlow()
+{
+    OverlayController controller;
+
+    // 1. Check initial default glow is 3
+    QCOMPARE(controller.defaultGlow(), 3);
+
+    // 2. Update default glow
+    QVariantMap updateProps;
+    updateProps[QStringLiteral("glow")] = 10;
+    controller.updateProperties(updateProps);
+
+    QCOMPARE(controller.defaultGlow(), 10);
+
+    // 3. Create a shape and ensure it gets default glow
+    QVariantMap shape;
+    shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+    shape[QStringLiteral("glow")] = controller.defaultGlow();
+    controller.addShape(shape);
+
+    QCOMPARE(controller.selectedIndex(), 0);
+    QCOMPARE(controller.getSelectionState()[QStringLiteral("glow")].toInt(), 10);
+}
+
 void ShapesModelTest::testExcalidrawPasteCompatibility()
 {
     OverlayController controller;
@@ -738,6 +763,9 @@ void ShapesModelTest::testExcalidrawPasteCompatibility()
             QVERIFY(!shape.contains(key));
         }
     }
+
+    // Verify pasted shape has glow defaulted to 0
+    QCOMPARE(controller.shapesModel()->shapes().first().value(QStringLiteral("glow")).toInt(), 0);
 }
 
 

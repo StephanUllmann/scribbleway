@@ -21,6 +21,7 @@ Depends: ${shlibs:Depends},
          qml6-module-qtquick-layouts,
          qml6-module-qtquick-controls,
          qml6-module-qtquick-templates,
-         qml6-module-qtquick-shapes
+         qml6-module-qtquick-shapes,
+         qml6-module-qtquick-effects
 Description: Screen annotation utility for KDE Plasma 6
  A modern, Excalidraw-style screen annotation utility designed for Wayland and KDE Plasma 6.
