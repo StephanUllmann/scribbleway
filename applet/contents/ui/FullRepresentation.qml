@@ -341,6 +341,31 @@ ColumnLayout {
             }
         }
 
+        // Row 4.5: Glow
+        RowLayout {
+            Layout.fillWidth: true
+            
+            PlasmaComponents.Label {
+                text: "Glow:"
+                width: Kirigami.Units.gridUnit * 3
+            }
+            
+            PlasmaComponents.Slider {
+                Layout.fillWidth: true
+                from: 0
+                to: 15
+                stepSize: 1
+                value: root.backend.hasSelection ? root.backend.selectedGlow : 3
+                onMoved: {
+                    root.backend.setGlow(value)
+                }
+            }
+
+            PlasmaComponents.Label {
+                text: Math.round(root.backend.hasSelection ? root.backend.selectedGlow : 3) + "px"
+            }
+        }
+
         // Row 5: Border Radius (only if Rectangle tool is active or Rectangle shape is selected)
         RowLayout {
             Layout.fillWidth: true
