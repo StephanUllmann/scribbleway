@@ -14,6 +14,7 @@ qt_add_qml_module(scribbleway-overlay
     RESOURCE_PREFIX "/"
     QML_FILES
         qml/main.qml
+        qml/ToolCursorBadge.qml
         qml/shapes/BaseShape.qml
         qml/shapes/RectangleShape.qml
         qml/shapes/EllipseShape.qml
