@@ -114,6 +114,7 @@ Item {
                     ctx.lineTo(11, 9);
                     ctx.stroke();
                 }
+                onVisibleChanged: if (visible) requestPaint()
                 Component.onCompleted: requestPaint()
             }
         }
