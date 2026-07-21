@@ -323,3 +323,174 @@ function getSketchyFreehand(points, roughness, seed) {
     }
     return strokes;
 }
+
+function pointDistSq(a, b) {
+    let dx = a.x - b.x;
+    let dy = a.y - b.y;
+    return dx * dx + dy * dy;
+}
+
+function copyPoint(p) {
+    return Qt.point(p.x, p.y);
+}
+
+function copyPoints(points) {
+    let out = [];
+    for (let i = 0; i < points.length; ++i) {
+        out.push(copyPoint(points[i]));
+    }
+    return out;
+}
+
+// Drop consecutive samples closer than sqrt(minDistSq).
+function dedupPoints(points, minDistSq) {
+    if (!points || points.length === 0) return [];
+    let out = [copyPoint(points[0])];
+    for (let i = 1; i < points.length; ++i) {
+        if (pointDistSq(out[out.length - 1], points[i]) >= minDistSq) {
+            out.push(copyPoint(points[i]));
+        }
+    }
+    // Always keep the true endpoint if it was collapsed away
+    let last = points[points.length - 1];
+    if (out.length === 1 || pointDistSq(out[out.length - 1], last) > 1e-12) {
+        if (pointDistSq(out[out.length - 1], last) >= minDistSq || out.length === 1) {
+            // if last equals only point, still fine; if collapsed, force endpoint
+            if (pointDistSq(out[out.length - 1], last) > 1e-12) {
+                out.push(copyPoint(last));
+            }
+        } else {
+            out[out.length - 1] = copyPoint(last);
+        }
+    }
+    return out;
+}
+
+function rdpPerpendicularDistSq(p, a, b) {
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let lenSq = dx * dx + dy * dy;
+    if (lenSq < 1e-12) {
+        return pointDistSq(p, a);
+    }
+    // Area formula: |(p-a) × (b-a)| / |b-a|  → squared
+    let cross = (p.x - a.x) * dy - (p.y - a.y) * dx;
+    return (cross * cross) / lenSq;
+}
+
+// Classic Ramer–Douglas–Peucker. points length >= 2. epsilon in pixels.
+function rdpSimplify(points, epsilon) {
+    if (!points || points.length < 3) {
+        return copyPoints(points || []);
+    }
+    let epsSq = epsilon * epsilon;
+    let keep = [];
+    for (let i = 0; i < points.length; ++i) {
+        keep.push(false);
+    }
+    keep[0] = true;
+    keep[points.length - 1] = true;
+
+    let stack = [[0, points.length - 1]];
+    while (stack.length > 0) {
+        let seg = stack.pop();
+        let start = seg[0];
+        let end = seg[1];
+        let maxDist = -1;
+        let index = -1;
+        for (let i = start + 1; i < end; ++i) {
+            let d = rdpPerpendicularDistSq(points[i], points[start], points[end]);
+            if (d > maxDist) {
+                maxDist = d;
+                index = i;
+            }
+        }
+        if (index >= 0 && maxDist > epsSq) {
+            keep[index] = true;
+            stack.push([start, index]);
+            stack.push([index, end]);
+        }
+    }
+
+    let out = [];
+    for (let i = 0; i < points.length; ++i) {
+        if (keep[i]) {
+            out.push(copyPoint(points[i]));
+        }
+    }
+    return out;
+}
+
+// Chaikin corner-cutting on an open polyline. Endpoints stay fixed.
+// One iteration: for each segment (P_i, P_{i+1}) emit Q=0.75P_i+0.25P_{i+1}, R=0.25P_i+0.75P_{i+1}
+// then [P0, Q0, R0, Q1, R1, ..., Pn].
+function chaikinSmooth(points, iterations) {
+    if (!points || points.length < 3 || iterations <= 0) {
+        return copyPoints(points || []);
+    }
+    let pts = copyPoints(points);
+    for (let iter = 0; iter < iterations; ++iter) {
+        if (pts.length < 3) break;
+        let next = [];
+        next.push(copyPoint(pts[0]));
+        for (let i = 0; i < pts.length - 1; ++i) {
+            let p0 = pts[i];
+            let p1 = pts[i + 1];
+            next.push(Qt.point(
+                0.75 * p0.x + 0.25 * p1.x,
+                0.75 * p0.y + 0.25 * p1.y
+            ));
+            next.push(Qt.point(
+                0.25 * p0.x + 0.75 * p1.x,
+                0.25 * p0.y + 0.75 * p1.y
+            ));
+        }
+        next.push(copyPoint(pts[pts.length - 1]));
+        pts = next;
+    }
+    return pts;
+}
+
+function smoothFreehandLevelParams(level) {
+    let lv = level | 0;
+    if (lv < 0) lv = 0;
+    if (lv > 3) lv = 3;
+    // epsilon px, chaikin iterations
+    if (lv === 0) return { epsilon: 0, iterations: 0 };
+    if (lv === 1) return { epsilon: 1.5, iterations: 0 };
+    if (lv === 2) return { epsilon: 2.5, iterations: 1 };
+    return { epsilon: 4.0, iterations: 2 };
+}
+
+// Public entry: smooth freehand samples for commit.
+// points: array of Qt.point / {x,y}. level: 0..3.
+function smoothFreehandPoints(points, level) {
+    if (!points || points.length === 0) return [];
+    if (points.length < 2) return copyPoints(points);
+
+    let params = smoothFreehandLevelParams(level);
+    if (params.epsilon === 0 && params.iterations === 0) {
+        return copyPoints(points);
+    }
+
+    let first = copyPoint(points[0]);
+    let last = copyPoint(points[points.length - 1]);
+
+    // 0.5px consecutive dedup
+    let pts = dedupPoints(points, 0.25);
+    if (pts.length < 3) {
+        return [first, last];
+    }
+
+    pts = rdpSimplify(pts, params.epsilon);
+    if (pts.length < 2) {
+        return [first, last];
+    }
+
+    pts = chaikinSmooth(pts, params.iterations);
+
+    // Pin endpoints to the original stroke ends
+    pts[0] = first;
+    pts[pts.length - 1] = last;
+    return pts;
+}
