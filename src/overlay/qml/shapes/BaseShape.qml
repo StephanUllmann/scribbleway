@@ -81,7 +81,9 @@ Item {
         width: mode === "line" ? Math.abs(shapeFromX - shapeToX) + 20 : shapeWidth
         height: mode === "line" ? Math.abs(shapeFromY - shapeToY) + 20 : shapeHeight
         enabled: !isLocked
-        
+        hoverEnabled: true
+        cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+
         property real startMouseX: 0
         property real startMouseY: 0
         property real startShapeX: 0
