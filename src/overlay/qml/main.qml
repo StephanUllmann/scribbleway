@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Controls as Controls
 import QtQuick.Shapes
+import "shapes/RoughPathGenerator.js" as RoughPathGenerator
 
 Window {
     id: canvasWindow
@@ -156,7 +157,11 @@ Window {
         if (activeDrawTool === "freehand") {
             // Only add if we have at least 2 points
             if (activePoints.length >= 2) {
-                shape["points"] = activePoints;
+                let level = controller.defaultFreehandSmoothing;
+                if (level === undefined || level === null) {
+                    level = 2;
+                }
+                shape["points"] = RoughPathGenerator.smoothFreehandPoints(activePoints, level);
                 controller.addShape(shape);
             }
         } else if (activeDrawTool === "line" || activeDrawTool === "arrow") {
