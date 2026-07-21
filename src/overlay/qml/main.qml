@@ -44,6 +44,30 @@ Window {
     readonly property bool shortcutGuard: controller.currentMode !== "passthrough" && !textEditor.visible
     property real selectH: 0
 
+    // Cursor feedback -------------------------------------------------
+    // Maps draw tools to Qt.CursorShape. Most geometry tools share
+    // CrossCursor; the floating ToolCursorBadge disambiguates them.
+    function cursorForDrawTool(tool) {
+        switch (tool) {
+        case "text":
+            return Qt.IBeamCursor;
+        case "freehand":
+        case "rectangle":
+        case "ellipse":
+        case "line":
+        case "arrow":
+            return Qt.CrossCursor;
+        default:
+            return Qt.ArrowCursor;
+        }
+    }
+
+    readonly property bool showToolCursorBadge:
+        activeDrawTool !== ""
+        && controller.currentMode !== "passthrough"
+        && !textEditor.visible
+
+
     // Connections to C++ controller signals
     Connections {
         target: controller
@@ -206,6 +230,9 @@ Window {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
+        // Only useful when drawMouseArea is disabled; when drawing,
+        // drawMouseArea owns hover (see below).
+        enabled: !(activeDrawTool !== "" && !textEditor.visible)
         onPositionChanged: (mouse) => {
             canvasWindow.lastMousePos = Qt.point(mouse.x, mouse.y)
         }
@@ -243,9 +270,11 @@ Window {
         id: drawMouseArea
         anchors.fill: parent
         enabled: activeDrawTool !== "" && !textEditor.visible
-        cursorShape: Qt.CrossCursor
+        hoverEnabled: true
+        cursorShape: canvasWindow.cursorForDrawTool(activeDrawTool)
 
         onPressed: (mouse) => {
+            canvasWindow.lastMousePos = Qt.point(mouse.x, mouse.y);
             isDrawing = true;
             drawStartPoint = Qt.point(mouse.x, mouse.y);
             
@@ -260,6 +289,8 @@ Window {
         }
 
         onPositionChanged: (mouse) => {
+            canvasWindow.lastMousePos = Qt.point(mouse.x, mouse.y);
+
             if (!isDrawing) return;
 
             if (activeDrawTool === "freehand") {
@@ -708,6 +739,9 @@ Window {
         anchors.fill: parent
         z: -1 // Behind shapes and draw capture layers
         enabled: controller.currentMode === "select" || controller.selectedIndex !== -1 || textEditor.visible
+        hoverEnabled: true
+        cursorShape: textEditor.visible ? Qt.ArrowCursor
+                     : (isSelectingFrame ? Qt.CrossCursor : Qt.ArrowCursor)
 
         onPressed: (mouse) => {
             if (textEditor.visible) {
@@ -727,6 +761,7 @@ Window {
         }
 
         onPositionChanged: (mouse) => {
+            canvasWindow.lastMousePos = Qt.point(mouse.x, mouse.y);
             if (isSelectingFrame) {
                 selectX = Math.min(mouse.x, selectStartPoint.x);
                 selectY = Math.min(mouse.y, selectStartPoint.y);
