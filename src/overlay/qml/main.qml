@@ -761,6 +761,48 @@ Window {
         onActivated: controller.selectPresetColor(5)
     }
 
+    // Arrow-key nudge: move selected shape(s) by 1px, or 10px with Shift
+    Shortcut {
+        sequence: "Left"
+        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
+        onActivated: controller.nudgeSelected(-1, 0)
+    }
+    Shortcut {
+        sequence: "Right"
+        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
+        onActivated: controller.nudgeSelected(1, 0)
+    }
+    Shortcut {
+        sequence: "Up"
+        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
+        onActivated: controller.nudgeSelected(0, -1)
+    }
+    Shortcut {
+        sequence: "Down"
+        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
+        onActivated: controller.nudgeSelected(0, 1)
+    }
+    Shortcut {
+        sequence: "Shift+Left"
+        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
+        onActivated: controller.nudgeSelected(-10, 0)
+    }
+    Shortcut {
+        sequence: "Shift+Right"
+        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
+        onActivated: controller.nudgeSelected(10, 0)
+    }
+    Shortcut {
+        sequence: "Shift+Up"
+        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
+        onActivated: controller.nudgeSelected(0, -10)
+    }
+    Shortcut {
+        sequence: "Shift+Down"
+        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
+        onActivated: controller.nudgeSelected(0, 10)
+    }
+
 
     // Background interaction: handles click-to-deselect, text commit, and drag-selection frame
     MouseArea {

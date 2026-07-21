@@ -1509,4 +1509,52 @@ void OverlayController::dragSelected(double dx, double dy)
     m_shapesModel.endEdit();
 }
 
+void OverlayController::nudgeSelected(double dx, double dy)
+{
+    m_shapesModel.beginEdit();
+    bool moved = false;
+    for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+        QVariantMap shape = m_shapesModel.shapes()[i];
+        if (!shape.value(QStringLiteral("selected"), false).toBool())
+            continue;
+        if (shape.value(QStringLiteral("locked"), false).toBool())
+            continue;
+
+        QString type = shape[QStringLiteral("type")].toString();
+
+        if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
+            shape.insert(QStringLiteral("x"), shape[QStringLiteral("x")].toDouble() + dx);
+            shape.insert(QStringLiteral("y"), shape[QStringLiteral("y")].toDouble() + dy);
+        } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+            shape.insert(QStringLiteral("fromX"), shape[QStringLiteral("fromX")].toDouble() + dx);
+            shape.insert(QStringLiteral("toX"), shape[QStringLiteral("toX")].toDouble() + dx);
+            shape.insert(QStringLiteral("fromY"), shape[QStringLiteral("fromY")].toDouble() + dy);
+            shape.insert(QStringLiteral("toY"), shape[QStringLiteral("toY")].toDouble() + dy);
+        } else if (type == QStringLiteral("freehand")) {
+            QVariantList points = shape[QStringLiteral("points")].toList();
+            QVariantList newPoints;
+            for (const QVariant &pv : points) {
+                if (pv.canConvert<QPointF>()) {
+                    QPointF p = pv.toPointF();
+                    newPoints.append(QPointF(p.x() + dx, p.y() + dy));
+                } else if (pv.typeId() == QMetaType::QVariantMap) {
+                    QVariantMap pm = pv.toMap();
+                    pm.insert(QStringLiteral("x"), pm[QStringLiteral("x")].toDouble() + dx);
+                    pm.insert(QStringLiteral("y"), pm[QStringLiteral("y")].toDouble() + dy);
+                    newPoints.append(pm);
+                }
+            }
+            shape.insert(QStringLiteral("points"), newPoints);
+        }
+
+        m_shapesModel.updateShape(i, shape);
+        moved = true;
+    }
+    m_shapesModel.endEdit();
+
+    if (moved) {
+        notifyShapesChanged();
+    }
+}
+
 

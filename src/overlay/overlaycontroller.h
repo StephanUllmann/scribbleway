@@ -101,6 +101,7 @@ public:
     Q_INVOKABLE void selectShapesInRect(double rx, double ry, double rw, double rh, bool shiftHeld);
     Q_INVOKABLE void beginDragSelection(bool shiftHeld);
     Q_INVOKABLE void dragSelected(double dx, double dy);
+    Q_INVOKABLE void nudgeSelected(double dx, double dy);
     Q_INVOKABLE void toggleTool(const QString &tool);
     Q_INVOKABLE void cycleColor();
     Q_INVOKABLE void growSelected();
