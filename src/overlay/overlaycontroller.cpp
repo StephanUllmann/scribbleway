@@ -55,6 +55,7 @@ OverlayController::OverlayController(QObject *parent)
         {QStringLiteral("action_select"), QStringLiteral("Select Mode"), QStringLiteral("X"), QStringLiteral("X")},
         {QStringLiteral("action_cycle_roughness"), QStringLiteral("Cycle Roughness"), QStringLiteral("S"), QStringLiteral("S")},
         {QStringLiteral("action_undo"), QStringLiteral("Undo"), QStringLiteral("Ctrl+Z"), QStringLiteral("Ctrl+Z")},
+        {QStringLiteral("action_redo"), QStringLiteral("Redo"), QStringLiteral("Ctrl+Shift+Z"), QStringLiteral("Ctrl+Shift+Z")},
         {QStringLiteral("action_clear"), QStringLiteral("Clear All"), QStringLiteral("Ctrl+Delete"), QStringLiteral("Ctrl+Delete")},
         {QStringLiteral("action_increase_border_radius"), QStringLiteral("Increase Border Radius"), QStringLiteral("ü"), QStringLiteral("ü")},
         {QStringLiteral("action_decrease_border_radius"), QStringLiteral("Decrease Border Radius"), QStringLiteral("ä"), QStringLiteral("ä")}
@@ -457,6 +458,14 @@ void OverlayController::updateProperties(const QVariantMap &properties)
 void OverlayController::undo()
 {
     m_shapesModel.undo();
+    m_selectedIndex = -1;
+    notifyShapesChanged();
+    notifySelectionChanged();
+}
+
+void OverlayController::redo()
+{
+    m_shapesModel.redo();
     m_selectedIndex = -1;
     notifyShapesChanged();
     notifySelectionChanged();

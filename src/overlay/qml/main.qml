@@ -716,6 +716,11 @@ Window {
         onActivated: controller.undo()
     }
     Shortcut {
+        sequence: controller.localShortcutSequences["action_redo"]
+        enabled: canvasWindow.shortcutGuard
+        onActivated: controller.redo()
+    }
+    Shortcut {
         sequence: controller.localShortcutSequences["action_clear"]
         enabled: canvasWindow.shortcutGuard
         onActivated: controller.clear()

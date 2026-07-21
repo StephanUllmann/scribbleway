@@ -120,6 +120,7 @@ public Q_SLOTS:
     QVariantMap getSelectionState();
     void updateProperties(const QVariantMap &properties);
     void undo();
+    void redo();
     void clear();
     void deleteSelected();
     void toggleLock();

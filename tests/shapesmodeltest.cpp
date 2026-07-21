@@ -36,6 +36,7 @@ private Q_SLOTS:
     void testRedoNoopWhenEmpty();
     void testRedoAfterEditTransaction();
     void testRedoStackCapped();
+    void testOverlayControllerRedo();
     void testOverlayControllerProperties();
     void testMoveShape();
     void testOverlayControllerCopyPaste();
@@ -323,6 +324,50 @@ void ShapesModelTest::testRedoStackCapped()
     // Extra redo is a no-op.
     model.redo();
     QCOMPARE(model.rowCount(), 55);
+}
+
+void ShapesModelTest::testOverlayControllerRedo()
+{
+    OverlayController controller;
+
+    QVariantMap shape;
+    shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+    shape[QStringLiteral("x")] = 5;
+    shape[QStringLiteral("y")] = 5;
+    shape[QStringLiteral("width")] = 40;
+    shape[QStringLiteral("height")] = 30;
+    shape[QStringLiteral("selected")] = false;
+    controller.addShape(shape);
+    QCOMPARE(controller.shapesModel()->rowCount(), 1);
+
+    controller.undo();
+    QCOMPARE(controller.shapesModel()->rowCount(), 0);
+    QCOMPARE(controller.selectedIndex(), -1);
+
+    controller.redo();
+    QCOMPARE(controller.shapesModel()->rowCount(), 1);
+    QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("type")].toString(),
+             QStringLiteral("rectangle"));
+    // Mirror undo(): selection is cleared after history apply.
+    QCOMPARE(controller.selectedIndex(), -1);
+
+    // Shortcut table exposes action_redo with Ctrl+Shift+Z default.
+    const QVariantMap seqs = controller.localShortcutSequences();
+    QVERIFY(seqs.contains(QStringLiteral("action_redo")));
+    QCOMPARE(seqs.value(QStringLiteral("action_redo")).toString(), QStringLiteral("Ctrl+Shift+Z"));
+
+    bool foundInGetShortcuts = false;
+    const QVariantList all = controller.getShortcuts();
+    for (const QVariant &entry : all) {
+        const QVariantMap map = entry.toMap();
+        if (map.value(QStringLiteral("id")).toString() == QStringLiteral("action_redo")) {
+            foundInGetShortcuts = true;
+            QCOMPARE(map.value(QStringLiteral("name")).toString(), QStringLiteral("Redo"));
+            QCOMPARE(map.value(QStringLiteral("shortcut")).toString(), QStringLiteral("Ctrl+Shift+Z"));
+            break;
+        }
+    }
+    QVERIFY(foundInGetShortcuts);
 }
 
 void ShapesModelTest::testOverlayControllerProperties()
