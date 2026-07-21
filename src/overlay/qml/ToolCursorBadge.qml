@@ -86,42 +86,35 @@ Item {
             rotation: -32
         }
 
-        // Arrow (stem + head via two rects)
-        Item {
-            visible: root.tool === "arrow"
+        // Arrow
+        Canvas {
             anchors.fill: parent
-            Rectangle {
-                width: 12
-                height: 1.8
-                radius: 1
-                color: root.accent
-                x: 2
-                y: 7
-                rotation: -32
-                transformOrigin: Item.Left
+            visible: root.tool === "arrow"
+            property color accent: root.accent
+            onPaint: {
+                var ctx = getContext("2d");
+                ctx.reset();
+                ctx.strokeStyle = accent;
+                ctx.lineWidth = 1.6;
+                ctx.lineCap = "round";
+                ctx.lineJoin = "round";
+
+                // Stem
+                ctx.beginPath();
+                ctx.moveTo(2, 13);
+                ctx.lineTo(12, 3);
+                ctx.stroke();
+
+                // Chevron head
+                ctx.beginPath();
+                ctx.moveTo(7, 3);
+                ctx.lineTo(12, 3);
+                ctx.lineTo(12, 8);
+                ctx.stroke();
             }
-            // simple chevron head
-            Canvas {
-                anchors.fill: parent
-                visible: parent.visible
-                property color accent: root.accent
-                onPaint: {
-                    var ctx = getContext("2d");
-                    ctx.reset();
-                    ctx.strokeStyle = accent;
-                    ctx.lineWidth = 1.6;
-                    ctx.lineCap = "round";
-                    ctx.lineJoin = "round";
-                    ctx.beginPath();
-                    ctx.moveTo(9, 3);
-                    ctx.lineTo(14, 4);
-                    ctx.lineTo(11, 9);
-                    ctx.stroke();
-                }
-                onVisibleChanged: if (visible) requestPaint()
-                onAccentChanged: requestPaint()
-                Component.onCompleted: requestPaint()
-            }
+            onVisibleChanged: if (visible) requestPaint()
+            onAccentChanged: requestPaint()
+            Component.onCompleted: requestPaint()
         }
 
         // Text: "T"
@@ -141,6 +134,10 @@ Item {
         anchors.bottom: parent.bottom
         anchors.margins: 2
         text: {
+            if (typeof controller !== "undefined") {
+                var seq = controller.localShortcutSequences["tool_" + root.tool];
+                if (seq) return seq;
+            }
             switch (root.tool) {
             case "arrow": return "A";
             case "rectangle": return "R";
