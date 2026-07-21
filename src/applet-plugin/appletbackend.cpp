@@ -106,6 +106,11 @@ int AppletBackend::selectedGlow() const
     return m_selectedGlow;
 }
 
+int AppletBackend::selectedRoughness() const
+{
+    return m_selectedRoughness;
+}
+
 QString AppletBackend::currentMode() const
 {
     return m_currentMode;
@@ -155,6 +160,13 @@ void AppletBackend::setBorderRadius(int radius)
 void AppletBackend::setGlow(int glow)
 {
     sendDBus(QStringLiteral("updateProperties"), { QVariantMap{{QStringLiteral("glow"), glow}} });
+}
+
+void AppletBackend::setRoughness(int roughness)
+{
+    roughness = qBound(0, roughness, 2);
+    sendDBus(QStringLiteral("updateProperties"),
+             { QVariantMap{{QStringLiteral("roughness"), roughness}} });
 }
 
 void AppletBackend::undo()
@@ -365,6 +377,7 @@ void AppletBackend::onSelectionChanged(const QVariantMap &state)
     m_selectedShapeIndex = demarshalled[QStringLiteral("selectedIndex")].toInt();
     m_selectedBorderRadius = demarshalled.value(QStringLiteral("borderRadius"), 8).toInt();
     m_selectedGlow = demarshalled.value(QStringLiteral("glow"), 3).toInt();
+    m_selectedRoughness = demarshalled.value(QStringLiteral("roughness"), 1).toInt();
     Q_EMIT selectionChanged();
 }
 
