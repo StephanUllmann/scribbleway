@@ -31,6 +31,11 @@ private Q_SLOTS:
     void testSelectionNoHistory();
     void testCappedHistory();
     void testEditTransaction();
+    void testRedoAfterUndo();
+    void testRedoClearedOnNewMutation();
+    void testRedoNoopWhenEmpty();
+    void testRedoAfterEditTransaction();
+    void testRedoStackCapped();
     void testOverlayControllerProperties();
     void testMoveShape();
     void testOverlayControllerCopyPaste();
@@ -199,6 +204,125 @@ void ShapesModelTest::testEditTransaction()
     // Calling undo again should revert to before adding the shape: empty model.
     model.undo();
     QCOMPARE(model.rowCount(), 0);
+}
+
+void ShapesModelTest::testRedoAfterUndo()
+{
+    ShapesModel model;
+
+    QVariantMap s1;
+    s1[QStringLiteral("type")] = QStringLiteral("rectangle");
+    s1[QStringLiteral("x")] = 10;
+    model.addShape(s1);
+
+    QVariantMap s2;
+    s2[QStringLiteral("type")] = QStringLiteral("ellipse");
+    s2[QStringLiteral("x")] = 20;
+    model.addShape(s2);
+    QCOMPARE(model.rowCount(), 2);
+
+    model.undo();
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.shapes().first()[QStringLiteral("type")].toString(), QStringLiteral("rectangle"));
+
+    model.redo();
+    QCOMPARE(model.rowCount(), 2);
+    QCOMPARE(model.shapes().at(0)[QStringLiteral("type")].toString(), QStringLiteral("rectangle"));
+    QCOMPARE(model.shapes().at(1)[QStringLiteral("type")].toString(), QStringLiteral("ellipse"));
+    QCOMPARE(model.shapes().at(1)[QStringLiteral("x")].toInt(), 20);
+
+    // Second redo is a no-op (only one undone step).
+    model.redo();
+    QCOMPARE(model.rowCount(), 2);
+}
+
+void ShapesModelTest::testRedoClearedOnNewMutation()
+{
+    ShapesModel model;
+
+    QVariantMap s1;
+    s1[QStringLiteral("type")] = QStringLiteral("rectangle");
+    model.addShape(s1);
+    QCOMPARE(model.rowCount(), 1);
+
+    model.undo();
+    QCOMPARE(model.rowCount(), 0);
+
+    // New mutation must discard the redo branch.
+    QVariantMap s2;
+    s2[QStringLiteral("type")] = QStringLiteral("ellipse");
+    model.addShape(s2);
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.shapes().first()[QStringLiteral("type")].toString(), QStringLiteral("ellipse"));
+
+    model.redo(); // must be no-op
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.shapes().first()[QStringLiteral("type")].toString(), QStringLiteral("ellipse"));
+}
+
+void ShapesModelTest::testRedoNoopWhenEmpty()
+{
+    ShapesModel model;
+    model.redo(); // never crashed / never invents shapes
+    QCOMPARE(model.rowCount(), 0);
+
+    QVariantMap s1;
+    s1[QStringLiteral("type")] = QStringLiteral("rectangle");
+    model.addShape(s1);
+    model.redo(); // still empty redo stack
+    QCOMPARE(model.rowCount(), 1);
+}
+
+void ShapesModelTest::testRedoAfterEditTransaction()
+{
+    ShapesModel model;
+    QVariantMap shape;
+    shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+    shape[QStringLiteral("x")] = 10;
+    model.addShape(shape);
+
+    model.beginEdit();
+    model.updateShape(0, {{QStringLiteral("x"), 11}});
+    model.updateShape(0, {{QStringLiteral("x"), 12}});
+    model.updateShape(0, {{QStringLiteral("x"), 15}});
+    model.endEdit();
+    QCOMPARE(model.shapes().first()[QStringLiteral("x")].toInt(), 15);
+
+    model.undo();
+    QCOMPARE(model.shapes().first()[QStringLiteral("x")].toInt(), 10);
+
+    model.redo();
+    QCOMPARE(model.shapes().first()[QStringLiteral("x")].toInt(), 15);
+}
+
+void ShapesModelTest::testRedoStackCapped()
+{
+    ShapesModel model;
+
+    // Build 55 undoable states (same cap path as testCappedHistory).
+    for (int i = 0; i < 55; ++i) {
+        QVariantMap shape;
+        shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+        shape[QStringLiteral("x")] = i;
+        model.addShape(shape);
+    }
+    QCOMPARE(model.rowCount(), 55);
+
+    // Undo 50 times → rowCount 5, redo stack full (50).
+    for (int i = 0; i < 50; ++i) {
+        model.undo();
+    }
+    QCOMPARE(model.rowCount(), 5);
+
+    // Redo 50 times → back to 55.
+    for (int i = 0; i < 50; ++i) {
+        model.redo();
+    }
+    QCOMPARE(model.rowCount(), 55);
+
+    // Extra redo is a no-op.
+    model.redo();
+    QCOMPARE(model.rowCount(), 55);
 }
 
 void ShapesModelTest::testOverlayControllerProperties()

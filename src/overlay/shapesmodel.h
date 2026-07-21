@@ -52,6 +52,7 @@ public:
     bool moveShape(int fromIndex, int toIndex);
     void clear();
     void undo();
+    void redo();
     void beginEdit();
     void endEdit();
 
@@ -60,6 +61,7 @@ private:
 
     QList<QVariantMap> m_shapes;
     QList<QList<QVariantMap>> m_history;
+    QList<QList<QVariantMap>> m_redo;
     bool m_isApplyingUndo = false;
     bool m_inEditTransaction = false;
 };

@@ -102,6 +102,8 @@ void ShapesModel::saveHistorySnapshot()
     if (m_history.size() > 50) {
         m_history.removeFirst();
     }
+    // New user mutation invalidates the redo branch.
+    m_redo.clear();
 }
 
 void ShapesModel::undo()
@@ -110,8 +112,29 @@ void ShapesModel::undo()
         return;
     }
     m_isApplyingUndo = true;
+    // Preserve the state we are leaving so redo can restore it.
+    m_redo.append(m_shapes);
+    if (m_redo.size() > 50) {
+        m_redo.removeFirst();
+    }
     QList<QVariantMap> previousState = m_history.takeLast();
     setShapes(previousState);
+    m_isApplyingUndo = false;
+}
+
+void ShapesModel::redo()
+{
+    if (m_redo.isEmpty()) {
+        return;
+    }
+    m_isApplyingUndo = true;
+    // Current state becomes undoable again.
+    m_history.append(m_shapes);
+    if (m_history.size() > 50) {
+        m_history.removeFirst();
+    }
+    QList<QVariantMap> nextState = m_redo.takeLast();
+    setShapes(nextState);
     m_isApplyingUndo = false;
 }
 
