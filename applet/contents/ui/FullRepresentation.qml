@@ -373,6 +373,37 @@ ColumnLayout {
             }
         }
 
+        // Freehand smoothing (draw-time default; 0 = raw)
+        RowLayout {
+            Layout.fillWidth: true
+
+            PlasmaComponents.Label {
+                text: "Smoothing:"
+                width: Kirigami.Units.gridUnit * 4
+            }
+
+            PlasmaComponents.Slider {
+                Layout.fillWidth: true
+                from: 0
+                to: 3
+                stepSize: 1
+                value: root.backend.selectedFreehandSmoothing
+                onMoved: {
+                    root.backend.setFreehandSmoothing(value)
+                }
+            }
+
+            PlasmaComponents.Label {
+                text: {
+                    let v = Math.round(root.backend.selectedFreehandSmoothing)
+                    if (v <= 0) return "Off"
+                    if (v === 1) return "Low"
+                    if (v === 2) return "Med"
+                    return "High"
+                }
+            }
+        }
+
         // Row: Roughness (Excalidraw sloppiness levels)
         RowLayout {
             Layout.fillWidth: true

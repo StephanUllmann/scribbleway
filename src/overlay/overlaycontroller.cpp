@@ -260,6 +260,20 @@ void OverlayController::setDefaultGlow(int glow)
     }
 }
 
+int OverlayController::defaultFreehandSmoothing() const
+{
+    return m_defaultFreehandSmoothing;
+}
+
+void OverlayController::setDefaultFreehandSmoothing(int level)
+{
+    int clamped = qBound(0, level, 3);
+    if (m_defaultFreehandSmoothing != clamped) {
+        m_defaultFreehandSmoothing = clamped;
+        Q_EMIT defaultFreehandSmoothingChanged();
+    }
+}
+
 void OverlayController::addShape(const QVariantMap &shape)
 {
     QVariantMap demarshalledShape = DBusUtils::demarshal(shape).toMap();
@@ -388,6 +402,7 @@ QVariantMap OverlayController::getSelectionState()
         state[QStringLiteral("borderRadius")] = shape.value(QStringLiteral("borderRadius"), m_defaultBorderRadius).toInt();
         state[QStringLiteral("roughness")] = shape.value(QStringLiteral("roughness"), m_defaultRoughness).toInt();
         state[QStringLiteral("glow")] = shape.value(QStringLiteral("glow"), m_defaultGlow).toInt();
+        state[QStringLiteral("freehandSmoothing")] = m_defaultFreehandSmoothing;
         state[QStringLiteral("seed")] = shape.value(QStringLiteral("seed"), 123456).toInt();
         state[QStringLiteral("locked")] = shape.value(QStringLiteral("locked"), false).toBool();
         state[QStringLiteral("selectedIndex")] = m_selectedIndex;
@@ -402,6 +417,7 @@ QVariantMap OverlayController::getSelectionState()
         state[QStringLiteral("borderRadius")] = m_defaultBorderRadius;
         state[QStringLiteral("roughness")] = m_defaultRoughness;
         state[QStringLiteral("glow")] = m_defaultGlow;
+        state[QStringLiteral("freehandSmoothing")] = m_defaultFreehandSmoothing;
         state[QStringLiteral("locked")] = false;
         state[QStringLiteral("selectedIndex")] = -1;
     }
@@ -438,6 +454,9 @@ void OverlayController::updateProperties(const QVariantMap &properties)
     }
     if (demarshalled.contains(QStringLiteral("glow"))) {
         setDefaultGlow(demarshalled[QStringLiteral("glow")].toInt());
+    }
+    if (demarshalled.contains(QStringLiteral("freehandSmoothing"))) {
+        setDefaultFreehandSmoothing(demarshalled[QStringLiteral("freehandSmoothing")].toInt());
     }
 
     m_shapesModel.beginEdit();

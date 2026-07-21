@@ -23,6 +23,7 @@ class AppletBackend : public QObject
     Q_PROPERTY(int selectedShapeIndex READ selectedShapeIndex NOTIFY selectionChanged)
     Q_PROPERTY(int selectedBorderRadius READ selectedBorderRadius NOTIFY selectionChanged)
     Q_PROPERTY(int selectedGlow READ selectedGlow NOTIFY selectionChanged)
+    Q_PROPERTY(int selectedFreehandSmoothing READ selectedFreehandSmoothing NOTIFY selectionChanged)
     Q_PROPERTY(int selectedRoughness READ selectedRoughness NOTIFY selectionChanged)
     Q_PROPERTY(QString currentMode READ currentMode NOTIFY modeChanged)
     Q_PROPERTY(QString activeTool READ activeTool NOTIFY activeToolChanged)
@@ -46,6 +47,7 @@ public:
     int selectedShapeIndex() const;
     int selectedBorderRadius() const;
     int selectedGlow() const;
+    int selectedFreehandSmoothing() const;
     int selectedRoughness() const;
     QString currentMode() const;
     QString activeTool() const;
@@ -64,6 +66,7 @@ public:
     Q_INVOKABLE void setFontSize(int size);
     Q_INVOKABLE void setBorderRadius(int radius);
     Q_INVOKABLE void setGlow(int glow);
+    Q_INVOKABLE void setFreehandSmoothing(int level);
     Q_INVOKABLE void setRoughness(int roughness);
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();
@@ -114,6 +117,7 @@ private:
     int m_selectedFontSize = 20;
     int m_selectedBorderRadius = 8;
     int m_selectedGlow = 10;
+    int m_selectedFreehandSmoothing = 2;
     int m_selectedRoughness = 1;
     bool m_selectedLocked = false;
     int m_selectedShapeIndex = -1;
