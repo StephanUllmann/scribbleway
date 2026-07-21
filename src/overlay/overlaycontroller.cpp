@@ -457,6 +457,7 @@ void OverlayController::updateProperties(const QVariantMap &properties)
     }
     if (demarshalled.contains(QStringLiteral("freehandSmoothing"))) {
         setDefaultFreehandSmoothing(demarshalled[QStringLiteral("freehandSmoothing")].toInt());
+        demarshalled.remove(QStringLiteral("freehandSmoothing"));
     }
 
     m_shapesModel.beginEdit();
