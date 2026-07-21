@@ -33,10 +33,11 @@ Item {
         Canvas {
             anchors.fill: parent
             visible: root.tool === "freehand"
+            property color accent: root.accent
             onPaint: {
                 var ctx = getContext("2d");
                 ctx.reset();
-                ctx.strokeStyle = root.accent;
+                ctx.strokeStyle = accent;
                 ctx.lineWidth = 1.8;
                 ctx.lineCap = "round";
                 ctx.beginPath();
@@ -46,6 +47,7 @@ Item {
                 ctx.stroke();
             }
             onVisibleChanged: if (visible) requestPaint()
+            onAccentChanged: requestPaint()
             Component.onCompleted: requestPaint()
         }
 
@@ -101,10 +103,11 @@ Item {
             // simple chevron head
             Canvas {
                 anchors.fill: parent
+                property color accent: root.accent
                 onPaint: {
                     var ctx = getContext("2d");
                     ctx.reset();
-                    ctx.strokeStyle = root.accent;
+                    ctx.strokeStyle = accent;
                     ctx.lineWidth = 1.6;
                     ctx.lineCap = "round";
                     ctx.lineJoin = "round";
@@ -115,6 +118,7 @@ Item {
                     ctx.stroke();
                 }
                 onVisibleChanged: if (visible) requestPaint()
+                onAccentChanged: requestPaint()
                 Component.onCompleted: requestPaint()
             }
         }
