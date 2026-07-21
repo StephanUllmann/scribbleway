@@ -1437,6 +1437,16 @@ void ShapesModelTest::testAppletBackendIntegration()
     QCOMPARE(controller.defaultColor(), QStringLiteral("#112233"));
     QCOMPARE(controller.defaultStrokeWidth(), 8);
     QCOMPARE(controller.defaultOpacity(), 0.25);
+
+    backend.setRoughness(2);
+    QTest::qWait(50);
+    QCOMPARE(controller.defaultRoughness(), 2);
+    QCOMPARE(backend.selectedRoughness(), 2);
+
+    backend.setRoughness(0);
+    QTest::qWait(50);
+    QCOMPARE(controller.defaultRoughness(), 0);
+    QCOMPARE(backend.selectedRoughness(), 0);
     
     QVariantMap shape1;
     shape1[QStringLiteral("type")] = QStringLiteral("rectangle");
@@ -1445,6 +1455,12 @@ void ShapesModelTest::testAppletBackendIntegration()
     
     QVERIFY(backend.hasSelection());
     QCOMPARE(backend.selectedShapeIndex(), 0);
+
+    backend.setRoughness(2);
+    QTest::qWait(50);
+    QCOMPARE(controller.getSelectionState().value(QStringLiteral("roughness")).toInt(), 2);
+    QCOMPARE(backend.selectedRoughness(), 2);
+    QCOMPARE(controller.shapesModel()->shapes().at(0).value(QStringLiteral("roughness")).toInt(), 2);
     
     QVariantMap shape2;
     shape2[QStringLiteral("type")] = QStringLiteral("ellipse");
