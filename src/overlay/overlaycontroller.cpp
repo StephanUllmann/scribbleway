@@ -240,6 +240,7 @@ int OverlayController::defaultRoughness() const
 
 void OverlayController::setDefaultRoughness(int roughness)
 {
+    roughness = qBound(0, roughness, 2);
     if (m_defaultRoughness != roughness) {
         m_defaultRoughness = roughness;
         Q_EMIT defaultRoughnessChanged();
@@ -431,7 +432,9 @@ void OverlayController::updateProperties(const QVariantMap &properties)
         setDefaultBorderRadius(demarshalled[QStringLiteral("borderRadius")].toInt());
     }
     if (demarshalled.contains(QStringLiteral("roughness"))) {
-        setDefaultRoughness(demarshalled[QStringLiteral("roughness")].toInt());
+        int r = qBound(0, demarshalled[QStringLiteral("roughness")].toInt(), 2);
+        demarshalled[QStringLiteral("roughness")] = r;
+        setDefaultRoughness(r);
     }
     if (demarshalled.contains(QStringLiteral("glow"))) {
         setDefaultGlow(demarshalled[QStringLiteral("glow")].toInt());
