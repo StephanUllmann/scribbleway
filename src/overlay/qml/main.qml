@@ -464,6 +464,24 @@ Window {
         }
     }
 
+    // --- TOOL CURSOR BADGE (follows pointer while a draw tool is active) ---
+    ToolCursorBadge {
+        id: toolCursorBadge
+        visible: canvasWindow.showToolCursorBadge
+        tool: canvasWindow.activeDrawTool
+        accent: controller.defaultColor
+        z: 1000
+        opacity: canvasWindow.isDrawing ? 0.55 : 0.92
+        x: {
+            let nx = canvasWindow.lastMousePos.x + 16;
+            return Math.min(canvasWindow.width - width - 4, Math.max(4, nx));
+        }
+        y: {
+            let ny = canvasWindow.lastMousePos.y + 16;
+            return Math.min(canvasWindow.height - height - 4, Math.max(4, ny));
+        }
+    }
+
     // --- SELECTION FRAME UI ---
     Rectangle {
         id: selectionFrameRect
