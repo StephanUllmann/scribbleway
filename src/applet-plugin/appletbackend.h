@@ -63,6 +63,7 @@ public:
     Q_INVOKABLE void setBorderRadius(int radius);
     Q_INVOKABLE void setGlow(int glow);
     Q_INVOKABLE void undo();
+    Q_INVOKABLE void redo();
     Q_INVOKABLE void clear();
     Q_INVOKABLE void deleteSelected();
     Q_INVOKABLE void toggleLock();

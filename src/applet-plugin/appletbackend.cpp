@@ -162,6 +162,11 @@ void AppletBackend::undo()
     sendDBus(QStringLiteral("undo"));
 }
 
+void AppletBackend::redo()
+{
+    sendDBus(QStringLiteral("redo"));
+}
+
 void AppletBackend::clear()
 {
     sendDBus(QStringLiteral("clear"));

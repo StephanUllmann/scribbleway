@@ -1467,6 +1467,10 @@ void ShapesModelTest::testAppletBackendIntegration()
     backend.undo();
     QTest::qWait(50);
     QCOMPARE(controller.shapesModel()->rowCount(), 0);
+
+    backend.redo();
+    QTest::qWait(50);
+    QCOMPARE(controller.shapesModel()->rowCount(), 1);
     
     backend.enterSelectMode();
     QTest::qWait(50);

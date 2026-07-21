@@ -147,6 +147,13 @@ ColumnLayout {
             }
 
             PlasmaComponents.Button {
+                icon.name: "edit-redo"
+                text: "Redo"
+                Layout.fillWidth: true
+                onClicked: root.backend.redo()
+            }
+
+            PlasmaComponents.Button {
                 icon.name: "edit-clear"
                 text: "Clear All"
                 Layout.fillWidth: true
