@@ -373,6 +373,27 @@ ColumnLayout {
             }
         }
 
+        // Row: Roughness (Excalidraw sloppiness levels)
+        RowLayout {
+            Layout.fillWidth: true
+
+            PlasmaComponents.Label {
+                text: "Roughness:"
+                width: Kirigami.Units.gridUnit * 4
+            }
+
+            Controls.ComboBox {
+                Layout.fillWidth: true
+                model: ["Architect", "Artist", "Cartoonist"]
+                // selectedRoughness is always synced from getSelectionState
+                // (selection or defaults when hasSelection === false)
+                currentIndex: Math.max(0, Math.min(2, root.backend.selectedRoughness))
+                onActivated: (index) => {
+                    root.backend.setRoughness(index)
+                }
+            }
+        }
+
         // Row 5: Border Radius (only if Rectangle tool is active or Rectangle shape is selected)
         RowLayout {
             Layout.fillWidth: true
