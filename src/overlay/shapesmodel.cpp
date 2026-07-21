@@ -140,15 +140,19 @@ void ShapesModel::redo()
 
 void ShapesModel::beginEdit()
 {
-    if (!m_isApplyingUndo && !m_inEditTransaction) {
-        saveHistorySnapshot();
-        m_inEditTransaction = true;
+    if (!m_isApplyingUndo) {
+        if (m_inEditTransaction == 0) {
+            saveHistorySnapshot();
+        }
+        m_inEditTransaction++;
     }
 }
 
 void ShapesModel::endEdit()
 {
-    m_inEditTransaction = false;
+    if (!m_isApplyingUndo && m_inEditTransaction > 0) {
+        m_inEditTransaction--;
+    }
 }
 
 void ShapesModel::setShapes(const QList<QVariantMap> &shapes)
@@ -193,7 +197,7 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
             }
         }
 
-        if (hasRealChanges && !m_isApplyingUndo && !m_inEditTransaction) {
+        if (hasRealChanges && !m_isApplyingUndo && m_inEditTransaction == 0) {
             saveHistorySnapshot();
         }
 

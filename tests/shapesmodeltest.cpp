@@ -31,6 +31,7 @@ private Q_SLOTS:
     void testSelectionNoHistory();
     void testCappedHistory();
     void testEditTransaction();
+    void testNestedEditTransaction();
     void testRedoAfterUndo();
     void testRedoClearedOnNewMutation();
     void testRedoNoopWhenEmpty();
@@ -203,6 +204,36 @@ void ShapesModelTest::testEditTransaction()
     QCOMPARE(model.shapes().first()[QStringLiteral("x")].toInt(), 10);
 
     // Calling undo again should revert to before adding the shape: empty model.
+    model.undo();
+    QCOMPARE(model.rowCount(), 0);
+}
+
+void ShapesModelTest::testNestedEditTransaction()
+{
+    ShapesModel model;
+    QVariantMap shape;
+    shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+    shape[QStringLiteral("x")] = 10;
+    model.addShape(shape);
+
+    model.beginEdit();
+    model.beginEdit();
+    model.updateShape(0, {{QStringLiteral("x"), 11}});
+    model.endEdit();
+    model.updateShape(0, {{QStringLiteral("x"), 12}});
+    model.endEdit();
+
+    QCOMPARE(model.shapes().first()[QStringLiteral("x")].toInt(), 12);
+
+    // Revert the nested transaction
+    model.undo();
+    QCOMPARE(model.shapes().first()[QStringLiteral("x")].toInt(), 10);
+
+    // Reverting the shape addition
+    model.undo();
+    QCOMPARE(model.rowCount(), 0);
+
+    // Further undo is a no-op
     model.undo();
     QCOMPARE(model.rowCount(), 0);
 }

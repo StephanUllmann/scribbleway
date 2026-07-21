@@ -63,5 +63,5 @@ private:
     QList<QList<QVariantMap>> m_history;
     QList<QList<QVariantMap>> m_redo;
     bool m_isApplyingUndo = false;
-    bool m_inEditTransaction = false;
+    int m_inEditTransaction = 0;
 };

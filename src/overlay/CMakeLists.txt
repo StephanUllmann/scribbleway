@@ -8,10 +8,13 @@ qt_add_executable(scribbleway-overlay
     shapesmodel.cpp
 )
 
+qt_policy(SET QTP0004 NEW)
+
 qt_add_qml_module(scribbleway-overlay
     URI scribbleway
     VERSION 1.0
     RESOURCE_PREFIX "/"
+    NO_IMPORT_SCAN
     QML_FILES
         qml/main.qml
         qml/ToolCursorBadge.qml

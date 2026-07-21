@@ -15,6 +15,11 @@ include(KDEInstallDirs)
 include(KDECMakeSettings)
 include(KDECompilerSettings NO_POLICY_SCOPE)
 
+# Suppress warnings about missing Qt private header directories
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wno-missing-include-dirs)
+endif()
+
 # Find Qt6 components
 find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Core
