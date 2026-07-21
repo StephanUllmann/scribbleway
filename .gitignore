@@ -10,3 +10,10 @@ build-flatpak/
 .flatpak-builder/
 repo-flatpak/
 build-flatpak-cache/
+debug.log
+*.pkg.tar.zst
+.superpowers/
+.agents/
+skills-lock.json
+scribbleway_*.deb
+scribbleway.flatpak

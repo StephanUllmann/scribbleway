@@ -49,7 +49,6 @@ Item {
     property real minSize: 15
 
     property bool isResizing: false
-    property bool isInteracting: dragArea.pressed || isResizing
 
     // Line-mode properties
     property real shapeFromX: 0

@@ -33,7 +33,6 @@ Window {
 
     // Text editing index
     property int editingShapeIndex: -1
-    property bool isUpdatingInputRegion: false
     property point lastMousePos: Qt.point(width / 2, height / 2)
 
     // Selection frame properties

@@ -1,5 +1,5 @@
 find_package(Qt6 REQUIRED COMPONENTS Test Quick DBus)
-find_package(KF6 REQUIRED COMPONENTS GlobalAccel DBusAddons)
+find_package(KF6 REQUIRED COMPONENTS GlobalAccel)
 find_package(LayerShellQt REQUIRED)
 
 add_executable(shapesmodeltest
@@ -24,7 +24,6 @@ target_link_libraries(shapesmodeltest PRIVATE
     Qt6::Quick
     Qt6::DBus
     KF6::GlobalAccel
-    KF6::DBusAddons
     LayerShellQt::Interface
 )
 

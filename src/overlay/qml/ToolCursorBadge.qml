@@ -8,8 +8,6 @@ Item {
     // freehand | rectangle | ellipse | line | arrow | text
     property string tool: "freehand"
     property color accent: "#e63946"
-    property color chipColor: Qt.rgba(0.08, 0.09, 0.12, 0.82)
-    property color chipBorder: Qt.rgba(1, 1, 1, 0.35)
 
     // Never intercept pointer events — shapes / draw MouseArea stay authoritative
     enabled: false
@@ -17,8 +15,8 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: 6
-        color: root.chipColor
-        border.color: root.chipBorder
+        color: Qt.rgba(0.08, 0.09, 0.12, 0.82)
+        border.color: Qt.rgba(1, 1, 1, 0.35)
         border.width: 1
     }
 

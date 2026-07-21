@@ -5,7 +5,6 @@
 #include <QVariantMap>
 #include <QDBusArgument>
 #include <QDBusVariant>
-#include <QStringList>
 #include <QString>
 
 namespace DBusUtils {
