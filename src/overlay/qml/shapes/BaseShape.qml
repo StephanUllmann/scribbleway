@@ -114,6 +114,8 @@ Item {
         }
 
         onPositionChanged: (mouse) => {
+            let globalPos = mapToItem(null, mouse.x, mouse.y);
+            canvasWindow.lastMousePos = Qt.point(globalPos.x, globalPos.y);
             if (pressed) {
                 let pos = mapToItem(baseShapeRoot, mouse.x, mouse.y);
                 let dx = pos.x - startMouseX;
