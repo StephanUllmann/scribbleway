@@ -45,6 +45,7 @@ private Q_SLOTS:
     void testBorderRadius();
     void testRoughness();
     void testGlow();
+    void testFreehandSmoothing();
     void testExcalidrawPasteCompatibility();
     void testZOrder();
     void testShapeLock();
@@ -808,6 +809,47 @@ void ShapesModelTest::testGlow()
 
     QCOMPARE(controller.selectedIndex(), 0);
     QCOMPARE(controller.getSelectionState()[QStringLiteral("glow")].toInt(), 20);
+}
+
+void ShapesModelTest::testFreehandSmoothing()
+{
+    OverlayController controller;
+
+    // Default level is medium (2)
+    QCOMPARE(controller.defaultFreehandSmoothing(), 2);
+
+    QVariantMap updateProps;
+    updateProps[QStringLiteral("freehandSmoothing")] = 0;
+    controller.updateProperties(updateProps);
+    QCOMPARE(controller.defaultFreehandSmoothing(), 0);
+
+    // Clamp high
+    controller.updateProperties({{QStringLiteral("freehandSmoothing"), 99}});
+    QCOMPARE(controller.defaultFreehandSmoothing(), 3);
+
+    // Clamp low
+    controller.updateProperties({{QStringLiteral("freehandSmoothing"), -5}});
+    QCOMPARE(controller.defaultFreehandSmoothing(), 0);
+
+    // Selection state always reports the draw default
+    QVariantMap state = controller.getSelectionState();
+    QCOMPARE(state.value(QStringLiteral("freehandSmoothing")).toInt(), 0);
+
+    // Freehand shape does not need freehandSmoothing key; state still reports default
+    QVariantMap freehand;
+    freehand[QStringLiteral("type")] = QStringLiteral("freehand");
+    QVariantList pts;
+    pts.append(QPointF(0.0, 0.0));
+    pts.append(QPointF(10.0, 0.0));
+    pts.append(QPointF(10.0, 10.0));
+    freehand[QStringLiteral("points")] = pts;
+    controller.addShape(freehand);
+
+    state = controller.getSelectionState();
+    QVERIFY(state.value(QStringLiteral("hasSelection")).toBool());
+    QCOMPARE(state.value(QStringLiteral("freehandSmoothing")).toInt(), 0);
+    // Shape map must not be required to contain freehandSmoothing
+    QVERIFY(!controller.shapesModel()->shapes().first().contains(QStringLiteral("freehandSmoothing")));
 }
 
 void ShapesModelTest::testExcalidrawPasteCompatibility()
@@ -1893,6 +1935,97 @@ void ShapesModelTest::testRoughPathGenerator()
     QVERIFY(!arcResultZero.isError());
     QVERIFY(arcResultZero.isArray());
     QCOMPARE(arcResultZero.property(QStringLiteral("length")).toInt(), 2);
+
+    // --- Freehand smoothing helpers ---
+    QJSValue smoothFreehandPoints = engine.globalObject().property(QStringLiteral("smoothFreehandPoints"));
+    QVERIFY(smoothFreehandPoints.isCallable());
+    QJSValue rdpSimplify = engine.globalObject().property(QStringLiteral("rdpSimplify"));
+    QVERIFY(rdpSimplify.isCallable());
+    QJSValue chaikinSmooth = engine.globalObject().property(QStringLiteral("chaikinSmooth"));
+    QVERIFY(chaikinSmooth.isCallable());
+
+    auto makePt = [&](double x, double y) {
+        QJSValue o = engine.newObject();
+        o.setProperty(QStringLiteral("x"), x);
+        o.setProperty(QStringLiteral("y"), y);
+        return o;
+    };
+    auto makePts = [&](std::initializer_list<std::pair<double, double>> coords) {
+        QJSValue arr = engine.newArray();
+        int i = 0;
+        for (const auto &c : coords) {
+            arr.setProperty(i++, makePt(c.first, c.second));
+        }
+        return arr;
+    };
+    auto lenOf = [](const QJSValue &v) {
+        return v.property(QStringLiteral("length")).toInt();
+    };
+    auto xAt = [](const QJSValue &arr, int i) {
+        return arr.property(i).property(QStringLiteral("x")).toNumber();
+    };
+    auto yAt = [](const QJSValue &arr, int i) {
+        return arr.property(i).property(QStringLiteral("y")).toNumber();
+    };
+
+    // Colinear dense samples → RDP collapses to endpoints
+    QJSValue dense = makePts({
+        {0, 0}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {5, 0}
+    });
+    QJSValue rdpOut = rdpSimplify.call(QJSValueList() << dense << 0.5);
+    QVERIFY(!rdpOut.isError());
+    QCOMPARE(lenOf(rdpOut), 2);
+    QCOMPARE(xAt(rdpOut, 0), 0.0);
+    QCOMPARE(yAt(rdpOut, 0), 0.0);
+    QCOMPARE(xAt(rdpOut, 1), 5.0);
+    QCOMPARE(yAt(rdpOut, 1), 0.0);
+
+    // Corner is kept by RDP
+    QJSValue corner = makePts({{0, 0}, {5, 0}, {5, 5}});
+    QJSValue rdpCorner = rdpSimplify.call(QJSValueList() << corner << 0.5);
+    QCOMPARE(lenOf(rdpCorner), 3);
+
+    // Level 0 is identity (same count, same endpoints)
+    QJSValue jagged = makePts({
+        {0, 0}, {1, 0.4}, {2, -0.3}, {3, 0.2}, {4, 0}, {5, 1}, {6, 6}
+    });
+    QJSValue lvl0 = smoothFreehandPoints.call(QJSValueList() << jagged << 0);
+    QVERIFY(!lvl0.isError());
+    QCOMPARE(lenOf(lvl0), lenOf(jagged));
+    QCOMPARE(xAt(lvl0, 0), 0.0);
+    QCOMPARE(yAt(lvl0, 0), 0.0);
+    QCOMPARE(xAt(lvl0, lenOf(lvl0) - 1), 6.0);
+    QCOMPARE(yAt(lvl0, lenOf(lvl0) - 1), 6.0);
+
+    // Level 2/3 keep endpoints, produce finite coords, and are defined for short strokes
+    for (int level : {1, 2, 3}) {
+        QJSValue smoothed = smoothFreehandPoints.call(QJSValueList() << jagged << level);
+        QVERIFY2(!smoothed.isError(), qPrintable(QStringLiteral("level %1 errored").arg(level)));
+        QVERIFY(lenOf(smoothed) >= 2);
+        QCOMPARE(xAt(smoothed, 0), 0.0);
+        QCOMPARE(yAt(smoothed, 0), 0.0);
+        QCOMPARE(xAt(smoothed, lenOf(smoothed) - 1), 6.0);
+        QCOMPARE(yAt(smoothed, lenOf(smoothed) - 1), 6.0);
+        for (int i = 0; i < lenOf(smoothed); ++i) {
+            QVERIFY(qIsFinite(xAt(smoothed, i)));
+            QVERIFY(qIsFinite(yAt(smoothed, i)));
+        }
+    }
+
+    // Two-point stroke remains two points at any level
+    QJSValue two = makePts({{10, 10}, {20, 30}});
+    QJSValue twoSm = smoothFreehandPoints.call(QJSValueList() << two << 3);
+    QCOMPARE(lenOf(twoSm), 2);
+
+    // Chaikin one iteration grows point count on a 3-point polyline:
+    // endpoints + 2 per segment × 2 segments = 2 + 4 = 6
+    QJSValue tri = makePts({{0, 0}, {10, 0}, {10, 10}});
+    QJSValue ch = chaikinSmooth.call(QJSValueList() << tri << 1);
+    QCOMPARE(lenOf(ch), 6);
+    QCOMPARE(xAt(ch, 0), 0.0);
+    QCOMPARE(yAt(ch, 0), 0.0);
+    QCOMPARE(xAt(ch, 5), 10.0);
+    QCOMPARE(yAt(ch, 5), 10.0);
 }
 
 QTEST_MAIN(ShapesModelTest)
