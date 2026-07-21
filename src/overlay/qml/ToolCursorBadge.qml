@@ -103,6 +103,7 @@ Item {
             // simple chevron head
             Canvas {
                 anchors.fill: parent
+                visible: parent.visible
                 property color accent: root.accent
                 onPaint: {
                     var ctx = getContext("2d");

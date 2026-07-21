@@ -474,11 +474,11 @@ Window {
         opacity: canvasWindow.isDrawing ? 0.55 : 0.92
         x: {
             let nx = canvasWindow.lastMousePos.x + 16;
-            return Math.min(canvasWindow.width - width - 4, Math.max(4, nx));
+            return Math.min(canvasWindow.width - toolCursorBadge.width - 4, Math.max(4, nx));
         }
         y: {
             let ny = canvasWindow.lastMousePos.y + 16;
-            return Math.min(canvasWindow.height - height - 4, Math.max(4, ny));
+            return Math.min(canvasWindow.height - toolCursorBadge.height - 4, Math.max(4, ny));
         }
     }
 
