@@ -646,29 +646,16 @@ Window {
     }
 
     function attachedTextRect(shape) {
-        const padding = 12;
-        const type = (shape.type || "").toLowerCase();
-        if (type === "rectangle") {
-            return Qt.rect(shape.x + padding, shape.y + padding,
-                           Math.max(40, shape.width - padding * 2),
-                           Math.max(24, shape.height - padding * 2));
-        }
-        if (type === "ellipse") {
-            const insetX = shape.width * (1 - Math.SQRT1_2) / 2 + padding;
-            const insetY = shape.height * (1 - Math.SQRT1_2) / 2 + padding;
-            return Qt.rect(shape.x + insetX, shape.y + insetY,
-                           Math.max(40, shape.width - insetX * 2),
-                           Math.max(24, shape.height - insetY * 2));
-        }
+        const pad = 12, type = (shape.type || "").toLowerCase();
         if (type === "line" || type === "arrow") {
-            const midX = (shape.fromX + shape.toX) / 2;
-            const midY = (shape.fromY + shape.toY) / 2;
-            const len = Math.sqrt(Math.pow(shape.toX - shape.fromX, 2) + Math.pow(shape.toY - shape.fromY, 2));
-            const labelWidth = Math.max(80, len * 0.7);
-            const labelHeight = Math.max(32, (shape.fontSize || controller.defaultFontSize) * 1.6);
-            return Qt.rect(midX - labelWidth / 2, midY - labelHeight / 2, labelWidth, labelHeight);
+            const midX = (shape.fromX + shape.toX) / 2, midY = (shape.fromY + shape.toY) / 2;
+            const len = Math.hypot(shape.toX - shape.fromX, shape.toY - shape.fromY);
+            const w = Math.max(80, len * 0.7), h = Math.max(32, (shape.fontSize || controller.defaultFontSize) * 1.6);
+            return Qt.rect(midX - w / 2, midY - h / 2, w, h);
         }
-        return Qt.rect(0, 0, 120, 40);
+        const ix = type === "ellipse" ? shape.width * (1 - Math.SQRT1_2) / 2 + pad : pad;
+        const iy = type === "ellipse" ? shape.height * (1 - Math.SQRT1_2) / 2 + pad : pad;
+        return Qt.rect(shape.x + ix, shape.y + iy, Math.max(40, shape.width - ix * 2), Math.max(24, shape.height - iy * 2));
     }
 
     function startTextEditing(shapeIndex) {

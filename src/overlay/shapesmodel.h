@@ -54,6 +54,7 @@ public:
     void setShapes(const QList<QVariantMap> &shapes);
     QList<QVariantMap> shapes() const;
     QString shapeIdAt(int index) const;
+    static QVariantMap firstAttachedTextBinding(const QVariantMap &shape);
 
     void addShape(const QVariantMap &shape);
     void updateShape(int index, const QVariantMap &properties);

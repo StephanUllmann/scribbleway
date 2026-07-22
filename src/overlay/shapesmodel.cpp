@@ -23,7 +23,7 @@ static QVariantList normalizePoints(const QVariant &var)
     return result;
 }
 
-static QVariantMap firstAttachedTextBinding(const QVariantMap &shape)
+QVariantMap ShapesModel::firstAttachedTextBinding(const QVariantMap &shape)
 {
     const QVariantList bindings = shape.value(QStringLiteral("bindings")).toList();
     for (const QVariant &bindingValue : bindings) {

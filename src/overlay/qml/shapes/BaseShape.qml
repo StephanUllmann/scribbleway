@@ -104,7 +104,7 @@ Item {
         return t === "rectangle" || t === "ellipse" || t === "line" || t === "arrow";
     }
     readonly property real attachedPadding: 12
-    readonly property real attachedLineLength: Math.sqrt(Math.pow(shapeToX - shapeFromX, 2) + Math.pow(shapeToY - shapeFromY, 2))
+    readonly property real attachedLineLength: Math.hypot(shapeToX - shapeFromX, shapeToY - shapeFromY)
 
     readonly property color resolvedFill: {
         if (!modelFillColor || modelFillColor === "transparent" || modelFillOpacity <= 0)
