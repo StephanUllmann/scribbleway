@@ -106,6 +106,16 @@ int AppletBackend::selectedGlow() const
     return m_selectedGlow;
 }
 
+QString AppletBackend::selectedFillColor() const
+{
+    return m_selectedFillColor;
+}
+
+double AppletBackend::selectedFillOpacity() const
+{
+    return m_selectedFillOpacity;
+}
+
 int AppletBackend::selectedFreehandSmoothing() const
 {
     return m_selectedFreehandSmoothing;
@@ -165,6 +175,18 @@ void AppletBackend::setBorderRadius(int radius)
 void AppletBackend::setGlow(int glow)
 {
     sendDBus(QStringLiteral("updateProperties"), { QVariantMap{{QStringLiteral("glow"), glow}} });
+}
+
+void AppletBackend::setFillColor(const QString &color)
+{
+    sendDBus(QStringLiteral("updateProperties"),
+             { QVariantMap{{QStringLiteral("fillColor"), color}} });
+}
+
+void AppletBackend::setFillOpacity(double opacity)
+{
+    sendDBus(QStringLiteral("updateProperties"),
+             { QVariantMap{{QStringLiteral("fillOpacity"), opacity}} });
 }
 
 void AppletBackend::setFreehandSmoothing(int level)
@@ -388,6 +410,8 @@ void AppletBackend::onSelectionChanged(const QVariantMap &state)
     m_selectedShapeIndex = demarshalled[QStringLiteral("selectedIndex")].toInt();
     m_selectedBorderRadius = demarshalled.value(QStringLiteral("borderRadius"), 8).toInt();
     m_selectedGlow = demarshalled.value(QStringLiteral("glow"), 3).toInt();
+    m_selectedFillColor = demarshalled.value(QStringLiteral("fillColor"), QStringLiteral("#e63946")).toString();
+    m_selectedFillOpacity = demarshalled.value(QStringLiteral("fillOpacity"), 0.12).toDouble();
     m_selectedFreehandSmoothing = demarshalled.value(QStringLiteral("freehandSmoothing"), 2).toInt();
     m_selectedRoughness = demarshalled.value(QStringLiteral("roughness"), 1).toInt();
     Q_EMIT selectionChanged();

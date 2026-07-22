@@ -1574,6 +1574,12 @@ void ShapesModelTest::testAppletBackendIntegration()
     QCOMPARE(controller.defaultStrokeWidth(), 8);
     QCOMPARE(controller.defaultOpacity(), 0.25);
 
+    backend.setFillColor(QStringLiteral("#abcdef"));
+    backend.setFillOpacity(0.33);
+    QTest::qWait(50);
+    QCOMPARE(controller.defaultFillColor(), QStringLiteral("#abcdef"));
+    QCOMPARE(controller.defaultFillOpacity(), 0.33);
+
     backend.setRoughness(2);
     QTest::qWait(50);
     QCOMPARE(controller.defaultRoughness(), 2);

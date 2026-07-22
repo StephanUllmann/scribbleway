@@ -23,6 +23,8 @@ class AppletBackend : public QObject
     Q_PROPERTY(int selectedShapeIndex READ selectedShapeIndex NOTIFY selectionChanged)
     Q_PROPERTY(int selectedBorderRadius READ selectedBorderRadius NOTIFY selectionChanged)
     Q_PROPERTY(int selectedGlow READ selectedGlow NOTIFY selectionChanged)
+    Q_PROPERTY(QString selectedFillColor READ selectedFillColor NOTIFY selectionChanged)
+    Q_PROPERTY(double selectedFillOpacity READ selectedFillOpacity NOTIFY selectionChanged)
     Q_PROPERTY(int selectedFreehandSmoothing READ selectedFreehandSmoothing NOTIFY selectionChanged)
     Q_PROPERTY(int selectedRoughness READ selectedRoughness NOTIFY selectionChanged)
     Q_PROPERTY(QString currentMode READ currentMode NOTIFY modeChanged)
@@ -47,6 +49,8 @@ public:
     int selectedShapeIndex() const;
     int selectedBorderRadius() const;
     int selectedGlow() const;
+    QString selectedFillColor() const;
+    double selectedFillOpacity() const;
     int selectedFreehandSmoothing() const;
     int selectedRoughness() const;
     QString currentMode() const;
@@ -66,6 +70,8 @@ public:
     Q_INVOKABLE void setFontSize(int size);
     Q_INVOKABLE void setBorderRadius(int radius);
     Q_INVOKABLE void setGlow(int glow);
+    Q_INVOKABLE void setFillColor(const QString &color);
+    Q_INVOKABLE void setFillOpacity(double opacity);
     Q_INVOKABLE void setFreehandSmoothing(int level);
     Q_INVOKABLE void setRoughness(int roughness);
     Q_INVOKABLE void undo();
@@ -117,6 +123,8 @@ private:
     int m_selectedFontSize = 20;
     int m_selectedBorderRadius = 8;
     int m_selectedGlow = 10;
+    QString m_selectedFillColor = QStringLiteral("#e63946");
+    double m_selectedFillOpacity = 0.12;
     int m_selectedFreehandSmoothing = 2;
     int m_selectedRoughness = 1;
     bool m_selectedLocked = false;
