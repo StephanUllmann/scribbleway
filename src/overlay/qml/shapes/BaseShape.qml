@@ -41,6 +41,15 @@ Item {
     property int modelRoughness: model.roughness !== undefined ? model.roughness : 0
     property int modelGlow: model.glow !== undefined ? model.glow : 0
     property int modelSeed: model.seed !== undefined ? model.seed : 123456
+    property string modelFillColor: model.fillColor !== undefined ? model.fillColor : "transparent"
+    property real modelFillOpacity: model.fillOpacity !== undefined ? model.fillOpacity : 0.0
+
+    readonly property color resolvedFill: {
+        if (!modelFillColor || modelFillColor === "transparent" || modelFillOpacity <= 0)
+            return "transparent";
+        let c = Qt.color(modelFillColor);
+        return Qt.rgba(c.r, c.g, c.b, modelFillOpacity);
+    }
 
     // Rect-mode properties
     property real shapeX: 0

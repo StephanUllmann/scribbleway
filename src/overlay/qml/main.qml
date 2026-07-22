@@ -156,6 +156,8 @@ Window {
             "locked": false,
             "roughness": controller.defaultRoughness,
             "glow": controller.defaultGlow,
+            "fillColor": controller.defaultFillColor,
+            "fillOpacity": controller.defaultFillOpacity,
             "seed": Math.floor(Math.random() * 1000000) + 1
         };
 
@@ -383,8 +385,12 @@ Window {
         border.color: controller.defaultColor
         border.width: controller.defaultStrokeWidth
         color: {
-            let c = Qt.color(controller.defaultColor);
-            return Qt.rgba(c.r, c.g, c.b, 0.12);
+            let fc = controller.defaultFillColor;
+            let fo = controller.defaultFillOpacity;
+            if (!fc || fc === "transparent" || fo <= 0)
+                return "transparent";
+            let c = Qt.color(fc);
+            return Qt.rgba(c.r, c.g, c.b, fo);
         }
         radius: controller.defaultBorderRadius
     }
@@ -399,8 +405,12 @@ Window {
             strokeColor: controller.defaultColor
             strokeWidth: controller.defaultStrokeWidth
             fillColor: {
-                let c = Qt.color(controller.defaultColor);
-                return Qt.rgba(c.r, c.g, c.b, 0.12);
+                let fc = controller.defaultFillColor;
+                let fo = controller.defaultFillOpacity;
+                if (!fc || fc === "transparent" || fo <= 0)
+                    return "transparent";
+                let c = Qt.color(fc);
+                return Qt.rgba(c.r, c.g, c.b, fo);
             }
 
             startX: previewX + previewW / 2

@@ -24,11 +24,7 @@ BaseShape {
 
         border.color: root.modelColor
         border.width: root.modelRoughness === 0 ? root.modelStrokeWidth : 0
-        // Excalidraw-like premium fill style (stroke color at 12% opacity)
-        color: {
-            let c = Qt.color(root.modelColor);
-            return Qt.rgba(c.r, c.g, c.b, 0.12);
-        }
+        color: root.resolvedFill
         radius: typeof borderRadius !== "undefined" ? borderRadius : 0
     }
 

@@ -22,10 +22,7 @@ BaseShape {
             ShapePath {
                 strokeColor: root.modelRoughness === 0 ? root.modelColor : "transparent"
                 strokeWidth: root.modelStrokeWidth
-                fillColor: {
-                    let c = Qt.color(root.modelColor);
-                    return Qt.rgba(c.r, c.g, c.b, 0.12);
-                }
+                fillColor: root.resolvedFill
 
                 // Start at top center
                 startX: root.shapeX + root.shapeWidth / 2
