@@ -338,6 +338,141 @@ QVariantMap OverlayController::getShape(int index) const
     return QVariantMap();
 }
 
+bool OverlayController::supportsAttachedText(const QString &type)
+{
+    return type == QStringLiteral("rectangle")
+        || type == QStringLiteral("ellipse")
+        || type == QStringLiteral("line")
+        || type == QStringLiteral("arrow");
+}
+
+QVariantMap OverlayController::firstAttachedTextBinding(const QVariantMap &shape)
+{
+    const QVariantList bindings = shape.value(QStringLiteral("bindings")).toList();
+    for (const QVariant &bindingValue : bindings) {
+        const QVariantMap binding = bindingValue.toMap();
+        if (binding.value(QStringLiteral("type")).toString() == QStringLiteral("attachedText")) {
+            return binding;
+        }
+    }
+    return QVariantMap();
+}
+
+QVariantList OverlayController::withoutAttachedTextBinding(const QVariantMap &shape)
+{
+    QVariantList filtered;
+    const QVariantList bindings = shape.value(QStringLiteral("bindings")).toList();
+    for (const QVariant &bindingValue : bindings) {
+        const QVariantMap binding = bindingValue.toMap();
+        if (binding.value(QStringLiteral("type")).toString() != QStringLiteral("attachedText")) {
+            filtered.append(binding);
+        }
+    }
+    return filtered;
+}
+
+QVariantMap OverlayController::makeAttachedTextBinding(const QVariantMap &shape) const
+{
+    QVariantMap binding;
+    binding.insert(QStringLiteral("type"), QStringLiteral("attachedText"));
+    binding.insert(QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces));
+    binding.insert(QStringLiteral("text"), QString());
+    binding.insert(QStringLiteral("fontFamily"), shape.value(QStringLiteral("fontFamily"), m_defaultFontFamily).toString());
+    binding.insert(QStringLiteral("fontSize"), shape.value(QStringLiteral("fontSize"), m_defaultFontSize).toInt());
+    binding.insert(QStringLiteral("textAlign"), QStringLiteral("center"));
+    binding.insert(QStringLiteral("verticalAlign"), QStringLiteral("middle"));
+    return binding;
+}
+
+QVariantMap OverlayController::attachedTextForShape(int index) const
+{
+    if (index < 0 || index >= m_shapesModel.rowCount()) {
+        return QVariantMap();
+    }
+    return firstAttachedTextBinding(m_shapesModel.shapes().at(index));
+}
+
+QVariantMap OverlayController::ensureAttachedTextForShape(int index)
+{
+    if (index < 0 || index >= m_shapesModel.rowCount()) {
+        return QVariantMap();
+    }
+
+    QVariantMap shape = m_shapesModel.shapes().at(index);
+    const QString type = shape.value(QStringLiteral("type")).toString();
+    if (!supportsAttachedText(type)) {
+        return QVariantMap();
+    }
+
+    QVariantMap existing = firstAttachedTextBinding(shape);
+    if (!existing.isEmpty()) {
+        return existing;
+    }
+
+    QVariantMap binding = makeAttachedTextBinding(shape);
+    QVariantList bindings = shape.value(QStringLiteral("bindings")).toList();
+    bindings.append(binding);
+    m_shapesModel.updateShape(index, {{QStringLiteral("bindings"), bindings}});
+    notifyShapesChanged();
+    if (index == m_selectedIndex) {
+        notifySelectionChanged();
+    }
+    return binding;
+}
+
+void OverlayController::setAttachedText(int index, const QString &text)
+{
+    if (index < 0 || index >= m_shapesModel.rowCount()) {
+        return;
+    }
+
+    const QString trimmed = text.trimmed();
+    if (trimmed.isEmpty()) {
+        removeAttachedText(index);
+        return;
+    }
+
+    QVariantMap shape = m_shapesModel.shapes().at(index);
+    if (!supportsAttachedText(shape.value(QStringLiteral("type")).toString())) {
+        return;
+    }
+
+    QVariantList bindings = withoutAttachedTextBinding(shape);
+    QVariantMap binding = firstAttachedTextBinding(shape);
+    if (binding.isEmpty()) {
+        binding = makeAttachedTextBinding(shape);
+    }
+    binding.insert(QStringLiteral("text"), trimmed);
+    binding.insert(QStringLiteral("fontFamily"), shape.value(QStringLiteral("fontFamily"), m_defaultFontFamily).toString());
+    binding.insert(QStringLiteral("fontSize"), shape.value(QStringLiteral("fontSize"), m_defaultFontSize).toInt());
+    bindings.append(binding);
+
+    m_shapesModel.updateShape(index, {{QStringLiteral("bindings"), bindings}});
+    notifyShapesChanged();
+    if (index == m_selectedIndex) {
+        notifySelectionChanged();
+    }
+}
+
+void OverlayController::removeAttachedText(int index)
+{
+    if (index < 0 || index >= m_shapesModel.rowCount()) {
+        return;
+    }
+
+    const QVariantMap shape = m_shapesModel.shapes().at(index);
+    QVariantList bindings = withoutAttachedTextBinding(shape);
+    if (bindings == shape.value(QStringLiteral("bindings")).toList()) {
+        return;
+    }
+
+    m_shapesModel.updateShape(index, {{QStringLiteral("bindings"), bindings}});
+    notifyShapesChanged();
+    if (index == m_selectedIndex) {
+        notifySelectionChanged();
+    }
+}
+
 void OverlayController::updateShape(int index, const QVariantMap &properties)
 {
     QVariantMap demarshalledProps = DBusUtils::demarshal(properties).toMap();

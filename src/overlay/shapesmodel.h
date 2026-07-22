@@ -39,7 +39,9 @@ public:
         IdRole,
         StartBindingRole,
         EndBindingRole,
-        BoundElementIdsRole
+        BoundElementIdsRole,
+        BindingsRole,
+        AttachedTextRole
     };
     Q_ENUM(ShapeRoles)
 

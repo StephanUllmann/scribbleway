@@ -23,6 +23,18 @@ static QVariantList normalizePoints(const QVariant &var)
     return result;
 }
 
+static QVariantMap firstAttachedTextBinding(const QVariantMap &shape)
+{
+    const QVariantList bindings = shape.value(QStringLiteral("bindings")).toList();
+    for (const QVariant &bindingValue : bindings) {
+        const QVariantMap binding = bindingValue.toMap();
+        if (binding.value(QStringLiteral("type")).toString() == QStringLiteral("attachedText")) {
+            return binding;
+        }
+    }
+    return QVariantMap();
+}
+
 ShapesModel::ShapesModel(QObject *parent)
     : QAbstractListModel(parent)
 {
@@ -70,6 +82,8 @@ QVariant ShapesModel::data(const QModelIndex &index, int role) const
         case StartBindingRole: return shape.value(QStringLiteral("startBinding"));
         case EndBindingRole: return shape.value(QStringLiteral("endBinding"));
         case BoundElementIdsRole: return shape.value(QStringLiteral("boundElementIds"));
+        case BindingsRole: return shape.value(QStringLiteral("bindings"));
+        case AttachedTextRole: return firstAttachedTextBinding(shape);
         default: return QVariant();
     }
 }
@@ -106,6 +120,8 @@ QHash<int, QByteArray> ShapesModel::roleNames() const
     roles[StartBindingRole] = "startBinding";
     roles[EndBindingRole] = "endBinding";
     roles[BoundElementIdsRole] = "boundElementIds";
+    roles[BindingsRole] = "bindings";
+    roles[AttachedTextRole] = "attachedText";
     return roles;
 }
 
@@ -263,6 +279,7 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
                 else if (it.key() == QStringLiteral("startBinding")) changedRoles << StartBindingRole;
                 else if (it.key() == QStringLiteral("endBinding")) changedRoles << EndBindingRole;
                 else if (it.key() == QStringLiteral("boundElementIds")) changedRoles << BoundElementIdsRole;
+                else if (it.key() == QStringLiteral("bindings")) changedRoles << BindingsRole << AttachedTextRole;
             }
         }
         if (!changedRoles.isEmpty()) {

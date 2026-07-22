@@ -116,6 +116,10 @@ public:
     Q_INVOKABLE void beginEdit();
     Q_INVOKABLE void endEdit();
     Q_INVOKABLE QVariantMap getShape(int index) const;
+    Q_INVOKABLE QVariantMap attachedTextForShape(int index) const;
+    Q_INVOKABLE QVariantMap ensureAttachedTextForShape(int index);
+    Q_INVOKABLE void setAttachedText(int index, const QString &text);
+    Q_INVOKABLE void removeAttachedText(int index);
     Q_INVOKABLE void copySelected();
     Q_INVOKABLE void pasteFromClipboard(double localX = -1.0, double localY = -1.0);
     Q_INVOKABLE void selectShapesInRect(double rx, double ry, double rw, double rh, bool shiftHeld);
@@ -192,6 +196,10 @@ private:
     void ensureSelectMode();
     QJsonObject convertToExcalidraw(const QVariantMap &shape);
     QVariantMap convertFromExcalidraw(const QJsonObject &elem);
+    static bool supportsAttachedText(const QString &type);
+    static QVariantMap firstAttachedTextBinding(const QVariantMap &shape);
+    static QVariantList withoutAttachedTextBinding(const QVariantMap &shape);
+    QVariantMap makeAttachedTextBinding(const QVariantMap &shape) const;
 
     QList<ShortcutAction> m_shortcutActions;
     QList<LocalShortcutDef> m_localShortcuts;

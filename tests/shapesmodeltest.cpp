@@ -64,6 +64,8 @@ private Q_SLOTS:
     void testBindingDeleteCleanup();
     void testBindingResizePropagate();
     void testExcalidrawBindingRoundtrip();
+    void testAttachedTextDataModel();
+    void testAttachedTextUndoRedo();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -2482,4 +2484,79 @@ void ShapesModelTest::testExcalidrawBindingRoundtrip()
         }
     }
     QVERIFY(foundArrow);
+}
+
+void ShapesModelTest::testAttachedTextDataModel()
+{
+    OverlayController controller;
+
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("id")] = QStringLiteral("rect-attached");
+    rect[QStringLiteral("x")] = 10.0;
+    rect[QStringLiteral("y")] = 20.0;
+    rect[QStringLiteral("width")] = 100.0;
+    rect[QStringLiteral("height")] = 60.0;
+    rect[QStringLiteral("color")] = QStringLiteral("#123456");
+    rect[QStringLiteral("opacity")] = 0.75;
+    rect[QStringLiteral("fontFamily")] = QStringLiteral("monospace");
+    rect[QStringLiteral("fontSize")] = 24;
+    controller.addShape(rect);
+
+    QVariantMap created = controller.ensureAttachedTextForShape(0);
+    QCOMPARE(created.value(QStringLiteral("type")).toString(), QStringLiteral("attachedText"));
+    QVERIFY(!created.value(QStringLiteral("id")).toString().isEmpty());
+    QCOMPARE(created.value(QStringLiteral("text")).toString(), QString());
+    QCOMPARE(created.value(QStringLiteral("fontFamily")).toString(), QStringLiteral("monospace"));
+    QCOMPARE(created.value(QStringLiteral("fontSize")).toInt(), 24);
+    QCOMPARE(created.value(QStringLiteral("textAlign")).toString(), QStringLiteral("center"));
+    QCOMPARE(created.value(QStringLiteral("verticalAlign")).toString(), QStringLiteral("middle"));
+
+    controller.setAttachedText(0, QStringLiteral("Hello container"));
+    QVariantMap attached = controller.attachedTextForShape(0);
+    QCOMPARE(attached.value(QStringLiteral("text")).toString(), QStringLiteral("Hello container"));
+
+    QModelIndex idx = controller.shapesModel()->index(0);
+    QVariantMap roleAttached = controller.shapesModel()->data(idx, ShapesModel::AttachedTextRole).toMap();
+    QCOMPARE(roleAttached.value(QStringLiteral("text")).toString(), QStringLiteral("Hello container"));
+    QVariantList bindings = controller.shapesModel()->data(idx, ShapesModel::BindingsRole).toList();
+    QCOMPARE(bindings.size(), 1);
+
+    QCOMPARE(controller.shapesModel()->rowCount(), 1);
+
+    controller.removeAttachedText(0);
+    QVERIFY(controller.attachedTextForShape(0).isEmpty());
+    QCOMPARE(controller.shapesModel()->data(idx, ShapesModel::BindingsRole).toList().size(), 0);
+}
+
+void ShapesModelTest::testAttachedTextUndoRedo()
+{
+    OverlayController controller;
+
+    QVariantMap arrow;
+    arrow[QStringLiteral("type")] = QStringLiteral("arrow");
+    arrow[QStringLiteral("id")] = QStringLiteral("arrow-attached");
+    arrow[QStringLiteral("fromX")] = 10.0;
+    arrow[QStringLiteral("fromY")] = 20.0;
+    arrow[QStringLiteral("toX")] = 130.0;
+    arrow[QStringLiteral("toY")] = 80.0;
+    arrow[QStringLiteral("color")] = QStringLiteral("#abcdef");
+    arrow[QStringLiteral("fontFamily")] = QStringLiteral("sans-serif");
+    arrow[QStringLiteral("fontSize")] = 18;
+    controller.addShape(arrow);
+
+    controller.setAttachedText(0, QStringLiteral("First"));
+    QCOMPARE(controller.attachedTextForShape(0).value(QStringLiteral("text")).toString(), QStringLiteral("First"));
+
+    controller.undo();
+    QVERIFY(controller.attachedTextForShape(0).isEmpty());
+
+    controller.redo();
+    QCOMPARE(controller.attachedTextForShape(0).value(QStringLiteral("text")).toString(), QStringLiteral("First"));
+
+    controller.setAttachedText(0, QStringLiteral("Second"));
+    QCOMPARE(controller.attachedTextForShape(0).value(QStringLiteral("text")).toString(), QStringLiteral("Second"));
+
+    controller.undo();
+    QCOMPARE(controller.attachedTextForShape(0).value(QStringLiteral("text")).toString(), QStringLiteral("First"));
 }
