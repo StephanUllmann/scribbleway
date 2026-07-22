@@ -22,11 +22,25 @@ ColumnLayout {
         }
     }
 
+    ColorDialog {
+        id: fillColorDialog
+        title: "Choose Fill Color"
+        onAccepted: {
+            root.backend.setFillColor(fillColorDialog.selectedColor.toString())
+        }
+    }
+
     // Track the currently selected tool name for draw mode
     property string currentToolName: "freehand"
     property string recordingActionId: ""
     property string reassignmentNoticeText: ""
     property bool isRectActive: (root.backend.hasSelection && root.backend.selectedType.toLowerCase() === "rectangle") || (!root.backend.hasSelection && currentToolName === "rectangle")
+    property bool isFillableActive: {
+        const t = root.backend.hasSelection
+            ? root.backend.selectedType.toLowerCase()
+            : fullRoot.currentToolName;
+        return t === "rectangle" || t === "ellipse";
+    }
 
     Timer {
         id: reassignmentNoticeTimer
@@ -347,6 +361,126 @@ ColumnLayout {
                 text: Math.round((root.backend.hasSelection ? root.backend.selectedOpacity : 1.0) * 100) + "%"
             }
         }
+
+        // Fill Color (rectangle / ellipse only)
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: fullRoot.isFillableActive
+            spacing: Kirigami.Units.smallSpacing
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                PlasmaComponents.Label {
+                    text: "Fill:"
+                    Layout.alignment: Qt.AlignVCenter
+                    width: Kirigami.Units.gridUnit * 3
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    property var colors: ["#e63946", "#f4a261", "#e9c46a", "#2a9d8f", "#457b9d", "#8338ec"]
+                    property string activeFill: root.backend.selectedFillColor
+
+                    // No-fill swatch
+                    Rectangle {
+                        width: Kirigami.Units.gridUnit * 1.5
+                        height: Kirigami.Units.gridUnit * 1.5
+                        radius: 4
+                        color: Kirigami.Theme.backgroundColor
+                        border.width: parent.activeFill === "transparent" ? 2 : 1
+                        border.color: parent.activeFill === "transparent" ? Kirigami.Theme.highlightColor : "gray"
+
+                        // Simple X to indicate no fill
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: parent.width * 0.7
+                            height: 2
+                            rotation: 45
+                            color: "gray"
+                        }
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: parent.width * 0.7
+                            height: 2
+                            rotation: -45
+                            color: "gray"
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                root.backend.setFillColor("transparent")
+                                root.backend.setFillOpacity(0)
+                            }
+                        }
+                    }
+
+                    Repeater {
+                        model: parent.colors
+                        Rectangle {
+                            width: Kirigami.Units.gridUnit * 1.5
+                            height: Kirigami.Units.gridUnit * 1.5
+                            radius: 4
+                            color: modelData
+                            border.width: parent.activeFill === modelData ? 2 : 1
+                            border.color: parent.activeFill === modelData ? Kirigami.Theme.highlightColor : "gray"
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    root.backend.setFillColor(modelData)
+                                    // If user picks a color while no-fill, restore a visible opacity
+                                    if (root.backend.selectedFillOpacity <= 0)
+                                        root.backend.setFillOpacity(0.12)
+                                }
+                            }
+                        }
+                    }
+
+                    PlasmaComponents.Button {
+                        icon.name: "color-picker"
+                        text: "Custom"
+                        onClicked: {
+                            const cur = root.backend.selectedFillColor
+                            fillColorDialog.selectedColor = (cur && cur !== "transparent") ? cur : root.backend.selectedColor
+                            fillColorDialog.open()
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+
+                PlasmaComponents.Label {
+                    text: "Fill Op:"
+                    width: Kirigami.Units.gridUnit * 3
+                }
+
+                PlasmaComponents.Slider {
+                    Layout.fillWidth: true
+                    from: 0.0
+                    to: 1.0
+                    stepSize: 0.05
+                    value: root.backend.selectedFillOpacity
+                    onMoved: {
+                        root.backend.setFillOpacity(value)
+                        // Sliding up from zero while transparent: adopt stroke color as fill
+                        if (value > 0 && root.backend.selectedFillColor === "transparent")
+                            root.backend.setFillColor(root.backend.selectedColor)
+                    }
+                }
+
+                PlasmaComponents.Label {
+                    text: Math.round(root.backend.selectedFillOpacity * 100) + "%"
+                }
+            }
+        }
+
 
         // Row 4.5: Glow
         RowLayout {
