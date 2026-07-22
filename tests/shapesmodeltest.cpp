@@ -66,6 +66,9 @@ private Q_SLOTS:
     void testExcalidrawBindingRoundtrip();
     void testAttachedTextDataModel();
     void testAttachedTextUndoRedo();
+    void testAttachedTextExcalidrawExport();
+    void testAttachedTextExcalidrawImport();
+    void testLineAttachedTextClipboardFallback();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -2559,4 +2562,147 @@ void ShapesModelTest::testAttachedTextUndoRedo()
 
     controller.undo();
     QCOMPARE(controller.attachedTextForShape(0).value(QStringLiteral("text")).toString(), QStringLiteral("First"));
+}
+void ShapesModelTest::testAttachedTextExcalidrawExport()
+{
+    OverlayController controller;
+
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("id")] = QStringLiteral("rect-export");
+    rect[QStringLiteral("x")] = 10.0;
+    rect[QStringLiteral("y")] = 20.0;
+    rect[QStringLiteral("width")] = 120.0;
+    rect[QStringLiteral("height")] = 80.0;
+    rect[QStringLiteral("color")] = QStringLiteral("#111111");
+    rect[QStringLiteral("opacity")] = 0.8;
+    rect[QStringLiteral("fontFamily")] = QStringLiteral("monospace");
+    rect[QStringLiteral("fontSize")] = 22;
+    controller.addShape(rect);
+    controller.setAttachedText(0, QStringLiteral("Bound label"));
+
+    controller.copySelected();
+    const QJsonObject root = QJsonDocument::fromJson(QGuiApplication::clipboard()->text().toUtf8()).object();
+    const QJsonArray elements = root.value(QStringLiteral("elements")).toArray();
+    QCOMPARE(elements.size(), 2);
+
+    const QJsonObject exportedRect = elements.at(0).toObject();
+    const QJsonObject exportedText = elements.at(1).toObject();
+    QCOMPARE(exportedRect.value(QStringLiteral("type")).toString(), QStringLiteral("rectangle"));
+    QCOMPARE(exportedText.value(QStringLiteral("type")).toString(), QStringLiteral("text"));
+    QCOMPARE(exportedText.value(QStringLiteral("containerId")).toString(), QStringLiteral("rect-export"));
+    QCOMPARE(exportedText.value(QStringLiteral("text")).toString(), QStringLiteral("Bound label"));
+    QCOMPARE(exportedText.value(QStringLiteral("originalText")).toString(), QStringLiteral("Bound label"));
+    QCOMPARE(exportedText.value(QStringLiteral("textAlign")).toString(), QStringLiteral("center"));
+    QCOMPARE(exportedText.value(QStringLiteral("verticalAlign")).toString(), QStringLiteral("middle"));
+    QVERIFY(exportedText.value(QStringLiteral("autoResize")).toBool());
+
+    const QJsonArray boundElements = exportedRect.value(QStringLiteral("boundElements")).toArray();
+    QCOMPARE(boundElements.size(), 1);
+    QCOMPARE(boundElements.at(0).toObject().value(QStringLiteral("type")).toString(), QStringLiteral("text"));
+    QCOMPARE(boundElements.at(0).toObject().value(QStringLiteral("id")).toString(), exportedText.value(QStringLiteral("id")).toString());
+}
+
+void ShapesModelTest::testAttachedTextExcalidrawImport()
+{
+    OverlayController controller;
+
+    QJsonObject root;
+    root.insert(QStringLiteral("type"), QStringLiteral("excalidraw/clipboard"));
+    QJsonArray elements;
+
+    QJsonObject rect;
+    rect.insert(QStringLiteral("id"), QStringLiteral("rect-import"));
+    rect.insert(QStringLiteral("type"), QStringLiteral("rectangle"));
+    rect.insert(QStringLiteral("x"), 10.0);
+    rect.insert(QStringLiteral("y"), 20.0);
+    rect.insert(QStringLiteral("width"), 120.0);
+    rect.insert(QStringLiteral("height"), 80.0);
+    rect.insert(QStringLiteral("strokeColor"), QStringLiteral("#222222"));
+    rect.insert(QStringLiteral("backgroundColor"), QStringLiteral("transparent"));
+    rect.insert(QStringLiteral("strokeWidth"), 2.0);
+    rect.insert(QStringLiteral("opacity"), 100.0);
+    rect.insert(QStringLiteral("roughness"), 1);
+    rect.insert(QStringLiteral("seed"), 12345);
+    rect.insert(QStringLiteral("locked"), false);
+    QJsonArray bound;
+    bound.append(QJsonObject{{QStringLiteral("id"), QStringLiteral("text-import")}, {QStringLiteral("type"), QStringLiteral("text")}});
+    rect.insert(QStringLiteral("boundElements"), bound);
+    elements.append(rect);
+
+    QJsonObject text;
+    text.insert(QStringLiteral("id"), QStringLiteral("text-import"));
+    text.insert(QStringLiteral("type"), QStringLiteral("text"));
+    text.insert(QStringLiteral("x"), 25.0);
+    text.insert(QStringLiteral("y"), 35.0);
+    text.insert(QStringLiteral("width"), 80.0);
+    text.insert(QStringLiteral("height"), 30.0);
+    text.insert(QStringLiteral("strokeColor"), QStringLiteral("#222222"));
+    text.insert(QStringLiteral("backgroundColor"), QStringLiteral("transparent"));
+    text.insert(QStringLiteral("strokeWidth"), 1.0);
+    text.insert(QStringLiteral("opacity"), 100.0);
+    text.insert(QStringLiteral("roughness"), 1);
+    text.insert(QStringLiteral("seed"), 67890);
+    text.insert(QStringLiteral("locked"), false);
+    text.insert(QStringLiteral("containerId"), QStringLiteral("rect-import"));
+    text.insert(QStringLiteral("text"), QStringLiteral("Imported label"));
+    text.insert(QStringLiteral("originalText"), QStringLiteral("Imported label"));
+    text.insert(QStringLiteral("fontSize"), 20.0);
+    text.insert(QStringLiteral("fontFamily"), 3.0);
+    text.insert(QStringLiteral("textAlign"), QStringLiteral("center"));
+    text.insert(QStringLiteral("verticalAlign"), QStringLiteral("middle"));
+    text.insert(QStringLiteral("autoResize"), true);
+    elements.append(text);
+
+    root.insert(QStringLiteral("elements"), elements);
+    QGuiApplication::clipboard()->setText(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact)));
+
+    controller.pasteFromClipboard(100.0, 100.0);
+    QCOMPARE(controller.shapesModel()->rowCount(), 1);
+    QVariantMap pasted = controller.getShape(0);
+    QCOMPARE(pasted.value(QStringLiteral("type")).toString(), QStringLiteral("rectangle"));
+    QVariantMap attached = controller.attachedTextForShape(0);
+    QCOMPARE(attached.value(QStringLiteral("id")).toString(), QStringLiteral("text-import"));
+    QCOMPARE(attached.value(QStringLiteral("text")).toString(), QStringLiteral("Imported label"));
+    QCOMPARE(attached.value(QStringLiteral("fontFamily")).toString(), QStringLiteral("Cascadia Code"));
+    QCOMPARE(attached.value(QStringLiteral("fontSize")).toInt(), 20);
+}
+
+void ShapesModelTest::testLineAttachedTextClipboardFallback()
+{
+    OverlayController controller;
+
+    QVariantMap line;
+    line[QStringLiteral("type")] = QStringLiteral("line");
+    line[QStringLiteral("id")] = QStringLiteral("line-export");
+    line[QStringLiteral("fromX")] = 10.0;
+    line[QStringLiteral("fromY")] = 20.0;
+    line[QStringLiteral("toX")] = 110.0;
+    line[QStringLiteral("toY")] = 20.0;
+    line[QStringLiteral("color")] = QStringLiteral("#333333");
+    line[QStringLiteral("opacity")] = 1.0;
+    line[QStringLiteral("fontFamily")] = QStringLiteral("sans-serif");
+    line[QStringLiteral("fontSize")] = 18;
+    controller.addShape(line);
+    controller.setAttachedText(0, QStringLiteral("Line label"));
+
+    controller.copySelected();
+    const QJsonObject root = QJsonDocument::fromJson(QGuiApplication::clipboard()->text().toUtf8()).object();
+    const QJsonArray elements = root.value(QStringLiteral("elements")).toArray();
+    QCOMPARE(elements.size(), 2);
+    QCOMPARE(elements.at(0).toObject().value(QStringLiteral("type")).toString(), QStringLiteral("line"));
+
+    const QJsonObject text = elements.at(1).toObject();
+    QCOMPARE(text.value(QStringLiteral("type")).toString(), QStringLiteral("text"));
+    QCOMPARE(text.value(QStringLiteral("containerId")).toString(), QString());
+    QCOMPARE(text.value(QStringLiteral("text")).toString(), QStringLiteral("Line label"));
+    QCOMPARE(text.value(QStringLiteral("customData")).toObject()
+                 .value(QStringLiteral("scribbleway")).toObject()
+                 .value(QStringLiteral("attachedTextFor")).toString(), QStringLiteral("line-export"));
+
+    OverlayController pasted;
+    QGuiApplication::clipboard()->setText(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact)));
+    pasted.pasteFromClipboard(200.0, 200.0);
+    QCOMPARE(pasted.shapesModel()->rowCount(), 1);
+    QCOMPARE(pasted.attachedTextForShape(0).value(QStringLiteral("text")).toString(), QStringLiteral("Line label"));
 }

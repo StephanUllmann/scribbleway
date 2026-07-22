@@ -195,7 +195,9 @@ private:
     void notifyShapesChanged();
     void ensureSelectMode();
     QJsonObject convertToExcalidraw(const QVariantMap &shape);
+    QJsonObject convertAttachedTextToExcalidraw(const QVariantMap &shape, const QVariantMap &attachedText) const;
     QVariantMap convertFromExcalidraw(const QJsonObject &elem);
+    void attachImportedBoundText(QList<QVariantMap> &shapes) const;
     static bool supportsAttachedText(const QString &type);
     static QVariantMap firstAttachedTextBinding(const QVariantMap &shape);
     static QVariantList withoutAttachedTextBinding(const QVariantMap &shape);
