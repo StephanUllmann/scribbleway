@@ -31,8 +31,9 @@ Window {
 
 
 
-    // Text editing index
+    // Text editing target: "standalone" edits a text shape, "attached" edits a container binding.
     property int editingShapeIndex: -1
+    property string editingTextKind: ""
     property point lastMousePos: Qt.point(width / 2, height / 2)
 
     // Selection frame properties
@@ -606,18 +607,24 @@ Window {
         // Finalize text input when clicking outside or pressing Escape
         function commitText() {
             if (editingShapeIndex !== -1) {
-
-                
                 let val = text.trim();
-                if (val === "") {
-                    // Delete empty text shape
-                    controller.deleteShape(editingShapeIndex);
+                if (editingTextKind === "attached") {
+                    if (val === "") {
+                        controller.removeAttachedText(editingShapeIndex);
+                    } else {
+                        controller.setAttachedText(editingShapeIndex, val);
+                    }
                 } else {
-                    controller.updateShape(editingShapeIndex, { "text": val });
+                    if (val === "") {
+                        controller.deleteShape(editingShapeIndex);
+                    } else {
+                        controller.updateShape(editingShapeIndex, { "text": val });
+                    }
                 }
             }
             visible = false;
             editingShapeIndex = -1;
+            editingTextKind = "";
             canvasWindow.requestInputRegionUpdate();
         }
 
@@ -637,17 +644,64 @@ Window {
         }
     }
 
+    function attachedTextRect(shape) {
+        const padding = 12;
+        const type = (shape.type || "").toLowerCase();
+        if (type === "rectangle") {
+            return Qt.rect(shape.x + padding, shape.y + padding,
+                           Math.max(40, shape.width - padding * 2),
+                           Math.max(24, shape.height - padding * 2));
+        }
+        if (type === "ellipse") {
+            const insetX = shape.width * (1 - Math.SQRT1_2) / 2 + padding;
+            const insetY = shape.height * (1 - Math.SQRT1_2) / 2 + padding;
+            return Qt.rect(shape.x + insetX, shape.y + insetY,
+                           Math.max(40, shape.width - insetX * 2),
+                           Math.max(24, shape.height - insetY * 2));
+        }
+        if (type === "line" || type === "arrow") {
+            const midX = (shape.fromX + shape.toX) / 2;
+            const midY = (shape.fromY + shape.toY) / 2;
+            const len = Math.sqrt(Math.pow(shape.toX - shape.fromX, 2) + Math.pow(shape.toY - shape.fromY, 2));
+            const labelWidth = Math.max(80, len * 0.7);
+            const labelHeight = Math.max(32, (shape.fontSize || controller.defaultFontSize) * 1.6);
+            return Qt.rect(midX - labelWidth / 2, midY - labelHeight / 2, labelWidth, labelHeight);
+        }
+        return Qt.rect(0, 0, 120, 40);
+    }
+
     function startTextEditing(shapeIndex) {
         let shape = controller.getShape(shapeIndex);
         if (!shape) return;
 
         editingShapeIndex = shapeIndex;
+        editingTextKind = "standalone";
         controller.setSelectedIndex(shapeIndex);
 
-        // Position text editor exactly over the text shape bounds
         textEditor.x = shape.x;
         textEditor.y = shape.y;
         textEditor.text = shape.text || "";
+        textEditor.visible = true;
+
+        canvasWindow.requestInputRegionUpdate();
+    }
+
+    function startAttachedTextEditing(shapeIndex) {
+        let shape = controller.getShape(shapeIndex);
+        if (!shape) return;
+
+        let attached = controller.ensureAttachedTextForShape(shapeIndex);
+        if (!attached) return;
+
+        editingShapeIndex = shapeIndex;
+        editingTextKind = "attached";
+        controller.setSelectedIndex(shapeIndex);
+
+        const r = attachedTextRect(shape);
+        textEditor.x = r.x;
+        textEditor.y = r.y;
+        textEditor.width = r.width;
+        textEditor.text = attached.text || "";
         textEditor.visible = true;
 
         canvasWindow.requestInputRegionUpdate();

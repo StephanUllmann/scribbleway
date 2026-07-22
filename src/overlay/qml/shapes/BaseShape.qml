@@ -26,6 +26,60 @@ Item {
         anchors.fill: parent
         visible: baseShapeRoot.modelGlow === 0
     }
+    Text {
+        id: attachedTextLabel
+        visible: baseShapeRoot.hasAttachedText
+        enabled: false
+        z: 2
+        text: baseShapeRoot.modelAttachedText.text || ""
+        color: baseShapeRoot.modelColor
+        opacity: baseShapeRoot.modelOpacity
+        font.family: model.fontFamily !== undefined ? model.fontFamily : controller.defaultFontFamily
+        font.pixelSize: model.fontSize !== undefined ? model.fontSize : controller.defaultFontSize
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter
+        wrapMode: Text.Wrap
+        clip: false
+
+        x: {
+            if (baseShapeRoot.mode === "line") {
+                return (baseShapeRoot.shapeFromX + baseShapeRoot.shapeToX) / 2 - width / 2;
+            }
+            if (model && model.type && model.type.toLowerCase() === "ellipse") {
+                return baseShapeRoot.shapeX + baseShapeRoot.shapeWidth * (1 - Math.SQRT1_2) / 2 + baseShapeRoot.attachedPadding;
+            }
+            return baseShapeRoot.shapeX + baseShapeRoot.attachedPadding;
+        }
+        y: {
+            if (baseShapeRoot.mode === "line") {
+                return (baseShapeRoot.shapeFromY + baseShapeRoot.shapeToY) / 2 - height / 2;
+            }
+            if (model && model.type && model.type.toLowerCase() === "ellipse") {
+                return baseShapeRoot.shapeY + baseShapeRoot.shapeHeight * (1 - Math.SQRT1_2) / 2 + baseShapeRoot.attachedPadding;
+            }
+            return baseShapeRoot.shapeY + baseShapeRoot.attachedPadding;
+        }
+        width: {
+            if (baseShapeRoot.mode === "line") {
+                return Math.max(80, baseShapeRoot.attachedLineLength * 0.7);
+            }
+            if (model && model.type && model.type.toLowerCase() === "ellipse") {
+                const inset = baseShapeRoot.shapeWidth * (1 - Math.SQRT1_2) / 2 + baseShapeRoot.attachedPadding;
+                return Math.max(40, baseShapeRoot.shapeWidth - inset * 2);
+            }
+            return Math.max(40, baseShapeRoot.shapeWidth - baseShapeRoot.attachedPadding * 2);
+        }
+        height: {
+            if (baseShapeRoot.mode === "line") {
+                return Math.max(32, font.pixelSize * 1.6);
+            }
+            if (model && model.type && model.type.toLowerCase() === "ellipse") {
+                const inset = baseShapeRoot.shapeHeight * (1 - Math.SQRT1_2) / 2 + baseShapeRoot.attachedPadding;
+                return Math.max(24, baseShapeRoot.shapeHeight - inset * 2);
+            }
+            return Math.max(24, baseShapeRoot.shapeHeight - baseShapeRoot.attachedPadding * 2);
+        }
+    }
 
     property int index: -1
     property int shapeIndex: index
@@ -43,6 +97,14 @@ Item {
     property int modelSeed: model.seed !== undefined ? model.seed : 123456
     property string modelFillColor: model.fillColor !== undefined ? model.fillColor : "transparent"
     property real modelFillOpacity: model.fillOpacity !== undefined ? model.fillOpacity : 0.0
+    property var modelAttachedText: model.attachedText !== undefined ? model.attachedText : ({})
+    readonly property bool hasAttachedText: modelAttachedText && modelAttachedText.text !== undefined && modelAttachedText.text !== ""
+    readonly property bool supportsAttachedText: {
+        const t = model && model.type ? model.type.toLowerCase() : "";
+        return t === "rectangle" || t === "ellipse" || t === "line" || t === "arrow";
+    }
+    readonly property real attachedPadding: 12
+    readonly property real attachedLineLength: Math.sqrt(Math.pow(shapeToX - shapeFromX, 2) + Math.pow(shapeToY - shapeFromY, 2))
 
     readonly property color resolvedFill: {
         if (!modelFillColor || modelFillColor === "transparent" || modelFillOpacity <= 0)
@@ -144,7 +206,11 @@ Item {
         }
 
         onDoubleClicked: (mouse) => {
-            baseShapeRoot.doubleClicked(mouse);
+            if (baseShapeRoot.supportsAttachedText && typeof canvasWindow !== "undefined") {
+                canvasWindow.startAttachedTextEditing(baseShapeRoot.shapeIndex);
+            } else {
+                baseShapeRoot.doubleClicked(mouse);
+            }
         }
     }
 
