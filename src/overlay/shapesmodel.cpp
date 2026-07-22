@@ -64,6 +64,8 @@ QVariant ShapesModel::data(const QModelIndex &index, int role) const
         case RoughnessRole: return shape.value(QStringLiteral("roughness"));
         case SeedRole: return shape.value(QStringLiteral("seed"));
         case GlowRole: return shape.value(QStringLiteral("glow"));
+        case FillColorRole: return shape.value(QStringLiteral("fillColor"));
+        case FillOpacityRole: return shape.value(QStringLiteral("fillOpacity"));
         case IdRole: return shape.value(QStringLiteral("id"));
         case StartBindingRole: return shape.value(QStringLiteral("startBinding"));
         case EndBindingRole: return shape.value(QStringLiteral("endBinding"));
@@ -98,6 +100,8 @@ QHash<int, QByteArray> ShapesModel::roleNames() const
     roles[RoughnessRole] = "roughness";
     roles[SeedRole] = "seed";
     roles[GlowRole] = "glow";
+    roles[FillColorRole] = "fillColor";
+    roles[FillOpacityRole] = "fillOpacity";
     roles[IdRole] = "shapeId";
     roles[StartBindingRole] = "startBinding";
     roles[EndBindingRole] = "endBinding";
@@ -253,6 +257,8 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
                 else if (it.key() == QStringLiteral("roughness")) changedRoles << RoughnessRole;
                 else if (it.key() == QStringLiteral("seed")) changedRoles << SeedRole;
                 else if (it.key() == QStringLiteral("glow")) changedRoles << GlowRole;
+                else if (it.key() == QStringLiteral("fillColor")) changedRoles << FillColorRole;
+                else if (it.key() == QStringLiteral("fillOpacity")) changedRoles << FillOpacityRole;
                 else if (it.key() == QStringLiteral("id")) changedRoles << IdRole;
                 else if (it.key() == QStringLiteral("startBinding")) changedRoles << StartBindingRole;
                 else if (it.key() == QStringLiteral("endBinding")) changedRoles << EndBindingRole;

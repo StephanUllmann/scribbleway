@@ -34,6 +34,8 @@ public:
         RoughnessRole,
         SeedRole,
         GlowRole,
+        FillColorRole,
+        FillOpacityRole,
         IdRole,
         StartBindingRole,
         EndBindingRole,
