@@ -45,6 +45,7 @@ private Q_SLOTS:
     void testBorderRadius();
     void testRoughness();
     void testGlow();
+    void testFillColor();
     void testFreehandSmoothing();
     void testExcalidrawPasteCompatibility();
     void testZOrder();
@@ -818,6 +819,89 @@ void ShapesModelTest::testGlow()
     QCOMPARE(controller.getSelectionState()[QStringLiteral("glow")].toInt(), 20);
 }
 
+void ShapesModelTest::testFillColor()
+{
+    OverlayController controller;
+
+    // Defaults preserve previous 12% stroke-colored fill look
+    QCOMPARE(controller.defaultFillColor(), QStringLiteral("#e63946"));
+    QCOMPARE(controller.defaultFillOpacity(), 0.12);
+
+    QVariantMap defaults;
+    defaults[QStringLiteral("fillColor")] = QStringLiteral("#00ff00");
+    defaults[QStringLiteral("fillOpacity")] = 0.5;
+    controller.updateProperties(defaults);
+    QCOMPARE(controller.defaultFillColor(), QStringLiteral("#00ff00"));
+    QCOMPARE(controller.defaultFillOpacity(), 0.5);
+
+    // No selection state exposes defaults
+    QVariantMap noSel = controller.getSelectionState();
+    QCOMPARE(noSel[QStringLiteral("fillColor")].toString(), QStringLiteral("#00ff00"));
+    QCOMPARE(noSel[QStringLiteral("fillOpacity")].toDouble(), 0.5);
+
+    // Shape inherits explicit fill fields via add + selection
+    QVariantMap shape;
+    shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+    shape[QStringLiteral("fillColor")] = QStringLiteral("#112233");
+    shape[QStringLiteral("fillOpacity")] = 0.25;
+    controller.addShape(shape);
+
+    QVariantMap sel = controller.getSelectionState();
+    QCOMPARE(sel[QStringLiteral("fillColor")].toString(), QStringLiteral("#112233"));
+    QCOMPARE(sel[QStringLiteral("fillOpacity")].toDouble(), 0.25);
+    QCOMPARE(controller.defaultFillColor(), QStringLiteral("#112233"));
+    QCOMPARE(controller.defaultFillOpacity(), 0.25);
+
+    // updateProperties mutates selected shape + defaults
+    QVariantMap upd;
+    upd[QStringLiteral("fillColor")] = QStringLiteral("transparent");
+    upd[QStringLiteral("fillOpacity")] = 0.0;
+    controller.updateProperties(upd);
+    QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("fillColor")].toString(),
+             QStringLiteral("transparent"));
+    QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("fillOpacity")].toDouble(), 0.0);
+
+    // Role names surface to QML
+    ShapesModel *model = controller.shapesModel();
+    const QModelIndex idx = model->index(0, 0);
+    const QHash<int, QByteArray> roles = model->roleNames();
+    QVERIFY(roles.values().contains("fillColor"));
+    QVERIFY(roles.values().contains("fillOpacity"));
+    QCOMPARE(model->data(idx, ShapesModel::FillColorRole).toString(), QStringLiteral("transparent"));
+    QCOMPARE(model->data(idx, ShapesModel::FillOpacityRole).toDouble(), 0.0);
+
+    // Clamp opacity
+    controller.setDefaultFillOpacity(1.5);
+    QCOMPARE(controller.defaultFillOpacity(), 1.0);
+    controller.setDefaultFillOpacity(-0.2);
+    QCOMPARE(controller.defaultFillOpacity(), 0.0);
+
+    // Round-trip export encoding
+    QVariantMap exportShape;
+    exportShape[QStringLiteral("type")] = QStringLiteral("ellipse");
+    exportShape[QStringLiteral("color")] = QStringLiteral("#ff0000");
+    exportShape[QStringLiteral("strokeWidth")] = 2;
+    exportShape[QStringLiteral("opacity")] = 1.0;
+    exportShape[QStringLiteral("x")] = 0;
+    exportShape[QStringLiteral("y")] = 0;
+    exportShape[QStringLiteral("width")] = 10;
+    exportShape[QStringLiteral("height")] = 10;
+    exportShape[QStringLiteral("fillColor")] = QStringLiteral("#0000ff");
+    exportShape[QStringLiteral("fillOpacity")] = 0.5;
+    // Use public copy path: add, select, copy, inspect clipboard JSON
+    controller.clear();
+    controller.addShape(exportShape);
+    controller.copySelected();
+    const QString clip = QGuiApplication::clipboard()->text();
+    const QJsonObject root = QJsonDocument::fromJson(clip.toUtf8()).object();
+    const QJsonArray elements = root.value(QStringLiteral("elements")).toArray();
+    QVERIFY(!elements.isEmpty());
+    const QString bg = elements.at(0).toObject().value(QStringLiteral("backgroundColor")).toString();
+    // Expect #0000ff80 (approx 0.5 * 255 = 127.5 → 127 or 128 depending on rounding)
+    QVERIFY(bg.startsWith(QStringLiteral("#0000ff")));
+    QCOMPARE(bg.size(), 9);
+}
+
 void ShapesModelTest::testFreehandSmoothing()
 {
     OverlayController controller;
@@ -884,6 +968,7 @@ void ShapesModelTest::testExcalidrawPasteCompatibility()
     rectObj.insert(QStringLiteral("roughness"), 1);
     rectObj.insert(QStringLiteral("angle"), 0.5);
     rectObj.insert(QStringLiteral("fillStyle"), QStringLiteral("solid"));
+    rectObj.insert(QStringLiteral("backgroundColor"), QStringLiteral("#00ff0080")); // 50% green
     rectObj.insert(QStringLiteral("strokeStyle"), QStringLiteral("dashed"));
     
     QJsonObject roundnessObj;
@@ -966,6 +1051,8 @@ void ShapesModelTest::testExcalidrawPasteCompatibility()
     QCOMPARE(pastedRect[QStringLiteral("strokeWidth")].toDouble(), 2.0);
     QCOMPARE(pastedRect[QStringLiteral("opacity")].toDouble(), 0.8);
     QCOMPARE(pastedRect[QStringLiteral("borderRadius")].toInt(), 15);
+    QCOMPARE(pastedRect[QStringLiteral("fillColor")].toString(), QStringLiteral("#00ff00"));
+    QCOMPARE(pastedRect[QStringLiteral("fillOpacity")].toDouble(), 128.0 / 255.0);
 
     // Verify Text properties
     QCOMPARE(pastedText[QStringLiteral("type")].toString(), QStringLiteral("text"));

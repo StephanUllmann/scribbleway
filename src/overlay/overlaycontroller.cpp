@@ -34,6 +34,7 @@ OverlayController::OverlayController(QObject *parent)
     : QObject(parent)
     , m_activeTool(QStringLiteral("freehand"))
     , m_defaultColor(QStringLiteral("#e63946"))
+    , m_defaultFillColor(QStringLiteral("#e63946"))
 {
     m_defaultFontFamily = QStringLiteral("monospace");
     m_shapesModel.setParent(this);
@@ -262,6 +263,33 @@ void OverlayController::setDefaultGlow(int glow)
     }
 }
 
+QString OverlayController::defaultFillColor() const
+{
+    return m_defaultFillColor;
+}
+
+void OverlayController::setDefaultFillColor(const QString &color)
+{
+    if (m_defaultFillColor != color) {
+        m_defaultFillColor = color;
+        Q_EMIT defaultFillColorChanged();
+    }
+}
+
+double OverlayController::defaultFillOpacity() const
+{
+    return m_defaultFillOpacity;
+}
+
+void OverlayController::setDefaultFillOpacity(double opacity)
+{
+    const double clamped = qBound(0.0, opacity, 1.0);
+    if (!qFuzzyCompare(m_defaultFillOpacity, clamped)) {
+        m_defaultFillOpacity = clamped;
+        Q_EMIT defaultFillOpacityChanged();
+    }
+}
+
 int OverlayController::defaultFreehandSmoothing() const
 {
     return m_defaultFreehandSmoothing;
@@ -369,6 +397,12 @@ void OverlayController::setSelectedIndex(int index)
             if (shape.contains(QStringLiteral("glow"))) {
                 m_defaultGlow = shape[QStringLiteral("glow")].toInt();
             }
+            if (shape.contains(QStringLiteral("fillColor"))) {
+                m_defaultFillColor = shape[QStringLiteral("fillColor")].toString();
+            }
+            if (shape.contains(QStringLiteral("fillOpacity"))) {
+                m_defaultFillOpacity = shape[QStringLiteral("fillOpacity")].toDouble();
+            }
             Q_EMIT defaultColorChanged();
             Q_EMIT defaultStrokeWidthChanged();
             Q_EMIT defaultOpacityChanged();
@@ -377,6 +411,8 @@ void OverlayController::setSelectedIndex(int index)
             Q_EMIT defaultBorderRadiusChanged();
             Q_EMIT defaultRoughnessChanged();
             Q_EMIT defaultGlowChanged();
+            Q_EMIT defaultFillColorChanged();
+            Q_EMIT defaultFillOpacityChanged();
 
             ensureSelectMode();
         }
@@ -430,6 +466,8 @@ QVariantMap OverlayController::getSelectionState()
         state[QStringLiteral("borderRadius")] = shape.value(QStringLiteral("borderRadius"), m_defaultBorderRadius).toInt();
         state[QStringLiteral("roughness")] = shape.value(QStringLiteral("roughness"), m_defaultRoughness).toInt();
         state[QStringLiteral("glow")] = shape.value(QStringLiteral("glow"), m_defaultGlow).toInt();
+        state[QStringLiteral("fillColor")] = shape.value(QStringLiteral("fillColor"), m_defaultFillColor).toString();
+        state[QStringLiteral("fillOpacity")] = shape.value(QStringLiteral("fillOpacity"), m_defaultFillOpacity).toDouble();
         state[QStringLiteral("freehandSmoothing")] = m_defaultFreehandSmoothing;
         state[QStringLiteral("seed")] = shape.value(QStringLiteral("seed"), 123456).toInt();
         state[QStringLiteral("locked")] = shape.value(QStringLiteral("locked"), false).toBool();
@@ -445,6 +483,8 @@ QVariantMap OverlayController::getSelectionState()
         state[QStringLiteral("borderRadius")] = m_defaultBorderRadius;
         state[QStringLiteral("roughness")] = m_defaultRoughness;
         state[QStringLiteral("glow")] = m_defaultGlow;
+        state[QStringLiteral("fillColor")] = m_defaultFillColor;
+        state[QStringLiteral("fillOpacity")] = m_defaultFillOpacity;
         state[QStringLiteral("freehandSmoothing")] = m_defaultFreehandSmoothing;
         state[QStringLiteral("locked")] = false;
         state[QStringLiteral("selectedIndex")] = -1;
@@ -482,6 +522,12 @@ void OverlayController::updateProperties(const QVariantMap &properties)
     }
     if (demarshalled.contains(QStringLiteral("glow"))) {
         setDefaultGlow(demarshalled[QStringLiteral("glow")].toInt());
+    }
+    if (demarshalled.contains(QStringLiteral("fillColor"))) {
+        setDefaultFillColor(demarshalled[QStringLiteral("fillColor")].toString());
+    }
+    if (demarshalled.contains(QStringLiteral("fillOpacity"))) {
+        setDefaultFillOpacity(demarshalled[QStringLiteral("fillOpacity")].toDouble());
     }
     if (demarshalled.contains(QStringLiteral("freehandSmoothing"))) {
         setDefaultFreehandSmoothing(demarshalled[QStringLiteral("freehandSmoothing")].toInt());
@@ -1240,7 +1286,33 @@ QJsonObject OverlayController::convertToExcalidraw(const QVariantMap &shape)
     double opacityFloat = shape.value(QStringLiteral("opacity"), 1.0).toDouble();
     elem.insert(QStringLiteral("opacity"), qRound(opacityFloat * 100.0));
     
-    elem.insert(QStringLiteral("backgroundColor"), QStringLiteral("transparent"));
+    // Fill → Excalidraw backgroundColor
+    {
+        const QString fillColor = shape.value(QStringLiteral("fillColor"), QStringLiteral("transparent")).toString();
+        const double fillOpacity = shape.value(QStringLiteral("fillOpacity"), 0.0).toDouble();
+        const bool noFill = fillColor.isEmpty()
+            || fillColor.compare(QStringLiteral("transparent"), Qt::CaseInsensitive) == 0
+            || fillOpacity <= 0.0;
+
+        if (noFill) {
+            elem.insert(QStringLiteral("backgroundColor"), QStringLiteral("transparent"));
+        } else {
+            QColor c(fillColor);
+            if (!c.isValid()) {
+                elem.insert(QStringLiteral("backgroundColor"), QStringLiteral("transparent"));
+            } else if (fillOpacity >= 0.999) {
+                elem.insert(QStringLiteral("backgroundColor"), c.name(QColor::HexRgb)); // #RRGGBB
+            } else {
+                c.setAlphaF(fillOpacity);
+                // Qt HexArgb is #AARRGGBB; Excalidraw expects #RRGGBBAA
+                const QString argb = c.name(QColor::HexArgb); // #AARRGGBB
+                const QString rrggbbaa = QStringLiteral("#%1%2")
+                    .arg(argb.mid(3, 6))   // RRGGBB
+                    .arg(argb.mid(1, 2));  // AA
+                elem.insert(QStringLiteral("backgroundColor"), rrggbbaa);
+            }
+        }
+    }
     elem.insert(QStringLiteral("fillStyle"), QStringLiteral("solid"));
     elem.insert(QStringLiteral("strokeStyle"), QStringLiteral("solid"));
     elem.insert(QStringLiteral("roughness"), shape.value(QStringLiteral("roughness"), 1).toInt());
@@ -1411,6 +1483,29 @@ QVariantMap OverlayController::convertFromExcalidraw(const QJsonObject &elem)
     shape.insert(QStringLiteral("roughness"), elem.value(QStringLiteral("roughness")).toInt(1));
     shape.insert(QStringLiteral("glow"), elem.value(QStringLiteral("glow")).toInt(0)); // Default to 0px
     shape.insert(QStringLiteral("seed"), elem.value(QStringLiteral("seed")).toInt(123456));
+    {
+        const QString bg = elem.value(QStringLiteral("backgroundColor")).toString(QStringLiteral("transparent"));
+        if (bg.isEmpty() || bg.compare(QStringLiteral("transparent"), Qt::CaseInsensitive) == 0) {
+            shape.insert(QStringLiteral("fillColor"), QStringLiteral("transparent"));
+            shape.insert(QStringLiteral("fillOpacity"), 0.0);
+        } else {
+            QString hex = bg;
+            double fillOp = 1.0;
+            // Excalidraw RGBA: #RRGGBBAA (9 chars with '#')
+            if (hex.startsWith(QLatin1Char('#')) && hex.size() == 9) {
+                bool ok = false;
+                const int alphaByte = hex.mid(7, 2).toInt(&ok, 16);
+                if (ok) {
+                    fillOp = alphaByte / 255.0;
+                }
+                hex = hex.left(7); // #RRGGBB
+            } else if (hex.startsWith(QLatin1Char('#')) && hex.size() == 7) {
+                fillOp = 1.0;
+            }
+            shape.insert(QStringLiteral("fillColor"), hex);
+            shape.insert(QStringLiteral("fillOpacity"), fillOp);
+        }
+    }
 
     QString id = elem.value(QStringLiteral("id")).toString();
     if (!id.isEmpty()) {

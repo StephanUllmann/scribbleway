@@ -49,6 +49,8 @@ class OverlayController : public QObject
     Q_PROPERTY(int defaultBorderRadius READ defaultBorderRadius WRITE setDefaultBorderRadius NOTIFY defaultBorderRadiusChanged)
     Q_PROPERTY(int defaultRoughness READ defaultRoughness WRITE setDefaultRoughness NOTIFY defaultRoughnessChanged)
     Q_PROPERTY(int defaultGlow READ defaultGlow WRITE setDefaultGlow NOTIFY defaultGlowChanged)
+    Q_PROPERTY(QString defaultFillColor READ defaultFillColor WRITE setDefaultFillColor NOTIFY defaultFillColorChanged)
+    Q_PROPERTY(double defaultFillOpacity READ defaultFillOpacity WRITE setDefaultFillOpacity NOTIFY defaultFillOpacityChanged)
     Q_PROPERTY(int defaultFreehandSmoothing READ defaultFreehandSmoothing WRITE setDefaultFreehandSmoothing NOTIFY defaultFreehandSmoothingChanged)
     Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
     Q_PROPERTY(QString selectedShapeType READ selectedShapeType NOTIFY selectionChanged)
@@ -87,6 +89,10 @@ public:
     void setDefaultRoughness(int roughness);
     int defaultGlow() const;
     void setDefaultGlow(int glow);
+    QString defaultFillColor() const;
+    void setDefaultFillColor(const QString &color);
+    double defaultFillOpacity() const;
+    void setDefaultFillOpacity(double opacity);
     int defaultFreehandSmoothing() const;
     void setDefaultFreehandSmoothing(int level);
     void setDefaultBorderRadius(int radius);
@@ -164,6 +170,8 @@ Q_SIGNALS:
     void defaultBorderRadiusChanged();
     void defaultRoughnessChanged();
     void defaultGlowChanged();
+    void defaultFillColorChanged();
+    void defaultFillOpacityChanged();
     void defaultFreehandSmoothingChanged();
     
     // DBus signals (matched by AppletBackend slots)
@@ -204,6 +212,8 @@ private:
     int m_defaultBorderRadius = 8;
     int m_defaultRoughness = 1;
     int m_defaultGlow = 10;
+    QString m_defaultFillColor;
+    double m_defaultFillOpacity = 0.12;
     int m_defaultFreehandSmoothing = 2;
 
     QRegion m_lastInputMask;
