@@ -567,7 +567,8 @@ Window {
         textFormat: Text.PlainText
         
         property real maxWidth: canvasWindow.width - x - 20
-        width: Math.min(maxWidth, Math.max(150, textMeasurer.implicitWidth + leftPadding + rightPadding + 20))
+        property real containerWidth: 0
+        width: editingTextKind === "attached" ? containerWidth : Math.min(maxWidth, Math.max(150, textMeasurer.implicitWidth + leftPadding + rightPadding + 20))
         height: Math.max(40, contentHeight + topPadding + bottomPadding + 10)
         
         background: Rectangle {
@@ -680,6 +681,7 @@ Window {
 
         textEditor.x = shape.x;
         textEditor.y = shape.y;
+        textEditor.containerWidth = 0;
         textEditor.text = shape.text || "";
         textEditor.visible = true;
 
@@ -700,7 +702,7 @@ Window {
         const r = attachedTextRect(shape);
         textEditor.x = r.x;
         textEditor.y = r.y;
-        textEditor.width = r.width;
+        textEditor.containerWidth = r.width;
         textEditor.text = attached.text || "";
         textEditor.visible = true;
 

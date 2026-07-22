@@ -30,7 +30,7 @@ Item {
         id: attachedTextLabel
         visible: baseShapeRoot.hasAttachedText
         enabled: false
-        z: 2
+        z: 1
         text: baseShapeRoot.modelAttachedText.text || ""
         color: baseShapeRoot.modelColor
         opacity: baseShapeRoot.modelOpacity
@@ -216,6 +216,7 @@ Item {
 
     // Selection border & handles UI
     Item {
+        z: 10
         visible: isSelected && !isLocked && !(typeof canvasWindow !== "undefined" && canvasWindow.editingShapeIndex === shapeIndex)
 
         // Thin blue border
