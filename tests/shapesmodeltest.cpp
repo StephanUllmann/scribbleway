@@ -56,6 +56,13 @@ private Q_SLOTS:
     void testAppletBackendIntegration();
     void testReworkedShortcutsSlots();
     void testRoughPathGenerator();
+    void testStableShapeIds();
+    void testBindingDataModel();
+    void testBindingGeometry();
+    void testBindingMovePropagate();
+    void testBindingDeleteCleanup();
+    void testBindingResizePropagate();
+    void testExcalidrawBindingRoundtrip();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -2028,5 +2035,358 @@ void ShapesModelTest::testRoughPathGenerator()
     QCOMPARE(yAt(ch, 5), 10.0);
 }
 
+void ShapesModelTest::testStableShapeIds()
+{
+    ShapesModel model;
+
+    // Adding a shape auto-generates an ID
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("x")] = 10.0;
+    rect[QStringLiteral("y")] = 20.0;
+    rect[QStringLiteral("width")] = 100.0;
+    rect[QStringLiteral("height")] = 50.0;
+    model.addShape(rect);
+
+    QString id1 = model.shapeIdAt(0);
+    QVERIFY(!id1.isEmpty());
+
+    // Adding another shape gets a different ID
+    QVariantMap rect2;
+    rect2[QStringLiteral("type")] = QStringLiteral("ellipse");
+    rect2[QStringLiteral("x")] = 200.0;
+    rect2[QStringLiteral("y")] = 200.0;
+    rect2[QStringLiteral("width")] = 80.0;
+    rect2[QStringLiteral("height")] = 80.0;
+    model.addShape(rect2);
+
+    QString id2 = model.shapeIdAt(1);
+    QVERIFY(!id2.isEmpty());
+    QVERIFY(id1 != id2);
+
+    // Shape with existing ID keeps it
+    QVariantMap rect3;
+    rect3[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect3[QStringLiteral("id")] = QStringLiteral("my-custom-id");
+    rect3[QStringLiteral("x")] = 50.0;
+    rect3[QStringLiteral("y")] = 50.0;
+    rect3[QStringLiteral("width")] = 30.0;
+    rect3[QStringLiteral("height")] = 30.0;
+    model.addShape(rect3);
+    QCOMPARE(model.shapeIdAt(2), QStringLiteral("my-custom-id"));
+
+    // ID survives reorder (moveShape)
+    model.moveShape(0, 1);
+    // After move: index 0 = rect2 (id2), index 1 = rect (id1), index 2 = rect3
+    QCOMPARE(model.shapeIdAt(0), id2);
+    QCOMPARE(model.shapeIdAt(1), id1);
+}
+
 QTEST_MAIN(ShapesModelTest)
 #include "shapesmodeltest.moc"
+
+void ShapesModelTest::testBindingDataModel()
+{
+    ShapesModel model;
+
+    // Create a rectangle target
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("id")] = QStringLiteral("rect-1");
+    rect[QStringLiteral("x")] = 100.0;
+    rect[QStringLiteral("y")] = 100.0;
+    rect[QStringLiteral("width")] = 200.0;
+    rect[QStringLiteral("height")] = 100.0;
+    model.addShape(rect);
+
+    // Create an arrow with startBinding
+    QVariantMap arrow;
+    arrow[QStringLiteral("type")] = QStringLiteral("arrow");
+    arrow[QStringLiteral("id")] = QStringLiteral("arrow-1");
+    arrow[QStringLiteral("fromX")] = 50.0;
+    arrow[QStringLiteral("fromY")] = 50.0;
+    arrow[QStringLiteral("toX")] = 100.0;
+    arrow[QStringLiteral("toY")] = 150.0;
+    QVariantMap binding;
+    binding[QStringLiteral("elementId")] = QStringLiteral("rect-1");
+    binding[QStringLiteral("focus")] = 0.25;
+    binding[QStringLiteral("gap")] = 0.0;
+    arrow[QStringLiteral("startBinding")] = binding;
+    model.addShape(arrow);
+
+    // Verify binding is stored and retrievable
+    QModelIndex idx = model.index(1);
+    QVariant sb = model.data(idx, ShapesModel::StartBindingRole);
+    QVERIFY(sb.isValid());
+    QVariantMap sbMap = sb.toMap();
+    QCOMPARE(sbMap[QStringLiteral("elementId")].toString(), QStringLiteral("rect-1"));
+    QCOMPARE(sbMap[QStringLiteral("focus")].toDouble(), 0.25);
+
+    // Verify endBinding is empty/invalid
+    QVariant eb = model.data(idx, ShapesModel::EndBindingRole);
+    QVERIFY(!eb.isValid() || eb.toMap().isEmpty());
+
+    // Update endBinding
+    QVariantMap endBinding;
+    endBinding[QStringLiteral("elementId")] = QStringLiteral("rect-1");
+    endBinding[QStringLiteral("focus")] = 0.75;
+    endBinding[QStringLiteral("gap")] = 0.0;
+    model.updateShape(1, {{QStringLiteral("endBinding"), endBinding}});
+
+    eb = model.data(idx, ShapesModel::EndBindingRole);
+    QVERIFY(eb.isValid());
+    QCOMPARE(eb.toMap()[QStringLiteral("focus")].toDouble(), 0.75);
+
+    // Update back-references on the rect
+    QVariantList boundIds;
+    boundIds.append(QStringLiteral("arrow-1"));
+    model.updateShape(0, {{QStringLiteral("boundElementIds"), boundIds}});
+
+    QModelIndex rectIdx = model.index(0);
+    QVariant be = model.data(rectIdx, ShapesModel::BoundElementIdsRole);
+    QVERIFY(be.isValid());
+    QCOMPARE(be.toList().size(), 1);
+    QCOMPARE(be.toList().at(0).toString(), QStringLiteral("arrow-1"));
+}
+
+void ShapesModelTest::testBindingGeometry()
+{
+    OverlayController ctrl;
+
+    // Create a rectangle at (100, 100) size 200x100
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("id")] = QStringLiteral("rect-geo");
+    rect[QStringLiteral("x")] = 100.0;
+    rect[QStringLiteral("y")] = 100.0;
+    rect[QStringLiteral("width")] = 200.0;
+    rect[QStringLiteral("height")] = 100.0;
+    rect[QStringLiteral("selected")] = false;
+    rect[QStringLiteral("locked")] = false;
+    ctrl.addShape(rect);
+
+    // pointFromBinding at focus=0.0 should be top-center (200, 100)
+    QPointF p0 = ctrl.pointFromBinding(rect, 0.0);
+    QCOMPARE(p0, QPointF(200.0, 100.0));
+
+    // focus=0.25 should be right-center (300, 150)
+    // rw/2=100 is first segment. perim = 600. 0.25 * 600 = 150. 150-100=50 into right edge -> (300, 150)
+    QPointF p25 = ctrl.pointFromBinding(rect, 0.25);
+    QCOMPARE(p25, QPointF(300.0, 150.0));
+
+    // focus=0.5 should be bottom-center (200, 200)
+    QPointF p50 = ctrl.pointFromBinding(rect, 0.5);
+    QCOMPARE(p50, QPointF(200.0, 200.0));
+
+    // findSnapPoint: point at (201, 95) is 5px from top edge -> should snap to (201, 100)
+    QPointF hit = ctrl.findSnapPoint(201.0, 95.0);
+    QCOMPARE(hit.y(), 100.0);
+
+    // Point at (201, 50) is 50px from top edge -> should NOT snap (returns empty QPointF)
+    QPointF miss = ctrl.findSnapPoint(201.0, 50.0);
+    QVERIFY(miss.isNull());
+
+    // Create an ellipse
+    QVariantMap ell;
+    ell[QStringLiteral("type")] = QStringLiteral("ellipse");
+    ell[QStringLiteral("id")] = QStringLiteral("ell-geo");
+    ell[QStringLiteral("x")] = 400.0;
+    ell[QStringLiteral("y")] = 100.0;
+    ell[QStringLiteral("width")] = 100.0;
+    ell[QStringLiteral("height")] = 60.0;
+    ell[QStringLiteral("selected")] = false;
+    ell[QStringLiteral("locked")] = false;
+    ctrl.addShape(ell);
+
+    // Point near right side of ellipse -> should snap
+    QPointF hitEll = ctrl.findSnapPoint(505.0, 130.0);
+    QVERIFY(!hitEll.isNull());
+    // snapPoint should be on the ellipse perimeter, close to (500, 130)
+    QVERIFY(qAbs(hitEll.x() - 500.0) < 5.0);
+}
+
+void ShapesModelTest::testBindingMovePropagate()
+{
+    OverlayController ctrl;
+
+    // Create a rectangle
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("id")] = QStringLiteral("rect-bind");
+    rect[QStringLiteral("x")] = 100.0;
+    rect[QStringLiteral("y")] = 100.0;
+    rect[QStringLiteral("width")] = 200.0;
+    rect[QStringLiteral("height")] = 100.0;
+    rect[QStringLiteral("selected")] = false;
+    rect[QStringLiteral("locked")] = false;
+    ctrl.addShape(rect);
+
+    // Create an arrow with endpoint on the rect's top edge
+    QVariantMap arrow;
+    arrow[QStringLiteral("type")] = QStringLiteral("arrow");
+    arrow[QStringLiteral("id")] = QStringLiteral("arrow-bind");
+    arrow[QStringLiteral("fromX")] = 50.0;
+    arrow[QStringLiteral("fromY")] = 50.0;
+    arrow[QStringLiteral("toX")] = 200.0;  // top-center of rect
+    arrow[QStringLiteral("toY")] = 100.0;
+    arrow[QStringLiteral("selected")] = false;
+    arrow[QStringLiteral("locked")] = false;
+    ctrl.addShape(arrow);
+
+    // Create bindings
+    ctrl.createBindingsForShape(1);
+
+    // Verify endBinding was created
+    QVariantMap arrowData = ctrl.getShape(1);
+    QVariantMap eb = arrowData[QStringLiteral("endBinding")].toMap();
+    QVERIFY(!eb.isEmpty());
+    QCOMPARE(eb[QStringLiteral("elementId")].toString(), QStringLiteral("rect-bind"));
+    // toX/toY should be snapped to (200, 100)
+    QCOMPARE(arrowData[QStringLiteral("toX")].toDouble(), 200.0);
+    QCOMPARE(arrowData[QStringLiteral("toY")].toDouble(), 100.0);
+
+    // Verify back-reference on rect
+    QVariantMap rectData = ctrl.getShape(0);
+    QVariantList boundIds = rectData[QStringLiteral("boundElementIds")].toList();
+    QCOMPARE(boundIds.size(), 1);
+    QCOMPARE(boundIds[0].toString(), QStringLiteral("arrow-bind"));
+
+    // Select the rect and drag it 50px right
+    ctrl.selectShape(0);
+    ctrl.beginEdit();
+    ctrl.dragSelected(50.0, 0.0);
+    ctrl.endEdit();
+
+    // Arrow endpoint should have moved with the rect
+    arrowData = ctrl.getShape(1);
+    QCOMPARE(arrowData[QStringLiteral("toX")].toDouble(), 250.0); // 200 + 50
+    QCOMPARE(arrowData[QStringLiteral("toY")].toDouble(), 100.0);
+
+    // Arrow fromX/fromY should NOT have moved (not bound)
+    QCOMPARE(arrowData[QStringLiteral("fromX")].toDouble(), 50.0);
+    QCOMPARE(arrowData[QStringLiteral("fromY")].toDouble(), 50.0);
+}
+
+void ShapesModelTest::testBindingDeleteCleanup()
+{
+    OverlayController ctrl;
+
+    // Create rect and bound arrow
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("id")] = QStringLiteral("rect-del");
+    rect[QStringLiteral("x")] = 100.0; rect[QStringLiteral("y")] = 100.0;
+    rect[QStringLiteral("width")] = 200.0; rect[QStringLiteral("height")] = 100.0;
+    rect[QStringLiteral("selected")] = false; rect[QStringLiteral("locked")] = false;
+    ctrl.addShape(rect);
+
+    QVariantMap arrow;
+    arrow[QStringLiteral("type")] = QStringLiteral("arrow");
+    arrow[QStringLiteral("id")] = QStringLiteral("arrow-del");
+    arrow[QStringLiteral("fromX")] = 50.0; arrow[QStringLiteral("fromY")] = 50.0;
+    arrow[QStringLiteral("toX")] = 200.0; arrow[QStringLiteral("toY")] = 100.0;
+    arrow[QStringLiteral("selected")] = false; arrow[QStringLiteral("locked")] = false;
+    ctrl.addShape(arrow);
+    ctrl.createBindingsForShape(1);
+
+    // Delete the rect -> arrow's endBinding should be cleared
+    ctrl.deleteShape(0);
+
+    // Arrow is now at index 0
+    QVariantMap arrowData = ctrl.getShape(0);
+    QVariantMap eb = arrowData[QStringLiteral("endBinding")].toMap();
+    QVERIFY(eb.isEmpty());
+    // Arrow endpoint stays where it was (not moved)
+    QCOMPARE(arrowData[QStringLiteral("toX")].toDouble(), 200.0);
+}
+
+
+void ShapesModelTest::testBindingResizePropagate()
+{
+    OverlayController ctrl;
+
+    // Rect at (100,100) size 200x100
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("id")] = QStringLiteral("rect-resize");
+    rect[QStringLiteral("x")] = 100.0; rect[QStringLiteral("y")] = 100.0;
+    rect[QStringLiteral("width")] = 200.0; rect[QStringLiteral("height")] = 100.0;
+    rect[QStringLiteral("selected")] = false; rect[QStringLiteral("locked")] = false;
+    ctrl.addShape(rect);
+
+    // Arrow endpoint at top-center (200, 100)
+    QVariantMap arrow;
+    arrow[QStringLiteral("type")] = QStringLiteral("arrow");
+    arrow[QStringLiteral("id")] = QStringLiteral("arrow-resize");
+    arrow[QStringLiteral("fromX")] = 50.0; arrow[QStringLiteral("fromY")] = 50.0;
+    arrow[QStringLiteral("toX")] = 200.0; arrow[QStringLiteral("toY")] = 100.0;
+    arrow[QStringLiteral("selected")] = false; arrow[QStringLiteral("locked")] = false;
+    ctrl.addShape(arrow);
+    ctrl.createBindingsForShape(1);
+
+    // Resize rect: double width to 400
+    ctrl.updateShape(0, {{QStringLiteral("width"), 400.0}});
+
+    // Arrow endpoint should now be at top-center of wider rect: (100 + 400/2, 100) = (300, 100)
+    QVariantMap ad = ctrl.getShape(1);
+    QCOMPARE(ad[QStringLiteral("toX")].toDouble(), 300.0);
+    QCOMPARE(ad[QStringLiteral("toY")].toDouble(), 100.0);
+}
+
+void ShapesModelTest::testExcalidrawBindingRoundtrip()
+{
+    OverlayController ctrl;
+
+    // Create shapes with bindings
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("id")] = QStringLiteral("rect-ex");
+    rect[QStringLiteral("x")] = 100.0; rect[QStringLiteral("y")] = 100.0;
+    rect[QStringLiteral("width")] = 200.0; rect[QStringLiteral("height")] = 100.0;
+    rect[QStringLiteral("selected")] = true; rect[QStringLiteral("locked")] = false;
+    rect[QStringLiteral("color")] = QStringLiteral("#e63946"); rect[QStringLiteral("strokeWidth")] = 2;
+    rect[QStringLiteral("opacity")] = 1.0; rect[QStringLiteral("roughness")] = 1; rect[QStringLiteral("seed")] = 12345;
+    QVariantList boundIds;
+    boundIds.append(QStringLiteral("arrow-ex"));
+    rect[QStringLiteral("boundElementIds")] = boundIds;
+    ctrl.addShape(rect);
+
+    QVariantMap arrow;
+    arrow[QStringLiteral("type")] = QStringLiteral("arrow");
+    arrow[QStringLiteral("id")] = QStringLiteral("arrow-ex");
+    arrow[QStringLiteral("fromX")] = 50.0; arrow[QStringLiteral("fromY")] = 50.0;
+    arrow[QStringLiteral("toX")] = 200.0; arrow[QStringLiteral("toY")] = 100.0;
+    arrow[QStringLiteral("selected")] = true; arrow[QStringLiteral("locked")] = false;
+    arrow[QStringLiteral("color")] = QStringLiteral("#e63946"); arrow[QStringLiteral("strokeWidth")] = 2;
+    arrow[QStringLiteral("opacity")] = 1.0; arrow[QStringLiteral("roughness")] = 1; arrow[QStringLiteral("seed")] = 67890;
+    QVariantMap endBinding;
+    endBinding[QStringLiteral("elementId")] = QStringLiteral("rect-ex");
+    endBinding[QStringLiteral("focus")] = 0.0;
+    endBinding[QStringLiteral("gap")] = 0.0;
+    arrow[QStringLiteral("endBinding")] = endBinding;
+    ctrl.addShape(arrow);
+    // Copy (exports to Excalidraw clipboard format)
+    ctrl.selectShape(0, false);
+    ctrl.selectShape(1, true);
+    ctrl.copySelected();
+    // Clear and paste back
+    ctrl.clear();
+    QCOMPARE(ctrl.shapesModel()->rowCount(), 0);
+
+    ctrl.pasteFromClipboard();
+
+    // Verify bindings survived the round-trip
+    // Find the arrow (should be pasted)
+    bool foundArrow = false;
+    for (int i = 0; i < ctrl.shapesModel()->rowCount(); ++i) {
+        QVariantMap s = ctrl.getShape(i);
+        if (s[QStringLiteral("type")].toString() == QStringLiteral("arrow")) {
+            QVariantMap eb = s[QStringLiteral("endBinding")].toMap();
+            // elementId should reference the pasted rect's id
+            QVERIFY(!eb.isEmpty());
+            QCOMPARE(eb[QStringLiteral("focus")].toDouble(), 0.0);
+            foundArrow = true;
+        }
+    }
+    QVERIFY(foundArrow);
+}

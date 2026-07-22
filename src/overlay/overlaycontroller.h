@@ -25,6 +25,13 @@ struct LocalShortcutDef {
     QString currentSequence;
 };
 
+struct BindingHit {
+    QString targetId;
+    double focus = 0.0;
+    QPointF snapPoint;
+    bool valid = false;
+};
+
 class OverlayController : public QObject
 {
     Q_OBJECT
@@ -88,6 +95,13 @@ public:
     QVariantMap localShortcutSequences() const;
 
     void registerAction(QAction *action, const QString &actionId, const QString &displayName);
+    Q_INVOKABLE int indexForId(const QString &id) const;
+    Q_INVOKABLE QPointF pointFromBinding(const QVariantMap &targetShape, double focus) const;
+    Q_INVOKABLE QPointF findSnapPoint(double px, double py, int excludeIndex = -1) const;
+    Q_INVOKABLE QVariantMap findSnapInfo(double px, double py, int excludeIndex = -1) const;
+    Q_INVOKABLE void createBindingsForShape(int lineIndex);
+    Q_INVOKABLE void breakEndpointBinding(int lineIndex, bool isStart);
+    Q_INVOKABLE void resnapEndpoint(int lineIndex, bool isStart);
 
     // QML-invokable methods
     Q_INVOKABLE void setSelectedIndex(int index);
@@ -193,4 +207,15 @@ private:
     int m_defaultFreehandSmoothing = 2;
 
     QRegion m_lastInputMask;
+
+    static constexpr double kSnapThreshold = 20.0;
+    BindingHit findSnapTarget(double px, double py, int excludeIndex = -1) const;
+    double focusForPoint(const QVariantMap &targetShape, double px, double py) const;
+    QPointF nearestPointOnRect(double rx, double ry, double rw, double rh, double px, double py) const;
+    QPointF nearestPointOnEllipse(double cx, double cy, double a, double b, double px, double py) const;
+    void updateBoundEndpoints(int shapeIndex, const QSet<int> *skipIndices = nullptr);
+    void cleanupBindingsForDelete(int deletedIndex);
+    void breakBinding(int lineIndex, bool isStart);
+    void addBackReference(const QString &targetId, const QString &lineId);
+    void removeBackReference(const QString &targetId, const QString &lineId);
 };

@@ -44,6 +44,12 @@ Window {
     readonly property bool shortcutGuard: controller.currentMode !== "passthrough" && !textEditor.visible
     property real selectH: 0
 
+    // Snap indicator state
+    property int snapTargetIndex: -1
+    property real snapPointX: 0
+    property real snapPointY: 0
+    property bool hasSnap: snapTargetIndex >= 0
+
     // Cursor feedback -------------------------------------------------
     // Maps draw tools to Qt.CursorShape. Most geometry tools share
     // CrossCursor; the floating ToolCursorBadge disambiguates them.
@@ -173,6 +179,7 @@ Window {
                 shape["toX"] = drawStartPoint.x + dx;
                 shape["toY"] = drawStartPoint.y + dy;
                 controller.addShape(shape);
+                controller.createBindingsForShape(controller.shapesModel.rowCount() - 1);
             }
         } else if (activeDrawTool === "text") {
             shape["x"] = drawStartPoint.x;
@@ -281,6 +288,7 @@ Window {
             canvasWindow.lastMousePos = Qt.point(mouse.x, mouse.y);
             isDrawing = true;
             drawStartPoint = Qt.point(mouse.x, mouse.y);
+            snapTargetIndex = -1;
             
             if (activeDrawTool === "freehand") {
                 activePoints = [drawStartPoint];
@@ -308,6 +316,24 @@ Window {
                 if (activeDrawTool === "line" || activeDrawTool === "arrow") {
                     previewW = mouse.x - drawStartPoint.x;
                     previewH = mouse.y - drawStartPoint.y;
+
+                    // Check snap for the endpoint being drawn (toX/toY)
+                    let endSnap = controller.findSnapInfo(mouse.x, mouse.y);
+                    // Also check snap for start point
+                    let startSnap = controller.findSnapInfo(drawStartPoint.x, drawStartPoint.y);
+
+                    // Show snap for the end point (more relevant during active draw)
+                    if (endSnap.valid) {
+                        snapTargetIndex = endSnap.targetIndex;
+                        snapPointX = endSnap.snapX;
+                        snapPointY = endSnap.snapY;
+                    } else if (startSnap.valid) {
+                        snapTargetIndex = startSnap.targetIndex;
+                        snapPointX = startSnap.snapX;
+                        snapPointY = startSnap.snapY;
+                    } else {
+                        snapTargetIndex = -1;
+                    }
                 } else {
                     // Rect or Ellipse
                     previewX = Math.min(mouse.x, drawStartPoint.x);
@@ -319,6 +345,7 @@ Window {
         }
 
         onReleased: {
+            snapTargetIndex = -1;
             finalizeShape();
         }
     }
@@ -466,6 +493,20 @@ Window {
             }
             PathLine { x: arrowPreviewShape.tx; y: arrowPreviewShape.ty }
         }
+    }
+
+    // Snap indicator dot
+    Rectangle {
+        visible: hasSnap && isDrawing && (activeDrawTool === "line" || activeDrawTool === "arrow")
+        x: snapPointX - 5
+        y: snapPointY - 5
+        width: 10
+        height: 10
+        radius: 5
+        color: "#3b82f6"
+        border.color: "white"
+        border.width: 1.5
+        z: 999
     }
 
     // --- TOOL CURSOR BADGE (follows pointer while a draw tool is active) ---

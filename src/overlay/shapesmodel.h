@@ -33,7 +33,11 @@ public:
         BorderRadiusRole,
         RoughnessRole,
         SeedRole,
-        GlowRole
+        GlowRole,
+        IdRole,
+        StartBindingRole,
+        EndBindingRole,
+        BoundElementIdsRole
     };
     Q_ENUM(ShapeRoles)
 
@@ -45,6 +49,7 @@ public:
     // Helper methods for data modification
     void setShapes(const QList<QVariantMap> &shapes);
     QList<QVariantMap> shapes() const;
+    QString shapeIdAt(int index) const;
 
     void addShape(const QVariantMap &shape);
     void updateShape(int index, const QVariantMap &properties);

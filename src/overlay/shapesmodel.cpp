@@ -1,5 +1,6 @@
 #include "shapesmodel.h"
 #include <QPointF>
+#include <QUuid>
 
 static QVariantList normalizePoints(const QVariant &var)
 {
@@ -63,6 +64,10 @@ QVariant ShapesModel::data(const QModelIndex &index, int role) const
         case RoughnessRole: return shape.value(QStringLiteral("roughness"));
         case SeedRole: return shape.value(QStringLiteral("seed"));
         case GlowRole: return shape.value(QStringLiteral("glow"));
+        case IdRole: return shape.value(QStringLiteral("id"));
+        case StartBindingRole: return shape.value(QStringLiteral("startBinding"));
+        case EndBindingRole: return shape.value(QStringLiteral("endBinding"));
+        case BoundElementIdsRole: return shape.value(QStringLiteral("boundElementIds"));
         default: return QVariant();
     }
 }
@@ -93,7 +98,19 @@ QHash<int, QByteArray> ShapesModel::roleNames() const
     roles[RoughnessRole] = "roughness";
     roles[SeedRole] = "seed";
     roles[GlowRole] = "glow";
+    roles[IdRole] = "shapeId";
+    roles[StartBindingRole] = "startBinding";
+    roles[EndBindingRole] = "endBinding";
+    roles[BoundElementIdsRole] = "boundElementIds";
     return roles;
+}
+
+QString ShapesModel::shapeIdAt(int index) const
+{
+    if (index >= 0 && index < m_shapes.size()) {
+        return m_shapes[index].value(QStringLiteral("id")).toString();
+    }
+    return QString();
 }
 
 void ShapesModel::saveHistorySnapshot()
@@ -176,6 +193,9 @@ void ShapesModel::addShape(const QVariantMap &shape)
         saveHistorySnapshot();
     }
     QVariantMap normalizedShape = shape;
+    if (!normalizedShape.contains(QStringLiteral("id")) || normalizedShape.value(QStringLiteral("id")).toString().isEmpty()) {
+        normalizedShape.insert(QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces));
+    }
     if (normalizedShape.contains(QStringLiteral("points"))) {
         normalizedShape.insert(QStringLiteral("points"), normalizePoints(normalizedShape.value(QStringLiteral("points"))));
     }
@@ -233,6 +253,10 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
                 else if (it.key() == QStringLiteral("roughness")) changedRoles << RoughnessRole;
                 else if (it.key() == QStringLiteral("seed")) changedRoles << SeedRole;
                 else if (it.key() == QStringLiteral("glow")) changedRoles << GlowRole;
+                else if (it.key() == QStringLiteral("id")) changedRoles << IdRole;
+                else if (it.key() == QStringLiteral("startBinding")) changedRoles << StartBindingRole;
+                else if (it.key() == QStringLiteral("endBinding")) changedRoles << EndBindingRole;
+                else if (it.key() == QStringLiteral("boundElementIds")) changedRoles << BoundElementIdsRole;
             }
         }
         if (!changedRoles.isEmpty()) {

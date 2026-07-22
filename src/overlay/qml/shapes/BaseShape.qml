@@ -29,6 +29,7 @@ Item {
 
     property int index: -1
     property int shapeIndex: index
+    property bool isSnapTarget: typeof canvasWindow !== "undefined" && canvasWindow.snapTargetIndex === shapeIndex
     property string mode: "rect" // "rect", "line", "none" (freehand)
     property bool isSelected: model.selected !== undefined ? model.selected : false
     property bool isLocked: model.locked !== undefined ? model.locked : false
@@ -327,9 +328,16 @@ Item {
                         dragStartY = pos.y;
                         originalX = index === 0 ? shapeFromX : shapeToX;
                         originalY = index === 0 ? shapeFromY : shapeToY;
+                        // Break any existing binding on this endpoint
+                        controller.breakEndpointBinding(shapeIndex, index === 0);
                     }
 
                     onReleased: {
+                        if (typeof canvasWindow !== "undefined") {
+                            canvasWindow.snapTargetIndex = -1;
+                        }
+                        // Try to snap to a nearby shape
+                        controller.resnapEndpoint(shapeIndex, index === 0);
                         baseShapeRoot.isResizing = false;
                         controller.endEdit();
                     }
@@ -346,10 +354,36 @@ Item {
                             } else {
                                 lineGeometryChanged(shapeFromX, shapeFromY, nx, ny);
                             }
+
+                            // Update snap indicator
+                            if (typeof canvasWindow !== "undefined") {
+                                let snap = controller.findSnapInfo(nx, ny, shapeIndex);
+                                if (snap.valid) {
+                                    canvasWindow.snapTargetIndex = snap.targetIndex;
+                                    canvasWindow.snapPointX = snap.snapX;
+                                    canvasWindow.snapPointY = snap.snapY;
+                                } else {
+                                    canvasWindow.snapTargetIndex = -1;
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    // Snap target highlight
+    Rectangle {
+        visible: isSnapTarget && mode === "rect"
+        x: shapeX - 3
+        y: shapeY - 3
+        width: shapeWidth + 6
+        height: shapeHeight + 6
+        color: "transparent"
+        border.color: "#3b82f6"
+        border.width: 2
+        radius: 4
+        opacity: 0.8
     }
 }
