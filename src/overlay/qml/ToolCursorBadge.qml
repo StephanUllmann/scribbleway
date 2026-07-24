@@ -5,7 +5,7 @@ Item {
     width: 28
     height: 28
 
-    // freehand | rectangle | ellipse | line | arrow | text
+    // freehand | rectangle | ellipse | line | arrow | text | select
     property string tool: "freehand"
     property color accent: "#e63946"
 
@@ -124,6 +124,35 @@ Item {
             font.pixelSize: 14
             font.bold: true
         }
+
+        // Select: pointer arrow
+        Canvas {
+            anchors.fill: parent
+            visible: root.tool === "select"
+            property color accent: root.accent
+            onPaint: {
+                var ctx = getContext("2d");
+                ctx.reset();
+                ctx.fillStyle = accent;
+                ctx.strokeStyle = accent;
+                ctx.lineWidth = 1.2;
+                ctx.lineJoin = "round";
+                ctx.beginPath();
+                ctx.moveTo(2, 2);
+                ctx.lineTo(2, 13);
+                ctx.lineTo(5.5, 9.5);
+                ctx.lineTo(8.5, 14);
+                ctx.lineTo(10.5, 13);
+                ctx.lineTo(7.5, 8.5);
+                ctx.lineTo(11.5, 8.5);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
+            onVisibleChanged: if (visible) requestPaint()
+            onAccentChanged: requestPaint()
+            Component.onCompleted: requestPaint()
+        }
     }
 
     // Tiny shortcut hint in bottom-right of chip
@@ -134,6 +163,9 @@ Item {
         text: {
             if (typeof controller !== "undefined") {
                 var seq = controller.localShortcutSequences["tool_" + root.tool];
+                if (!seq && root.tool === "select") {
+                    seq = controller.localShortcutSequences["action_select"];
+                }
                 if (seq) return seq;
             }
             switch (root.tool) {
@@ -143,6 +175,7 @@ Item {
             case "ellipse": return "E";
             case "line": return "L";
             case "text": return "T";
+            case "select": return "X";
             default: return "";
             }
         }

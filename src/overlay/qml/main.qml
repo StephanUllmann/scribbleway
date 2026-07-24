@@ -74,6 +74,11 @@ Window {
         && controller.currentMode !== "passthrough"
         && !textEditor.visible
 
+    readonly property bool showSelectToolBadge:
+        activeDrawTool === ""
+        && controller.currentMode === "select"
+        && !textEditor.visible
+
 
     // Connections to C++ controller signals
     Connections {
@@ -536,6 +541,17 @@ Window {
             let ny = canvasWindow.lastMousePos.y + 16;
             return Math.min(canvasWindow.height - toolCursorBadge.height - 4, Math.max(4, ny));
         }
+    }
+
+    // --- SELECTION TOOL BADGE (placed in upper left corner when selection tool is active) ---
+    ToolCursorBadge {
+        id: selectToolBadge
+        visible: canvasWindow.showSelectToolBadge
+        tool: "select"
+        accent: controller.defaultColor
+        z: 1000
+        x: 16
+        y: 16
     }
 
     // --- SELECTION FRAME UI ---
