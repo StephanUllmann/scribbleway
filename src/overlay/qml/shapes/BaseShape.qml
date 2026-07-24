@@ -34,8 +34,18 @@ Item {
         text: baseShapeRoot.modelAttachedText.text || ""
         color: baseShapeRoot.modelColor
         opacity: baseShapeRoot.modelOpacity
-        font.family: model.fontFamily !== undefined ? model.fontFamily : controller.defaultFontFamily
-        font.pixelSize: model.fontSize !== undefined ? model.fontSize : controller.defaultFontSize
+        font.family: {
+            if (baseShapeRoot.modelAttachedText && baseShapeRoot.modelAttachedText.fontFamily !== undefined) {
+                return baseShapeRoot.modelAttachedText.fontFamily;
+            }
+            return model.fontFamily !== undefined ? model.fontFamily : controller.defaultFontFamily;
+        }
+        font.pixelSize: {
+            if (baseShapeRoot.modelAttachedText && baseShapeRoot.modelAttachedText.fontSize !== undefined) {
+                return baseShapeRoot.modelAttachedText.fontSize;
+            }
+            return model.fontSize !== undefined ? model.fontSize : controller.defaultFontSize;
+        }
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         wrapMode: Text.Wrap

@@ -586,7 +586,7 @@ ColumnLayout {
         }
 
         // Font Config Row (only if Text tool is active or Text shape is selected)
-        property bool isTextActive: (root.backend.hasSelection && root.backend.selectedType.toLowerCase() === "text") || (!root.backend.hasSelection && fullRoot.currentToolName === "text")
+        property bool isTextActive: (root.backend.hasSelection && ["text", "rectangle", "ellipse", "line", "arrow"].indexOf(root.backend.selectedType.toLowerCase()) >= 0) || (!root.backend.hasSelection && fullRoot.currentToolName === "text")
         
         ColumnLayout {
             Layout.fillWidth: true

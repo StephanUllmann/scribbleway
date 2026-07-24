@@ -69,6 +69,7 @@ private Q_SLOTS:
     void testAttachedTextExcalidrawExport();
     void testAttachedTextExcalidrawImport();
     void testLineAttachedTextClipboardFallback();
+    void testDecoupledAttachedTextFontProperties();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -2705,4 +2706,70 @@ void ShapesModelTest::testLineAttachedTextClipboardFallback()
     pasted.pasteFromClipboard(200.0, 200.0);
     QCOMPARE(pasted.shapesModel()->rowCount(), 1);
     QCOMPARE(pasted.attachedTextForShape(0).value(QStringLiteral("text")).toString(), QStringLiteral("Line label"));
+}
+void ShapesModelTest::testDecoupledAttachedTextFontProperties()
+{
+    OverlayController controller;
+
+    // 1. Add rectangle shape with attached text
+    QVariantMap rect;
+    rect[QStringLiteral("type")] = QStringLiteral("rectangle");
+    rect[QStringLiteral("x")] = 10.0;
+    rect[QStringLiteral("y")] = 10.0;
+    rect[QStringLiteral("width")] = 100.0;
+    rect[QStringLiteral("height")] = 50.0;
+    controller.addShape(rect); // index 0
+
+    controller.setAttachedText(0, QStringLiteral("Rectangle Text"));
+    const QString defaultFont = controller.defaultFontFamily();
+    QVariantMap rectShape1 = controller.getShape(0);
+    QCOMPARE(rectShape1.value(QStringLiteral("fontFamily")).toString(), defaultFont);
+    QCOMPARE(rectShape1.value(QStringLiteral("fontSize")).toInt(), 20);
+
+    // 2. Add an independent text shape
+    QVariantMap textShape;
+    textShape[QStringLiteral("type")] = QStringLiteral("text");
+    textShape[QStringLiteral("x")] = 200.0;
+    textShape[QStringLiteral("y")] = 200.0;
+    textShape[QStringLiteral("text")] = QStringLiteral("Independent Text");
+    controller.addShape(textShape); // index 1, selected automatically
+
+    // 3. Update properties of the independent text shape
+    controller.updateProperties({
+        {QStringLiteral("fontSize"), 36},
+        {QStringLiteral("fontFamily"), QStringLiteral("Cascadia Code")}
+    });
+
+    QVariantMap textShapeUpdated = controller.getShape(1);
+    QCOMPARE(textShapeUpdated.value(QStringLiteral("fontSize")).toInt(), 36);
+    QCOMPARE(textShapeUpdated.value(QStringLiteral("fontFamily")).toString(), QStringLiteral("Cascadia Code"));
+
+    // 4. Verify rectangle shape with attached text did NOT change
+    QVariantMap rectShape2 = controller.getShape(0);
+    QCOMPARE(rectShape2.value(QStringLiteral("fontSize")).toInt(), 20);
+    QCOMPARE(rectShape2.value(QStringLiteral("fontFamily")).toString(), defaultFont);
+
+    QVariantMap attached2 = controller.attachedTextForShape(0);
+    QCOMPARE(attached2.value(QStringLiteral("fontSize")).toInt(), 20);
+    QCOMPARE(attached2.value(QStringLiteral("fontFamily")).toString(), defaultFont);
+
+    // 5. Select rectangle shape (index 0) and control its font size/family directly
+    controller.setSelectedIndex(0);
+    controller.updateProperties({
+        {QStringLiteral("fontSize"), 28},
+        {QStringLiteral("fontFamily"), QStringLiteral("Virgil")}
+    });
+
+    QVariantMap rectShape3 = controller.getShape(0);
+    QCOMPARE(rectShape3.value(QStringLiteral("fontSize")).toInt(), 28);
+    QCOMPARE(rectShape3.value(QStringLiteral("fontFamily")).toString(), QStringLiteral("Virgil"));
+
+    QVariantMap attached3 = controller.attachedTextForShape(0);
+    QCOMPARE(attached3.value(QStringLiteral("fontSize")).toInt(), 28);
+    QCOMPARE(attached3.value(QStringLiteral("fontFamily")).toString(), QStringLiteral("Virgil"));
+
+    // 6. Verify independent text shape (index 1) remains unaffected by rectangle font changes
+    QVariantMap textShapeFinal = controller.getShape(1);
+    QCOMPARE(textShapeFinal.value(QStringLiteral("fontSize")).toInt(), 36);
+    QCOMPARE(textShapeFinal.value(QStringLiteral("fontFamily")).toString(), QStringLiteral("Cascadia Code"));
 }

@@ -400,7 +400,17 @@ QVariantMap OverlayController::ensureAttachedTextForShape(int index)
     QVariantMap binding = makeAttachedTextBinding(shape);
     QVariantList bindings = shape.value(QStringLiteral("bindings")).toList();
     bindings.append(binding);
-    m_shapesModel.updateShape(index, {{QStringLiteral("bindings"), bindings}});
+    
+    QVariantMap updates;
+    updates.insert(QStringLiteral("bindings"), bindings);
+    if (!shape.contains(QStringLiteral("fontFamily"))) {
+        updates.insert(QStringLiteral("fontFamily"), binding.value(QStringLiteral("fontFamily")));
+    }
+    if (!shape.contains(QStringLiteral("fontSize"))) {
+        updates.insert(QStringLiteral("fontSize"), binding.value(QStringLiteral("fontSize")));
+    }
+    
+    m_shapesModel.updateShape(index, updates);
     notifyShapesChanged();
     if (index == m_selectedIndex) {
         notifySelectionChanged();
@@ -430,12 +440,23 @@ void OverlayController::setAttachedText(int index, const QString &text)
     if (binding.isEmpty()) {
         binding = makeAttachedTextBinding(shape);
     }
+    const QString fontFamily = shape.value(QStringLiteral("fontFamily"), m_defaultFontFamily).toString();
+    const int fontSize = shape.value(QStringLiteral("fontSize"), m_defaultFontSize).toInt();
     binding.insert(QStringLiteral("text"), trimmed);
-    binding.insert(QStringLiteral("fontFamily"), shape.value(QStringLiteral("fontFamily"), m_defaultFontFamily).toString());
-    binding.insert(QStringLiteral("fontSize"), shape.value(QStringLiteral("fontSize"), m_defaultFontSize).toInt());
+    binding.insert(QStringLiteral("fontFamily"), fontFamily);
+    binding.insert(QStringLiteral("fontSize"), fontSize);
     bindings.append(binding);
 
-    m_shapesModel.updateShape(index, {{QStringLiteral("bindings"), bindings}});
+    QVariantMap updates;
+    updates.insert(QStringLiteral("bindings"), bindings);
+    if (!shape.contains(QStringLiteral("fontFamily"))) {
+        updates.insert(QStringLiteral("fontFamily"), fontFamily);
+    }
+    if (!shape.contains(QStringLiteral("fontSize"))) {
+        updates.insert(QStringLiteral("fontSize"), fontSize);
+    }
+
+    m_shapesModel.updateShape(index, updates);
     notifyShapesChanged();
     if (index == m_selectedIndex) {
         notifySelectionChanged();
@@ -659,15 +680,46 @@ void OverlayController::updateProperties(const QVariantMap &properties)
 
     m_shapesModel.beginEdit();
     bool updatedAny = false;
+    const bool hasFontUpdate = demarshalled.contains(QStringLiteral("fontFamily")) || demarshalled.contains(QStringLiteral("fontSize"));
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
         if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
-            m_shapesModel.updateShape(i, demarshalled);
+            QVariantMap shapeProps = demarshalled;
+            const QVariantMap shape = m_shapesModel.shapes()[i];
+            const QVariantMap attached = ShapesModel::firstAttachedTextBinding(shape);
+            if (!attached.isEmpty() && hasFontUpdate) {
+                QVariantList bindings = withoutAttachedTextBinding(shape);
+                QVariantMap updatedAttached = attached;
+                if (demarshalled.contains(QStringLiteral("fontFamily"))) {
+                    updatedAttached.insert(QStringLiteral("fontFamily"), demarshalled[QStringLiteral("fontFamily")]);
+                }
+                if (demarshalled.contains(QStringLiteral("fontSize"))) {
+                    updatedAttached.insert(QStringLiteral("fontSize"), demarshalled[QStringLiteral("fontSize")]);
+                }
+                bindings.append(updatedAttached);
+                shapeProps.insert(QStringLiteral("bindings"), bindings);
+            }
+            m_shapesModel.updateShape(i, shapeProps);
             updatedAny = true;
         }
     }
 
     if (!updatedAny && m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
-        m_shapesModel.updateShape(m_selectedIndex, demarshalled);
+        QVariantMap shapeProps = demarshalled;
+        const QVariantMap shape = m_shapesModel.shapes()[m_selectedIndex];
+        const QVariantMap attached = ShapesModel::firstAttachedTextBinding(shape);
+        if (!attached.isEmpty() && hasFontUpdate) {
+            QVariantList bindings = withoutAttachedTextBinding(shape);
+            QVariantMap updatedAttached = attached;
+            if (demarshalled.contains(QStringLiteral("fontFamily"))) {
+                updatedAttached.insert(QStringLiteral("fontFamily"), demarshalled[QStringLiteral("fontFamily")]);
+            }
+            if (demarshalled.contains(QStringLiteral("fontSize"))) {
+                updatedAttached.insert(QStringLiteral("fontSize"), demarshalled[QStringLiteral("fontSize")]);
+            }
+            bindings.append(updatedAttached);
+            shapeProps.insert(QStringLiteral("bindings"), bindings);
+        }
+        m_shapesModel.updateShape(m_selectedIndex, shapeProps);
     }
     m_shapesModel.endEdit();
 
