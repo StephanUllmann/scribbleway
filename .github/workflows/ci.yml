@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    # Ubuntu 24.04 (ubuntu-latest's default image) ships KF5 + Qt 6.4, but this project
+    # needs KF6 + Qt 6.6+ (QtQuick.Effects, find_package(KF6)). Run inside an ubuntu:25.04
+    # container, which packages KF6 6.12 and Qt 6.8.
+    container: ubuntu:25.04
+    steps:
+      - name: Install git (needed by actions/checkout in a bare container)
+        run: |
+          apt-get update
+          apt-get install -y git
+
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          apt-get install -y \
+            build-essential \
+            cmake \
+            extra-cmake-modules \
+            libkf6globalaccel-dev \
+            kglobalacceld \
+            dbus \
+            liblayershellqtinterface-dev \
+            qt6-base-dev \
+            qt6-declarative-dev \
+            qml6-module-qtquick-layouts \
+            qml6-module-qtquick-controls \
+            qml6-module-qtquick-templates \
+            qml6-module-qtquick-shapes \
+            qml6-module-qtquick-effects
+
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DBUILD_DEB_PACKAGE=OFF
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        # QTEST_MAIN needs a QPA platform (offscreen), and OverlayController's shortcut
+        # tests need the kglobalacceld daemon on a session bus or KGlobalAccel segfaults.
+        run: |
+          export QT_QPA_PLATFORM=offscreen
+          dbus-run-session -- bash -c '
+            /usr/lib/x86_64-linux-gnu/libexec/kglobalacceld >/dev/null 2>&1 &
+            sleep 3
+            ctest --test-dir build --output-on-failure
+          '
