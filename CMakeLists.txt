@@ -24,7 +24,6 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Widgets
     Qml
     Quick
-    DBus
 )
 
 include(ECMQmlModule)

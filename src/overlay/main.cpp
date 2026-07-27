@@ -41,26 +41,6 @@ int main(int argc, char *argv[])
 
     OverlayController controller;
 
-    // Clean up legacy global shortcuts that are now local
-    auto cleanLegacy = [&](const QString &objName) {
-        QAction tmp;
-        tmp.setObjectName(objName);
-        tmp.setProperty("componentName", QStringLiteral("scribbleway"));
-        KGlobalAccel::self()->removeAllShortcuts(&tmp);
-    };
-    cleanLegacy(QStringLiteral("draw_freehand"));
-    cleanLegacy(QStringLiteral("draw_arrow"));
-    cleanLegacy(QStringLiteral("draw_rectangle"));
-    cleanLegacy(QStringLiteral("draw_ellipse"));
-    cleanLegacy(QStringLiteral("draw_line"));
-    cleanLegacy(QStringLiteral("draw_text"));
-    cleanLegacy(QStringLiteral("action_undo"));
-    cleanLegacy(QStringLiteral("action_clear"));
-    cleanLegacy(QStringLiteral("action_select_mode"));
-    cleanLegacy(QStringLiteral("action_cycle_color"));
-    cleanLegacy(QStringLiteral("action_grow"));
-    cleanLegacy(QStringLiteral("action_shrink"));
-
     // Setup global actions and connect to KGlobalAccel
     auto setupGlobalAction = [&](const QString &objName, const QString &text, 
                                  const QList<QKeySequence> &defaultShortcuts) {

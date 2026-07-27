@@ -135,7 +135,7 @@ public:
 
     void registerAction(QAction *action, const QString &actionId, const QString &displayName);
     Q_INVOKABLE int indexForId(const QString &id) const;
-    Q_INVOKABLE QPointF pointFromBinding(const QVariantMap &targetShape, double focus) const;
+    QPointF pointFromBinding(const QVariantMap &targetShape, double focus) const;
     Q_INVOKABLE QPointF findSnapPoint(double px, double py, int excludeIndex = -1) const;
     Q_INVOKABLE QVariantMap findSnapInfo(double px, double py, int excludeIndex = -1) const;
     Q_INVOKABLE void createBindingsForShape(int lineIndex);
@@ -216,7 +216,6 @@ Q_SIGNALS:
     
     // DBus signals (matched by AppletBackend slots)
     void selectionChanged(const QVariantMap &selectionState);
-    void shapesListChanged(const QVariantList &shapes);
     void shapesMetadataChanged(const QVariantList &metadata);
     void modeChanged(const QString &mode);
     void shortcutsChanged(const QVariantList &shortcuts);

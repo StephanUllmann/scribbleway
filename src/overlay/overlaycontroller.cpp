@@ -12,7 +12,6 @@ static const QStringList presetColors = {
     QStringLiteral("#457b9d"),
     QStringLiteral("#8338ec")
 };
-#include <QDebug>
 #include <LayerShellQt/Window>
 #include <QScreen>
 #include <QGuiApplication>
@@ -27,8 +26,6 @@ static const QStringList presetColors = {
 #include <QPointF>
 #include <QLineF>
 #include <limits>
-
-#include "../common/dbusutils.h"
 
 OverlayController::OverlayController(QObject *parent)
     : QObject(parent)
@@ -306,13 +303,12 @@ void OverlayController::setDefaultFreehandSmoothing(int level)
 
 void OverlayController::addShape(const QVariantMap &shape)
 {
-    QVariantMap demarshalledShape = DBusUtils::demarshal(shape).toMap();
-    if (!demarshalledShape.contains(QStringLiteral("id")) || demarshalledShape.value(QStringLiteral("id")).toString().isEmpty()) {
-        demarshalledShape.insert(QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces));
+    QVariantMap newShape = shape;
+    if (!newShape.contains(QStringLiteral("id")) || newShape.value(QStringLiteral("id")).toString().isEmpty()) {
+        newShape.insert(QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces));
     }
-    qDebug() << "OverlayController::addShape - demarshalled shape:" << demarshalledShape;
     m_shapesModel.beginEdit();
-    m_shapesModel.addShape(demarshalledShape);
+    m_shapesModel.addShape(newShape);
     setSelectedIndex(m_shapesModel.rowCount() - 1);
     m_shapesModel.endEdit();
     notifyShapesChanged();
@@ -484,18 +480,17 @@ void OverlayController::removeAttachedText(int index)
 
 void OverlayController::updateShape(int index, const QVariantMap &properties)
 {
-    QVariantMap demarshalledProps = DBusUtils::demarshal(properties).toMap();
-    m_shapesModel.updateShape(index, demarshalledProps);
+    m_shapesModel.updateShape(index, properties);
     notifyShapesChanged();
-    
+
     if (index == m_selectedIndex) {
         notifySelectionChanged();
     }
 
-    bool geometryChanged = demarshalledProps.contains(QStringLiteral("x")) ||
-                           demarshalledProps.contains(QStringLiteral("y")) ||
-                           demarshalledProps.contains(QStringLiteral("width")) ||
-                           demarshalledProps.contains(QStringLiteral("height"));
+    bool geometryChanged = properties.contains(QStringLiteral("x")) ||
+                           properties.contains(QStringLiteral("y")) ||
+                           properties.contains(QStringLiteral("width")) ||
+                           properties.contains(QStringLiteral("height"));
     if (geometryChanged && index >= 0 && index < m_shapesModel.rowCount()) {
         const QVariantMap shape = m_shapesModel.shapes().at(index);
         if (!shape.value(QStringLiteral("boundElementIds")).toList().isEmpty()) {
@@ -741,7 +736,7 @@ QString OverlayController::targetScreen() const
 
 void OverlayController::updateProperties(const QVariantMap &properties)
 {
-    QVariantMap demarshalled = DBusUtils::demarshal(properties).toMap();
+    QVariantMap demarshalled = properties;
     if (demarshalled.contains(QStringLiteral("color"))) {
         setDefaultColor(demarshalled[QStringLiteral("color")].toString());
     }
