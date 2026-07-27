@@ -2,16 +2,12 @@
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QProcess>
-#include <QDBusConnection>
-#include <QDBusInterface>
-#include <QDBusReply>
 #include <QSignalSpy>
 #include <QAction>
 #include <QKeySequence>
 #include <KGlobalAccel>
 #include "shapesmodel.h"
 #include "overlaycontroller.h"
-#include "appletbackend.h"
 #include "singleinstance.h"
 #include <QFontDatabase>
 #include <QJsonDocument>
@@ -57,7 +53,6 @@ private Q_SLOTS:
     void testPropertiesDefaultsUpdates();
     void testMultiSelectionDragDelete();
     void testExcalidrawSchemaEdgeCases();
-    void testAppletBackendIntegration();
     void testReworkedShortcutsSlots();
     void testRoughPathGenerator();
     void testStableShapeIds();
@@ -1555,175 +1550,6 @@ void ShapesModelTest::testExcalidrawSchemaEdgeCases()
     QString cbText4 = QGuiApplication::clipboard()->text();
     QJsonObject rectObj4 = QJsonDocument::fromJson(cbText4.toUtf8()).object().value(QStringLiteral("elements")).toArray().at(0).toObject();
     QVERIFY(rectObj4.value(QStringLiteral("roundness")).isNull());
-}
-
-void ShapesModelTest::testAppletBackendIntegration()
-{
-    OverlayController controller;
-    
-    QVERIFY(QDBusConnection::sessionBus().registerService(QStringLiteral("org.kde.scribbleway")));
-    QVERIFY(QDBusConnection::sessionBus().registerObject(
-        QStringLiteral("/Overlay"),
-        &controller,
-        QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals
-    ));
-    
-    AppletBackend backend;
-    QTest::qWait(150);
-    
-    QVERIFY(backend.overlayConnected());
-    
-    QCOMPARE(backend.hasSelection(), false);
-    QCOMPARE(backend.selectedColor(), QStringLiteral("#e63946"));
-    QCOMPARE(backend.selectedStrokeWidth(), 2);
-    QCOMPARE(backend.selectedOpacity(), 1.0);
-    QCOMPARE(backend.currentMode(), QStringLiteral("passthrough"));
-    QCOMPARE(backend.activeTool(), QStringLiteral("freehand"));
-    
-    QVariantMap update;
-    update[QStringLiteral("color")] = QStringLiteral("#00ffff");
-    update[QStringLiteral("strokeWidth")] = 5;
-    update[QStringLiteral("opacity")] = 0.5;
-    controller.updateProperties(update);
-    QTest::qWait(50);
-    
-    QCOMPARE(backend.selectedColor(), QStringLiteral("#00ffff"));
-    QCOMPARE(backend.selectedStrokeWidth(), 5);
-    QCOMPARE(backend.selectedOpacity(), 0.5);
-    
-    controller.setActiveTool(QStringLiteral("ellipse"));
-    QTest::qWait(50);
-    QCOMPARE(backend.activeTool(), QStringLiteral("ellipse"));
-    QCOMPARE(backend.currentMode(), QStringLiteral("draw"));
-    
-    backend.setTargetScreen(QStringLiteral("CustomScreen"));
-    QTest::qWait(50);
-    QCOMPARE(backend.targetScreen(), QStringLiteral("CustomScreen"));
-    
-    QVERIFY(!backend.screenNames().isEmpty());
-    
-    backend.setTool(QStringLiteral("rectangle"));
-    QTest::qWait(50);
-    QCOMPARE(controller.activeTool(), QStringLiteral("rectangle"));
-    QCOMPARE(controller.currentMode(), QStringLiteral("draw"));
-    
-    backend.setColor(QStringLiteral("#112233"));
-    backend.setStrokeWidth(8);
-    backend.setOpacity(0.25);
-    QTest::qWait(50);
-    QCOMPARE(controller.defaultColor(), QStringLiteral("#112233"));
-    QCOMPARE(controller.defaultStrokeWidth(), 8);
-    QCOMPARE(controller.defaultOpacity(), 0.25);
-
-    backend.setFillColor(QStringLiteral("#abcdef"));
-    backend.setFillOpacity(0.33);
-    QTest::qWait(50);
-    QCOMPARE(controller.defaultFillColor(), QStringLiteral("#abcdef"));
-    QCOMPARE(controller.defaultFillOpacity(), 0.33);
-
-    backend.setRoughness(2);
-    QTest::qWait(50);
-    QCOMPARE(controller.defaultRoughness(), 2);
-    QCOMPARE(backend.selectedRoughness(), 2);
-
-    backend.setRoughness(0);
-    QTest::qWait(50);
-    QCOMPARE(controller.defaultRoughness(), 0);
-    QCOMPARE(backend.selectedRoughness(), 0);
-    
-    QVariantMap shape1;
-    shape1[QStringLiteral("type")] = QStringLiteral("rectangle");
-    controller.addShape(shape1);
-    QTest::qWait(50);
-    
-    QVERIFY(backend.hasSelection());
-    QCOMPARE(backend.selectedShapeIndex(), 0);
-
-    backend.setRoughness(2);
-    QTest::qWait(50);
-    QCOMPARE(controller.getSelectionState().value(QStringLiteral("roughness")).toInt(), 2);
-    QCOMPARE(backend.selectedRoughness(), 2);
-    QCOMPARE(controller.shapesModel()->shapes().at(0).value(QStringLiteral("roughness")).toInt(), 2);
-    
-    QVariantMap shape2;
-    shape2[QStringLiteral("type")] = QStringLiteral("ellipse");
-    controller.addShape(shape2);
-    QTest::qWait(50);
-    
-    QCOMPARE(backend.selectedShapeIndex(), 1);
-    
-    backend.lowerSelected();
-    QTest::qWait(50);
-    QCOMPARE(controller.selectedIndex(), 0);
-    QCOMPARE(backend.selectedShapeIndex(), 0);
-    
-    backend.raiseSelected();
-    QTest::qWait(50);
-    QCOMPARE(controller.selectedIndex(), 1);
-    QCOMPARE(backend.selectedShapeIndex(), 1);
-    
-    backend.toggleLock();
-    QTest::qWait(50);
-    QVERIFY(controller.shapesModel()->shapes().at(1)[QStringLiteral("locked")].toBool());
-    QCOMPARE(backend.hasSelection(), false);
-    
-    backend.setShapeLocked(1, false);
-    QTest::qWait(50);
-    QVERIFY(!controller.shapesModel()->shapes().at(1)[QStringLiteral("locked")].toBool());
-    
-    backend.selectShape(1);
-    QTest::qWait(50);
-    QCOMPARE(controller.selectedIndex(), 1);
-    QVERIFY(backend.hasSelection());
-    
-    backend.deleteSelected();
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 1);
-    
-    backend.deleteShape(0);
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 0);
-    
-    controller.addShape(shape1);
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 1);
-    backend.clear();
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 0);
-    
-    controller.addShape(shape1);
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 1);
-    backend.undo();
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 0);
-
-    backend.redo();
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 1);
-    
-    backend.enterSelectMode();
-    QTest::qWait(50);
-    QCOMPARE(controller.currentMode(), QStringLiteral("select"));
-    
-    backend.enterPassthroughMode();
-    QTest::qWait(50);
-    QCOMPARE(controller.currentMode(), QStringLiteral("passthrough"));
-    
-    QAction action(&controller);
-    action.setObjectName(QStringLiteral("action_test"));
-    controller.registerAction(&action, QStringLiteral("action_test"), QStringLiteral("Test Action"));
-    backend.changeShortcut(QStringLiteral("action_test"), QStringLiteral("Ctrl+Shift+D"));
-    QTest::qWait(50);
-    QList<QKeySequence> seqs = KGlobalAccel::self()->shortcut(&action);
-    QVERIFY(!seqs.isEmpty());
-    QCOMPARE(seqs.first().toString(), QStringLiteral("Ctrl+Shift+D"));
-    
-    QString formatted = backend.formatKeySequence(Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier);
-    QCOMPARE(formatted, QStringLiteral("Ctrl+Shift+K"));
-    
-    QDBusConnection::sessionBus().unregisterObject(QStringLiteral("/Overlay"));
-    QDBusConnection::sessionBus().unregisterService(QStringLiteral("org.kde.scribbleway"));
 }
 
 void ShapesModelTest::testReworkedShortcutsSlots()

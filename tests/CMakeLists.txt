@@ -9,13 +9,10 @@ add_executable(shapesmodeltest
     ../src/overlay/overlaycontroller.h
     ../src/overlay/overlaycontroller.cpp
     ../src/overlay/singleinstance.h
-    ../src/applet-plugin/appletbackend.h
-    ../src/applet-plugin/appletbackend.cpp
 )
 
 target_include_directories(shapesmodeltest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/overlay
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/applet-plugin
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/common
 )
 

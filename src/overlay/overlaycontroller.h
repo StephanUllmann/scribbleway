@@ -35,7 +35,6 @@ struct BindingHit {
 class OverlayController : public QObject
 {
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "org.kde.scribbleway.OverlayController")
     Q_PROPERTY(QQuickWindow* window READ window WRITE setWindow NOTIFY windowChanged)
     Q_PROPERTY(ShapesModel* shapesModel READ shapesModel CONSTANT)
     Q_PROPERTY(int selectedIndex READ selectedIndex NOTIFY selectionChanged)

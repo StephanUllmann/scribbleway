@@ -62,7 +62,6 @@ target_link_libraries(scribbleway-overlay PRIVATE
     Qt6::Widgets
     Qt6::DBus
     KF6::GlobalAccel
-    KF6::DBusAddons
     LayerShellQt::Interface
 )
 

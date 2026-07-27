@@ -11,7 +11,6 @@ fi
 PREFIX="${PREFIX:-$HOME/.local}"
 BUILD_DIR="build"
 BUILD_TYPE="${BUILD_TYPE:-Debug}"
-RESTART_PLASMA=true
 RESTART_OVERLAY=true
 
 print_usage() {
@@ -20,7 +19,6 @@ print_usage() {
     echo "  --prefix <path>     Set install prefix (default: $HOME/.local)"
     echo "  --system            Install to /usr/local (requires sudo for install)"
     echo "  --release           Build in Release mode instead of Debug"
-    echo "  --no-plasma         Do not restart Plasma shell"
     echo "  --no-overlay        Do not start scribbleway-overlay after install"
     echo "  --help              Show this help message"
 }
@@ -37,10 +35,6 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --release)
             BUILD_TYPE="Release"
-            shift
-            ;;
-        --no-plasma)
-            RESTART_PLASMA=false
             shift
             ;;
         --no-overlay)
@@ -118,11 +112,8 @@ done
 
 
 TARGET_DIRS=(
-    "$HOME/.local/share/plasma/plasmoids/org.kde.scribbleway"
     "$HOME/.local/lib/qml/org/kde/scribbleway"
     "$HOME/.local/lib/x86_64-linux-gnu/qml/org/kde/scribbleway"
-    "/usr/local/share/plasma/plasmoids/org.kde.scribbleway"
-    "/usr/share/plasma/plasmoids/org.kde.scribbleway"
     "/usr/lib/qt6/qml/org/kde/scribbleway"
     "/usr/lib64/qt6/qml/org/kde/scribbleway"
     "/usr/local/lib/qt6/qml/org/kde/scribbleway"
@@ -188,16 +179,6 @@ if [ "$PREFIX" = "$HOME/.local" ]; then
 fi
 
 echo "=== 6. Process lifecycle management ==="
-if [ "$RESTART_PLASMA" = true ] && pgrep -f plasmashell >/dev/null 2>&1; then
-    echo "Restarting Plasma shell..."
-    if systemctl --user is-active plasma-plasmashell.service >/dev/null 2>&1; then
-        systemctl --user restart plasma-plasmashell.service
-    else
-        kquitapp6 plasmashell 2>/dev/null || killall plasmashell 2>/dev/null || true
-        kstart6 plasmashell >/dev/null 2>&1 &
-    fi
-fi
-
 if [ "$RESTART_OVERLAY" = true ]; then
     OVERLAY_BIN=""
     if [ -x "$PREFIX/bin/scribbleway-overlay" ]; then

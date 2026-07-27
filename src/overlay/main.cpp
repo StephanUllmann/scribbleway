@@ -10,16 +10,16 @@
 #include <QElapsedTimer>
 #include <QMargins>
 #include <QRect>
+#include <QDebug>
 
 #include <LayerShellQt/Shell>
 #include <LayerShellQt/Window>
 #include <KGlobalAccel>
-#include <KDBusService>
-#include <QDBusConnection>
 
 #include <signal.h>
 
 #include "overlaycontroller.h"
+#include "singleinstance.h"
 
 int main(int argc, char *argv[])
 {
@@ -33,17 +33,13 @@ int main(int argc, char *argv[])
     app.setOrganizationDomain(QStringLiteral("kde.org"));
     app.setDesktopFileName(QStringLiteral("scribbleway"));
 
-    // Ensure unique application instance and register org.kde.scribbleway service
-    KDBusService dbusService(KDBusService::Unique);
+    SingleInstanceGuard instanceGuard(QStringLiteral("scribbleway"));
+    if (!instanceGuard.tryAcquire()) {
+        qWarning() << "Scribbleway is already running.";
+        return 0;
+    }
 
     OverlayController controller;
-
-    // Register QObject on D-Bus Session Bus
-    QDBusConnection::sessionBus().registerObject(
-        QStringLiteral("/Overlay"),
-        &controller,
-        QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals
-    );
 
     // Clean up legacy global shortcuts that are now local
     auto cleanLegacy = [&](const QString &objName) {
