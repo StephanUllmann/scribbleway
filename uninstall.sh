@@ -72,6 +72,9 @@ if [ "$CONFIRM" != true ]; then
     exit 0
 fi
 
+echo "=== Terminating running scribbleway processes ==="
+pkill -x scribbleway-overlay || true
+
 echo "=== Uninstalling Scribbleway ==="
 
 # 1. Delete binary
@@ -84,12 +87,27 @@ fi
 for dir in \
     "$HOME/.local/lib/qml/org/kde/scribbleway" \
     "$HOME/.local/lib/x86_64-linux-gnu/qml/org/kde/scribbleway" \
-    "$HOME/.local/share/plasma/plasmoids/org.kde.scribbleway"; do
+    "$HOME/.local/share/plasma/plasmoids/org.kde.scribbleway" \
+    "/usr/local/share/plasma/plasmoids/org.kde.scribbleway" \
+    "/usr/share/plasma/plasmoids/org.kde.scribbleway" \
+    "/usr/lib/qt6/qml/org/kde/scribbleway" \
+    "/usr/lib64/qt6/qml/org/kde/scribbleway" \
+    "/usr/local/lib/qt6/qml/org/kde/scribbleway" \
+    "/usr/local/lib/x86_64-linux-gnu/qt6/qml/org/kde/scribbleway"; do
     if [ -d "$dir" ] || [ -L "$dir" ]; then
         echo "Removing: $dir"
-        rm -rf "$dir"
+        if [ -w "$dir" ] || [ -w "$(dirname "$dir")" ]; then
+            rm -rf "$dir"
+        else
+            sudo rm -rf "$dir" 2>/dev/null || true
+        fi
     fi
 done
+
+echo "Clearing QML and Plasma caches..."
+rm -rf "$HOME/.cache/qmlcache"
+rm -rf "$HOME/.cache/plasmashell"
+rm -rf "$HOME/.cache/plasma"* 2>/dev/null || true
 
 # 3. Delete desktop entries and autostart files
 for file in \
