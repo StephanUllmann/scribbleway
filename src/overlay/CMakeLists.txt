@@ -27,6 +27,32 @@ qt_add_qml_module(scribbleway-overlay
         qml/shapes/TextShape.qml
         qml/shapes/RoughPathGenerator.js
         qml/shapes/RoughStroke.qml
+        qml/FullRepresentation.qml
+)
+
+qt_add_resources(scribbleway-overlay "icons"
+    PREFIX "/icons"
+    BASE icons
+    FILES
+        icons/arrow-down.svg
+        icons/arrow-right.svg
+        icons/color-picker.svg
+        icons/draw-freehand.svg
+        icons/draw-rectangle.svg
+        icons/draw-ellipse.svg
+        icons/draw-line.svg
+        icons/draw-arrow.svg
+        icons/draw-text.svg
+        icons/edit-clear.svg
+        icons/edit-delete.svg
+        icons/edit-redo.svg
+        icons/edit-select.svg
+        icons/edit-undo.svg
+        icons/go-down.svg
+        icons/go-up.svg
+        icons/object-locked.svg
+        icons/object-unlocked.svg
+        icons/run-build.svg
 )
 
 target_link_libraries(scribbleway-overlay PRIVATE

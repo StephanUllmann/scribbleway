@@ -28,13 +28,58 @@ Item {
         readonly property color warningColor: "#f39c12"
     }
 
-    // Dynamic backend provider for both Plasma applet (root.backend) and Standalone mode (controller)
-    readonly property var backend: (typeof root !== "undefined" && root && root.backend) ? root.backend : (typeof controller !== "undefined" ? controller : null)
+    readonly property var backend: controller
+
+    // Route property changes: to the selected shape if there is one, else to defaults.
+    function setColor(color) {
+        if (backend.hasSelection) backend.updateProperties({color: color})
+        else backend.setDefaultColor(color)
+    }
+    function setStrokeWidth(width) {
+        if (backend.hasSelection) backend.updateProperties({strokeWidth: width})
+        else backend.setDefaultStrokeWidth(width)
+    }
+    function setOpacity(opacity) {
+        if (backend.hasSelection) backend.updateProperties({opacity: opacity})
+        else backend.setDefaultOpacity(opacity)
+    }
+    function setFillColor(color) {
+        if (backend.hasSelection) backend.updateProperties({fillColor: color})
+        else backend.setDefaultFillColor(color)
+    }
+    function setFillOpacity(opacity) {
+        if (backend.hasSelection) backend.updateProperties({fillOpacity: opacity})
+        else backend.setDefaultFillOpacity(opacity)
+    }
+    function setGlow(glow) {
+        if (backend.hasSelection) backend.updateProperties({glow: glow})
+        else backend.setDefaultGlow(glow)
+    }
+    function setFreehandSmoothing(level) {
+        if (backend.hasSelection) backend.updateProperties({freehandSmoothing: level})
+        else backend.setDefaultFreehandSmoothing(level)
+    }
+    function setRoughness(roughness) {
+        if (backend.hasSelection) backend.updateProperties({roughness: roughness})
+        else backend.setDefaultRoughness(roughness)
+    }
+    function setBorderRadius(radius) {
+        if (backend.hasSelection) backend.updateProperties({borderRadius: radius})
+        else backend.setDefaultBorderRadius(radius)
+    }
+    function setFontFamily(family) {
+        if (backend.hasSelection) backend.updateProperties({fontFamily: family})
+        else backend.setDefaultFontFamily(family)
+    }
+    function setFontSize(size) {
+        if (backend.hasSelection) backend.updateProperties({fontSize: size})
+        else backend.setDefaultFontSize(size)
+    }
 
     // Track the currently selected tool name for draw mode
     property string activeDrawTool: "freehand"
     property bool isFillableActive: {
-        if (backend && backend.hasSelection) {
+        if (backend.hasSelection) {
             let t = backend.selectedType.toLowerCase();
             return t === "rectangle" || t === "ellipse";
         }
@@ -42,7 +87,7 @@ Item {
     }
 
     property bool isTextActive: {
-        if (backend && backend.hasSelection) {
+        if (backend.hasSelection) {
             return backend.selectedType.toLowerCase() === "text";
         }
         return activeDrawTool === "text";
@@ -52,7 +97,7 @@ Item {
         id: colorDialog
         title: "Choose Custom Color"
         onAccepted: {
-            if (backend) backend.setColor(colorDialog.selectedColor.toString())
+            fullRoot.setColor(colorDialog.selectedColor.toString())
         }
     }
 
@@ -60,7 +105,7 @@ Item {
         id: fillColorDialog
         title: "Choose Fill Color"
         onAccepted: {
-            if (backend) backend.setFillColor(fillColorDialog.selectedColor.toString())
+            fullRoot.setFillColor(fillColorDialog.selectedColor.toString())
         }
     }
 
@@ -84,37 +129,11 @@ Item {
                     color: palette.text
                     Layout.fillWidth: true
                 }
-
-                Controls.Label {
-                    text: (backend && backend.overlayConnected) ? "Running" : "Stopped"
-                    font.bold: true
-                }
-            }
-
-            // Not Running View
-            ColumnLayout {
-                Layout.fillWidth: true
-                visible: backend && !backend.overlayConnected
-                spacing: theme.largeSpacing
-
-                Controls.Label {
-                    text: "Scribbleway daemon is not running."
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                }
-
-                Controls.Button {
-                    text: "Start Scribbleway"
-                    icon.source: "qrc:/icons/run-build.svg"
-                    Layout.alignment: Qt.AlignHCenter
-                    onClicked: { if (backend) backend.startOverlay() }
-                }
             }
 
             // Running View
             ColumnLayout {
                 Layout.fillWidth: true
-                visible: !backend || backend.overlayConnected
                 spacing: theme.smallSpacing
 
                 // Mode Toggle Row
@@ -126,10 +145,10 @@ Item {
                         icon.source: "qrc:/icons/draw-freehand.svg"
                         text: "Draw"
                         checkable: true
-                        checked: backend ? backend.activeTool !== "select" : true
+                        checked: backend.activeTool !== "select"
                         Layout.fillWidth: true
                         onClicked: {
-                            if (backend && backend.activeTool === "select") {
+                            if (backend.activeTool === "select") {
                                 backend.setActiveTool(fullRoot.activeDrawTool)
                             }
                         }
@@ -139,10 +158,10 @@ Item {
                         icon.source: "qrc:/icons/edit-select.svg"
                         text: "Select"
                         checkable: true
-                        checked: backend ? backend.activeTool === "select" : false
+                        checked: backend.activeTool === "select"
                         Layout.fillWidth: true
                         onClicked: {
-                            if (backend) backend.setActiveTool("select")
+                            backend.setActiveTool("select")
                         }
                     }
 
@@ -150,27 +169,27 @@ Item {
                         icon.source: "qrc:/icons/edit-undo.svg"
                         text: "Undo"
                         Layout.fillWidth: true
-                        onClicked: { if (backend) backend.undo() }
+                        onClicked: { backend.undo() }
                     }
 
                     Controls.Button {
                         icon.source: "qrc:/icons/edit-redo.svg"
                         text: "Redo"
                         Layout.fillWidth: true
-                        onClicked: { if (backend) backend.redo() }
+                        onClicked: { backend.redo() }
                     }
 
                     Controls.Button {
                         icon.source: "qrc:/icons/edit-clear.svg"
                         text: "Clear All"
                         Layout.fillWidth: true
-                        onClicked: { if (backend) backend.clearAll() }
+                        onClicked: { backend.clear() }
                     }
                 }
 
                 // Section Header
                 Controls.Label {
-                    text: (backend && backend.hasSelection) ? "Edit Selection (" + backend.selectedType + ")" : "Default Properties & Tool"
+                    text: backend.hasSelection ? "Edit Selection (" + backend.selectedType + ")" : "Default Properties & Tool"
                     font.bold: true
                     font.pixelSize: 11
                     color: theme.highlightColor
@@ -179,26 +198,26 @@ Item {
                 // Selection Management Row
                 RowLayout {
                     Layout.fillWidth: true
-                    visible: backend && backend.hasSelection
+                    visible: backend.hasSelection
                     spacing: theme.smallSpacing
 
                     Controls.Button {
                         icon.source: "qrc:/icons/edit-delete.svg"
                         text: "Delete"
                         Layout.fillWidth: true
-                        onClicked: { if (backend) backend.deleteSelected() }
+                        onClicked: { backend.deleteSelected() }
                     }
 
                     Controls.Button {
                         icon.source: "qrc:/icons/go-up.svg"
                         text: "Raise"
-                        onClicked: { if (backend) backend.raiseSelected() }
+                        onClicked: { backend.raiseSelected() }
                     }
 
                     Controls.Button {
                         icon.source: "qrc:/icons/go-down.svg"
                         text: "Lower"
-                        onClicked: { if (backend) backend.lowerSelected() }
+                        onClicked: { backend.lowerSelected() }
                     }
                 }
 
@@ -215,7 +234,6 @@ Item {
                         Layout.fillWidth: true
                         model: ["Freehand", "Arrow", "Rectangle", "Ellipse", "Line", "Text"]
                         currentIndex: {
-                            if (!backend) return 0;
                             let tool = backend.activeTool.toLowerCase()
                             if (tool === "arrow") return 1
                             if (tool === "rectangle") return 2
@@ -228,7 +246,7 @@ Item {
                             let tools = ["freehand", "arrow", "rectangle", "ellipse", "line", "text"]
                             let selected = tools[index]
                             fullRoot.activeDrawTool = selected
-                            if (backend) backend.setActiveTool(selected)
+                            backend.setActiveTool(selected)
                         }
                     }
 
@@ -238,14 +256,13 @@ Item {
 
                     Controls.ComboBox {
                         Layout.fillWidth: true
-                        model: (backend && backend.screenNames) ? backend.screenNames : []
+                        model: backend.screenNames
                         currentIndex: {
-                            if (!backend || !backend.screenNames) return 0;
                             let idx = backend.screenNames.indexOf(backend.targetScreen)
                             return idx >= 0 ? idx : 0
                         }
                         onActivated: {
-                            if (backend) backend.setTargetScreen(currentValue)
+                            backend.setTargetScreen(currentValue)
                         }
                     }
                 }
@@ -265,7 +282,7 @@ Item {
                         spacing: theme.smallSpacing
 
                         property var colors: ["#e63946", "#f4a261", "#e9c46a", "#2a9d8f", "#457b9d", "#8338ec"]
-                        property string activeColor: (backend && backend.hasSelection) ? backend.selectedColor : (backend ? backend.defaultColor : "#e63946")
+                        property string activeColor: backend.hasSelection ? backend.selectedColor : backend.defaultColor
 
                         Repeater {
                             model: parent.colors
@@ -280,7 +297,7 @@ Item {
 
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: { if (backend) backend.setColor(modelData) }
+                                    onClicked: { fullRoot.setColor(modelData) }
                                 }
                             }
                         }
@@ -311,12 +328,12 @@ Item {
                         from: 1
                         to: 15
                         stepSize: 1
-                        value: (backend && backend.hasSelection) ? backend.selectedStrokeWidth : (backend ? backend.defaultStrokeWidth : 2)
-                        onMoved: { if (backend) backend.setStrokeWidth(value) }
+                        value: backend.hasSelection ? backend.selectedStrokeWidth : backend.defaultStrokeWidth
+                        onMoved: { fullRoot.setStrokeWidth(value) }
                     }
 
                     Controls.Label {
-                        text: Math.round((backend && backend.hasSelection) ? backend.selectedStrokeWidth : (backend ? backend.defaultStrokeWidth : 2)) + "px"
+                        text: Math.round(backend.hasSelection ? backend.selectedStrokeWidth : backend.defaultStrokeWidth) + "px"
                     }
                 }
 
@@ -335,12 +352,12 @@ Item {
                         from: 0.1
                         to: 1.0
                         stepSize: 0.05
-                        value: (backend && backend.hasSelection) ? backend.selectedOpacity : (backend ? backend.defaultOpacity : 1.0)
-                        onMoved: { if (backend) backend.setOpacity(value) }
+                        value: backend.hasSelection ? backend.selectedOpacity : backend.defaultOpacity
+                        onMoved: { fullRoot.setOpacity(value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(((backend && backend.hasSelection) ? backend.selectedOpacity : (backend ? backend.defaultOpacity : 1.0)) * 100) + "%"
+                        text: Math.round((backend.hasSelection ? backend.selectedOpacity : backend.defaultOpacity) * 100) + "%"
                     }
                 }
 
@@ -365,7 +382,7 @@ Item {
                             spacing: theme.smallSpacing
 
                             property var colors: ["#e63946", "#f4a261", "#e9c46a", "#2a9d8f", "#457b9d", "#8338ec"]
-                            property string activeFill: backend ? backend.selectedFillColor : "transparent"
+                            property string activeFill: backend.selectedFillColor
 
                             Rectangle {
                                 width: theme.gridUnit * 1.5
@@ -385,7 +402,7 @@ Item {
 
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: { if (backend) backend.setFillColor("transparent") }
+                                    onClicked: { fullRoot.setFillColor("transparent") }
                                 }
                             }
 
@@ -402,7 +419,7 @@ Item {
 
                                     MouseArea {
                                         anchors.fill: parent
-                                        onClicked: { if (backend) backend.setFillColor(modelData) }
+                                        onClicked: { fullRoot.setFillColor(modelData) }
                                     }
                                 }
                             }
@@ -432,12 +449,12 @@ Item {
                             from: 0.0
                             to: 1.0
                             stepSize: 0.05
-                            value: backend ? backend.selectedFillOpacity : 0.12
-                            onMoved: { if (backend) backend.setFillOpacity(value) }
+                            value: backend.selectedFillOpacity
+                            onMoved: { fullRoot.setFillOpacity(value) }
                         }
 
                         Controls.Label {
-                            text: Math.round((backend ? backend.selectedFillOpacity : 0.12) * 100) + "%"
+                            text: Math.round(backend.selectedFillOpacity * 100) + "%"
                         }
                     }
                 }
@@ -457,12 +474,12 @@ Item {
                         from: 0
                         to: 30
                         stepSize: 1
-                        value: backend ? backend.selectedGlow : 10
-                        onMoved: { if (backend) backend.setGlow(value) }
+                        value: backend.selectedGlow
+                        onMoved: { fullRoot.setGlow(value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(backend ? backend.selectedGlow : 10) + "px"
+                        text: Math.round(backend.selectedGlow) + "px"
                     }
                 }
 
@@ -481,13 +498,13 @@ Item {
                         from: 0
                         to: 3
                         stepSize: 1
-                        value: backend ? backend.selectedFreehandSmoothing : 2
-                        onMoved: { if (backend) backend.setFreehandSmoothing(value) }
+                        value: backend.selectedFreehandSmoothing
+                        onMoved: { fullRoot.setFreehandSmoothing(value) }
                     }
 
                     Controls.Label {
                         text: {
-                            let v = Math.round(backend ? backend.selectedFreehandSmoothing : 2)
+                            let v = Math.round(backend.selectedFreehandSmoothing)
                             if (v <= 0) return "Off"
                             if (v === 1) return "Low"
                             if (v === 2) return "Med"
@@ -508,8 +525,8 @@ Item {
                     Controls.ComboBox {
                         Layout.fillWidth: true
                         model: ["Neat (0)", "Artist (1)", "Cartoon (2)"]
-                        currentIndex: Math.min(2, Math.max(0, Math.round(backend ? backend.selectedRoughness : 1)))
-                        onActivated: { if (backend) backend.setRoughness(index) }
+                        currentIndex: Math.min(2, Math.max(0, Math.round(backend.selectedRoughness)))
+                        onActivated: { fullRoot.setRoughness(index) }
                     }
 
                     Controls.Label {
@@ -522,12 +539,12 @@ Item {
                         from: 0
                         to: 50
                         stepSize: 1
-                        value: backend ? backend.selectedBorderRadius : 8
-                        onMoved: { if (backend) backend.setBorderRadius(value) }
+                        value: backend.selectedBorderRadius
+                        onMoved: { fullRoot.setBorderRadius(value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(backend ? backend.selectedBorderRadius : 8) + "px"
+                        text: Math.round(backend.selectedBorderRadius) + "px"
                     }
                 }
 
@@ -548,12 +565,11 @@ Item {
                             Layout.fillWidth: true
                             model: ["sans-serif", "serif", "monospace", "Comic Sans MS"]
                             currentIndex: {
-                                if (!backend) return 0;
                                 let f = backend.selectedFontFamily
                                 let idx = model.indexOf(f)
                                 return idx >= 0 ? idx : 0
                             }
-                            onActivated: { if (backend) backend.setFontFamily(currentValue) }
+                            onActivated: { fullRoot.setFontFamily(currentValue) }
                         }
                     }
 
@@ -569,12 +585,12 @@ Item {
                             from: 10
                             to: 72
                             stepSize: 1
-                            value: backend ? backend.selectedFontSize : 20
-                            onMoved: { if (backend) backend.setFontSize(value) }
+                            value: backend.selectedFontSize
+                            onMoved: { fullRoot.setFontSize(value) }
                         }
 
                         Controls.Label {
-                            text: Math.round(backend ? backend.selectedFontSize : 20) + "px"
+                            text: Math.round(backend.selectedFontSize) + "px"
                         }
                     }
                 }
@@ -594,7 +610,7 @@ Item {
 
                     ListView {
                         id: shapesListView
-                        model: backend ? backend.shapesMetadata : []
+                        model: backend.shapesMetadata
 
                         delegate: Controls.ItemDelegate {
                             width: shapesListView.width
@@ -615,11 +631,11 @@ Item {
                                     source: {
                                         let t = modelData && modelData.type ? modelData.type.toLowerCase() : "";
                                         switch(t) {
-                                            case "rectangle": return "qrc:/icons/edit-select.svg";
-                                            case "ellipse": return "qrc:/icons/edit-select.svg";
-                                            case "arrow": return "qrc:/icons/arrow-right.svg";
-                                            case "line": return "qrc:/icons/arrow-right.svg";
-                                            case "text": return "qrc:/icons/draw-freehand.svg";
+                                            case "rectangle": return "qrc:/icons/draw-rectangle.svg";
+                                            case "ellipse": return "qrc:/icons/draw-ellipse.svg";
+                                            case "arrow": return "qrc:/icons/draw-arrow.svg";
+                                            case "line": return "qrc:/icons/draw-line.svg";
+                                            case "text": return "qrc:/icons/draw-text.svg";
                                             default: return "qrc:/icons/draw-freehand.svg";
                                         }
                                     }
@@ -637,20 +653,20 @@ Item {
                                 Controls.ToolButton {
                                     icon.source: (modelData && modelData.locked) ? "qrc:/icons/object-locked.svg" : "qrc:/icons/object-unlocked.svg"
                                     onClicked: {
-                                        if (backend) backend.setShapeLocked(index, !(modelData && modelData.locked))
+                                        backend.setShapeLocked(index, !(modelData && modelData.locked))
                                     }
                                 }
 
                                 Controls.ToolButton {
                                     icon.source: "qrc:/icons/edit-delete.svg"
                                     onClicked: {
-                                        if (backend) backend.deleteShape(index)
+                                        backend.deleteShape(index)
                                     }
                                 }
                             }
 
                             onClicked: {
-                                if (backend) backend.selectShape(index)
+                                backend.selectShape(index)
                             }
                         }
 
