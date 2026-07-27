@@ -28,6 +28,7 @@ qt_add_qml_module(scribbleway-overlay
         qml/shapes/RoughPathGenerator.js
         qml/shapes/RoughStroke.qml
         qml/FullRepresentation.qml
+        qml/TrayPopup.qml
 )
 
 qt_add_resources(scribbleway-overlay "icons"
@@ -58,6 +59,7 @@ qt_add_resources(scribbleway-overlay "icons"
 target_link_libraries(scribbleway-overlay PRIVATE
     Qt6::Quick
     Qt6::Qml
+    Qt6::Widgets
     Qt6::DBus
     KF6::GlobalAccel
     KF6::DBusAddons

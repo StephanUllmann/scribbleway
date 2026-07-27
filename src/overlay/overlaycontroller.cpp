@@ -569,8 +569,6 @@ void OverlayController::setSelectedIndex(int index)
 
 void OverlayController::updateInputMask(const QVariantList &rects)
 {
-    if (!m_window) return;
-    
     QRegion region;
     for (const QVariant &v : rects) {
         QRect r = v.toRectF().toRect();
@@ -578,14 +576,33 @@ void OverlayController::updateInputMask(const QVariantList &rects)
             region += r;
         }
     }
-    
+    m_baseInputMask = region;
+    applyInputMask();
+}
+
+void OverlayController::setPopupExclusion(const QRect &rect)
+{
+    if (m_popupExclusion == rect) return;
+    m_popupExclusion = rect;
+    applyInputMask();
+}
+
+void OverlayController::applyInputMask()
+{
+    if (!m_window) return;
+
+    QRegion region = m_baseInputMask;
+    if (m_popupExclusion.isValid()) {
+        region -= m_popupExclusion;
+    }
+
     // Safety fallback: if region is empty, set to a 1x1 pixel so the overlay is fully click-through.
-    // We cannot use off-screen coordinates or a truly empty region because Qt Wayland 
+    // We cannot use off-screen coordinates or a truly empty region because Qt Wayland
     // will treat it as "no mask" and block the entire screen.
     if (region.isEmpty()) {
         region += QRect(0, 0, 1, 1);
     }
-    
+
     if (m_lastInputMask == region) {
         return;
     }

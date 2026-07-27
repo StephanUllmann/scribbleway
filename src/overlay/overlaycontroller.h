@@ -146,6 +146,9 @@ public:
     // QML-invokable methods
     Q_INVOKABLE void setSelectedIndex(int index);
     Q_INVOKABLE void updateInputMask(const QVariantList &rects);
+    // Carve a rect (overlay-local coords) out of the input region so an on-top
+    // window (the Tray Popup) stays clickable while a tool is active. Empty = none.
+    void setPopupExclusion(const QRect &rect);
     Q_INVOKABLE void setKeyboardInteractivity(bool interactive);
     Q_INVOKABLE void beginEdit();
     Q_INVOKABLE void endEdit();
@@ -262,6 +265,9 @@ private:
     int m_defaultFreehandSmoothing = 2;
 
     QRegion m_lastInputMask;
+    QRegion m_baseInputMask;
+    QRect m_popupExclusion;
+    void applyInputMask();
 
     static constexpr double kSnapThreshold = 20.0;
     BindingHit findSnapTarget(double px, double py, int excludeIndex = -1) const;
