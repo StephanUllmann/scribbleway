@@ -39,6 +39,7 @@ private Q_SLOTS:
     void testRedoStackCapped();
     void testOverlayControllerRedo();
     void testOverlayControllerProperties();
+    void testOverlayControllerSelectionProperties();
     void testMoveShape();
     void testOverlayControllerCopyPaste();
     void testMultiSelection();
@@ -479,6 +480,29 @@ void ShapesModelTest::testOverlayControllerProperties()
     QVariantMap updatedShape = controller.shapesModel()->shapes().first();
     QCOMPARE(updatedShape[QStringLiteral("color")].toString(), QStringLiteral("#ff0000"));
     QCOMPARE(updatedShape[QStringLiteral("strokeWidth")].toInt(), 8);
+}
+
+void ShapesModelTest::testOverlayControllerSelectionProperties()
+{
+    OverlayController controller;
+
+    // No selection: falls back to defaults, matching getSelectionState()
+    QCOMPARE(controller.hasSelection(), false);
+    QCOMPARE(controller.selectedColor(), controller.defaultColor());
+    QCOMPARE(controller.selectedStrokeWidth(), controller.defaultStrokeWidth());
+
+    QVariantMap shape;
+    shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+    shape[QStringLiteral("color")] = QStringLiteral("#00ffff");
+    shape[QStringLiteral("strokeWidth")] = 7;
+    controller.addShape(shape);
+
+    QCOMPARE(controller.hasSelection(), true);
+    QCOMPARE(controller.selectedType(), QStringLiteral("rectangle"));
+    QCOMPARE(controller.selectedColor(), QStringLiteral("#00ffff"));
+    QCOMPARE(controller.selectedStrokeWidth(), 7);
+
+    QVERIFY(!controller.screenNames().isEmpty());
 }
 
 void ShapesModelTest::testMoveShape()

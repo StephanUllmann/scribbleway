@@ -55,6 +55,23 @@ class OverlayController : public QObject
     Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
     Q_PROPERTY(QString selectedShapeType READ selectedShapeType NOTIFY selectionChanged)
     Q_PROPERTY(QVariantMap localShortcutSequences READ localShortcutSequences NOTIFY localShortcutsChanged)
+    Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
+    Q_PROPERTY(QString selectedType READ selectedType NOTIFY selectionChanged)
+    Q_PROPERTY(QString selectedColor READ selectedColor NOTIFY selectionChanged)
+    Q_PROPERTY(int selectedStrokeWidth READ selectedStrokeWidth NOTIFY selectionChanged)
+    Q_PROPERTY(double selectedOpacity READ selectedOpacity NOTIFY selectionChanged)
+    Q_PROPERTY(QString selectedFontFamily READ selectedFontFamily NOTIFY selectionChanged)
+    Q_PROPERTY(int selectedFontSize READ selectedFontSize NOTIFY selectionChanged)
+    Q_PROPERTY(int selectedBorderRadius READ selectedBorderRadius NOTIFY selectionChanged)
+    Q_PROPERTY(int selectedRoughness READ selectedRoughness NOTIFY selectionChanged)
+    Q_PROPERTY(int selectedGlow READ selectedGlow NOTIFY selectionChanged)
+    Q_PROPERTY(QString selectedFillColor READ selectedFillColor NOTIFY selectionChanged)
+    Q_PROPERTY(double selectedFillOpacity READ selectedFillOpacity NOTIFY selectionChanged)
+    Q_PROPERTY(int selectedFreehandSmoothing READ selectedFreehandSmoothing NOTIFY selectionChanged)
+    Q_PROPERTY(bool selectedLocked READ selectedLocked NOTIFY selectionChanged)
+    Q_PROPERTY(QVariantList shapesMetadata READ shapesMetadata NOTIFY shapesMetadataChanged)
+    Q_PROPERTY(QStringList screenNames READ screenNames CONSTANT)
+    Q_PROPERTY(QString targetScreen READ targetScreen NOTIFY targetScreenChanged)
 
 public:
     explicit OverlayController(QObject *parent = nullptr);
@@ -65,6 +82,23 @@ public:
     int selectedIndex() const;
     bool hasMultiSelection() const;
     QString selectedShapeType() const;
+
+    bool hasSelection() const;
+    QString selectedType() const;
+    QString selectedColor() const;
+    int selectedStrokeWidth() const;
+    double selectedOpacity() const;
+    QString selectedFontFamily() const;
+    int selectedFontSize() const;
+    int selectedBorderRadius() const;
+    int selectedRoughness() const;
+    int selectedGlow() const;
+    QString selectedFillColor() const;
+    double selectedFillOpacity() const;
+    int selectedFreehandSmoothing() const;
+    bool selectedLocked() const;
+    QStringList screenNames() const;
+    QString targetScreen() const;
 
     QString currentMode() const;
 
@@ -185,6 +219,7 @@ Q_SIGNALS:
     void modeChanged(const QString &mode);
     void shortcutsChanged(const QVariantList &shortcuts);
     void localShortcutsChanged();
+    void targetScreenChanged();
 
     // Command signals to QML
     void enterSelectModeRequested();
@@ -212,6 +247,7 @@ private:
     QSet<int> m_preDragSelection;
 
     QString m_activeTool;
+    QString m_targetScreen;
     QString m_currentMode = QStringLiteral("passthrough");
     QString m_defaultColor;
     int m_defaultStrokeWidth = 2;

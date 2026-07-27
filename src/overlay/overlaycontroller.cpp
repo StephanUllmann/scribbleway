@@ -636,6 +636,90 @@ QVariantMap OverlayController::getSelectionState()
     return state;
 }
 
+bool OverlayController::hasSelection() const
+{
+    return m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount();
+}
+
+QString OverlayController::selectedType() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("type")).toString();
+}
+
+QString OverlayController::selectedColor() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("color")).toString();
+}
+
+int OverlayController::selectedStrokeWidth() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("strokeWidth")).toInt();
+}
+
+double OverlayController::selectedOpacity() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("opacity")).toDouble();
+}
+
+QString OverlayController::selectedFontFamily() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("fontFamily")).toString();
+}
+
+int OverlayController::selectedFontSize() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("fontSize")).toInt();
+}
+
+int OverlayController::selectedBorderRadius() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("borderRadius")).toInt();
+}
+
+int OverlayController::selectedRoughness() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("roughness")).toInt();
+}
+
+int OverlayController::selectedGlow() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("glow")).toInt();
+}
+
+QString OverlayController::selectedFillColor() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("fillColor")).toString();
+}
+
+double OverlayController::selectedFillOpacity() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("fillOpacity")).toDouble();
+}
+
+int OverlayController::selectedFreehandSmoothing() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("freehandSmoothing")).toInt();
+}
+
+bool OverlayController::selectedLocked() const
+{
+    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("locked")).toBool();
+}
+
+QStringList OverlayController::screenNames() const
+{
+    QStringList names;
+    for (QScreen *screen : QGuiApplication::screens()) {
+        names << screen->name();
+    }
+    return names;
+}
+
+QString OverlayController::targetScreen() const
+{
+    return m_targetScreen;
+}
+
 
 
 void OverlayController::updateProperties(const QVariantMap &properties)
@@ -793,6 +877,11 @@ void OverlayController::setTargetScreen(const QString &screenName)
         m_window->hide();
         m_window->setScreen(target);
         m_window->show();
+    }
+
+    if (m_targetScreen != screenName) {
+        m_targetScreen = screenName;
+        Q_EMIT targetScreenChanged();
     }
 }
 
