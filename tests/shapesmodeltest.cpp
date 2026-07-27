@@ -12,6 +12,7 @@
 #include "shapesmodel.h"
 #include "overlaycontroller.h"
 #include "appletbackend.h"
+#include "singleinstance.h"
 #include <QFontDatabase>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -40,6 +41,7 @@ private Q_SLOTS:
     void testOverlayControllerRedo();
     void testOverlayControllerProperties();
     void testOverlayControllerSelectionProperties();
+    void testSingleInstanceGuard();
     void testMoveShape();
     void testOverlayControllerCopyPaste();
     void testMultiSelection();
@@ -503,6 +505,15 @@ void ShapesModelTest::testOverlayControllerSelectionProperties()
     QCOMPARE(controller.selectedStrokeWidth(), 7);
 
     QVERIFY(!controller.screenNames().isEmpty());
+}
+
+void ShapesModelTest::testSingleInstanceGuard()
+{
+    SingleInstanceGuard first(QStringLiteral("scribbleway-test-lock"));
+    QVERIFY(first.tryAcquire());
+
+    SingleInstanceGuard second(QStringLiteral("scribbleway-test-lock"));
+    QVERIFY(!second.tryAcquire());
 }
 
 void ShapesModelTest::testMoveShape()

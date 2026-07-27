@@ -8,6 +8,7 @@ add_executable(shapesmodeltest
     ../src/overlay/shapesmodel.cpp
     ../src/overlay/overlaycontroller.h
     ../src/overlay/overlaycontroller.cpp
+    ../src/overlay/singleinstance.h
     ../src/applet-plugin/appletbackend.h
     ../src/applet-plugin/appletbackend.cpp
 )
