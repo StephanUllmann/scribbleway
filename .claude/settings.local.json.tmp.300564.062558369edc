@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/stephan/.agents/skills/grill-with-docs/**)",
+      "Bash(awk -F: '{print $1, $0}')",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(./dev-reinstall.sh --no-plasma)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'chore: delete unwired OverlayPlatform scaffold and unused dev scripts *)"
+    ]
+  }
+}
