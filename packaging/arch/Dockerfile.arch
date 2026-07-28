@@ -3,7 +3,7 @@ FROM archlinux:latest
 # Update keyring first to avoid signature verification issues, then system packages and dependencies
 RUN pacman -Sy --noconfirm archlinux-keyring && \
     pacman -Syu --noconfirm && \
-    pacman -S --noconfirm base-devel git cmake extra-cmake-modules plasma-desktop layer-shell-qt kglobalaccel kdbusaddons qt6-declarative qt6-base
+    pacman -S --noconfirm base-devel git cmake extra-cmake-modules layer-shell-qt kglobalaccel qt6-declarative qt6-base
 
 # Create a non-root builduser with sudo privileges
 RUN useradd -m -G wheel builduser && \
