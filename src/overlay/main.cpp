@@ -162,9 +162,14 @@ int main(int argc, char *argv[])
             layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
             layerWindow->setExclusiveZone(0);
             layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
-            // Qt-Wayland ignores setScreen() (compositor owns placement), so let KWin
-            // pick the output — it maps a null-output layer surface on the active screen.
+            // Qt-Wayland ignores setScreen() (compositor owns placement), so let the
+            // compositor pick the output — it maps a null-output layer surface on the
+            // active screen. setScreenConfiguration() is the pre-6.6 spelling of this.
+#ifdef HAVE_LAYERSHELL_ACTIVE_SCREEN
+            layerWindow->setWantsToBeOnActiveScreen(true);
+#else
             layerWindow->setScreenConfiguration(LayerShellQt::Window::ScreenFromCompositor);
+#endif
             layerWindow->setScope(QStringLiteral("scribbleway-traypopup"));
         }
     };

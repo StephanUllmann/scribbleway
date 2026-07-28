@@ -64,5 +64,12 @@ target_link_libraries(scribbleway-overlay PRIVATE
     LayerShellQt::Interface
 )
 
+# setScreenConfiguration() is deprecated since LayerShellQt 6.6 in favour of
+# wantsToBeOnActiveScreen(), which older distros (Ubuntu 25.04 ships 6.5) do not
+# have yet. Build against whichever exists.
+if(LayerShellQt_VERSION VERSION_GREATER_EQUAL 6.6)
+    target_compile_definitions(scribbleway-overlay PRIVATE HAVE_LAYERSHELL_ACTIVE_SCREEN)
+endif()
+
 # Install executable to standard bin directory
 install(TARGETS scribbleway-overlay DESTINATION ${KDE_INSTALL_BINDIR})
