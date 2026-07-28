@@ -22,24 +22,38 @@ ARG GID=1000
 RUN groupadd -g "$GID" user && useradd -u "$UID" -g "$GID" -m user && \
     mkdir -p /out && chown "$UID:$GID" /out
 
-# `monitor=` sizes the nested output window. QT_QPA_PLATFORM=wayland is
-# required or LayerShellQt never attaches.
-RUN mkdir -p /home/user/.config/hypr && cat > /home/user/.config/hypr/hyprland.conf <<'EOF'
-monitor = ,1600x900@60,0x0,1
+# Lua, not hyprland.conf: Hyprland switched config languages in 0.55 and plans to
+# drop hyprlang a release or two later. hl.monitor sizes the nested output window.
+# QT_QPA_PLATFORM=wayland is required or LayerShellQt never attaches.
+RUN mkdir -p /home/user/.config/hypr && cat > /home/user/.config/hypr/hyprland.lua <<'EOF'
+hl.monitor({
+    output   = "",
+    mode     = "1600x900@60",
+    position = "0x0",
+    scale    = 1,
+})
 
-env = QT_QPA_PLATFORM,wayland
+hl.env("QT_QPA_PLATFORM", "wayland")
 
-misc {
-    disable_hyprland_logo = true
-    disable_splash_rendering = true
-    force_default_wallpaper = 0
-}
+hl.config({
+    misc = {
+        disable_hyprland_logo    = true,
+        disable_splash_rendering = true,
+        force_default_wallpaper  = 0,
+    },
+})
 
-exec-once = waybar > /out/waybar.log 2>&1
-# Delayed so Waybar's StatusNotifierHost has registered first. Starting it
-# immediately is the interesting race; a clean baseline comes first.
-exec-once = sh -c 'sleep 3; exec scribbleway-overlay > /out/scribbleway.log 2>&1'
-exec-once = /usr/local/bin/check.sh
+-- Verbatim the line the README tells Hyprland users to add. KGlobalAccel is inert
+-- without kglobalacceld, so this is the only way into the overlay here.
+hl.bind("SUPER + SHIFT + X", hl.dsp.exec_cmd("scribbleway-overlay --toggle"))
+
+hl.on("hyprland.start", function()
+    hl.exec_cmd("sh -c 'exec waybar > /out/waybar.log 2>&1'")
+    -- Delayed so Waybar's StatusNotifierHost has registered first. Starting it
+    -- immediately is the interesting race; a clean baseline comes first.
+    hl.exec_cmd("sh -c 'sleep 3; exec scribbleway-overlay > /out/scribbleway.log 2>&1'")
+    hl.exec_cmd("/usr/local/bin/check.sh")
+end)
 EOF
 
 # Collects everything in Task 4 that is checkable without a pointer device.
@@ -74,17 +88,7 @@ else
 fi
 
 echo
-echo "=== global shortcut: must not crash the app ==="
-wtype -M logo -M shift -k x -m shift -m logo 2>&1 || echo "wtype failed"
-sleep 2
-if pgrep -f scribbleway-overlay >/dev/null; then
-    echo "SURVIVED Meta+Shift+X"
-else
-    echo "DIED on Meta+Shift+X"
-fi
-
-echo
-echo "=== keyboard: --toggle must enter a mode, local hotkeys must reach QML ==="
+echo "=== keyboard: Super+Shift+X must enter a mode, local hotkeys must reach QML ==="
 # There is no compositor-side query for "who holds keyboard focus", so assert on
 # what the user would see instead: a mode change has to repaint. Crop away the
 # waybar clock, which ticks on its own and would differ every capture.
@@ -103,16 +107,16 @@ LEAKED=$(shot 2-passthrough-after-e)
     && echo "PASS passthrough ignores 'e' ($BASE)" \
     || echo "FAIL passthrough reacted to 'e' ($BASE -> $LEAKED) — overlay is eating keys it should pass through"
 
-# KGlobalAccel is inert here, so --toggle is the only way in. If it doesn't reach the
-# daemon, the overlay stays in passthrough and 'e' below stays inert too.
-scribbleway-overlay --toggle
-sleep 2
+# Drive the compositor keybind rather than calling --toggle directly: that exercises
+# the whole documented path, Hyprland bind -> exec -> single-instance socket -> daemon.
+wtype -M logo -M shift -k x -m shift -m logo 2>&1 || echo "wtype failed"
+sleep 3
 wtype e 2>&1 || echo "wtype failed"
 sleep 2
 ACTIVE=$(shot 3-ellipse-tool)
 [ "$ACTIVE" != "$BASE" ] \
-    && echo "PASS --toggle entered a mode and 'e' reached QML ($BASE -> $ACTIVE)" \
-    || echo "FAIL still inert after --toggle ($BASE) — toggle never landed, or no keyboard focus"
+    && echo "PASS Super+Shift+X entered a mode and 'e' reached QML ($BASE -> $ACTIVE)" \
+    || echo "FAIL still inert ($BASE) — the bind never reached the daemon, or no keyboard focus"
 
 wtype -k Escape 2>&1 || true
 sleep 1
@@ -128,7 +132,9 @@ cat /out/scribbleway.log 2>/dev/null || echo "(no log)"
 
 grim /out/screen.png 2>&1 || echo "grim failed"
 
-[ -n "${KEEP_OPEN:-}" ] || hyprctl dispatch exit
+# Lua config changed dispatcher syntax: plain `dispatch exit` errors out, which used
+# to leave the container running forever.
+[ -n "${KEEP_OPEN:-}" ] || hyprctl dispatch 'hl.dsp.exit()'
 EOF
 RUN chmod +x /usr/local/bin/check.sh && chown -R "$UID:$GID" /home/user
 

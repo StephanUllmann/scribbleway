@@ -154,10 +154,21 @@ nothing without Plasma's `kglobalacceld`. Bind the compositor's own hotkey to
 `--toggle` instead — it hands the request to the running daemon over the
 single-instance socket, and starts it if it isn't running yet:
 
+```lua
+-- ~/.config/hypr/hyprland.lua
+hl.bind("SUPER + SHIFT + X", hl.dsp.exec_cmd("scribbleway-overlay --toggle"))
 ```
-# ~/.config/hypr/hyprland.conf
+
+Hyprland switched its config language from hyprlang to Lua in 0.55. A legacy
+`hyprland.conf` is still read when no `hyprland.lua` exists, but upstream plans
+to drop it — on such a setup the equivalent line is:
+
+```
 bind = SUPER SHIFT, X, exec, scribbleway-overlay --toggle
 ```
+
+Other compositors bind the same command: `sway`/`niri`/`river` all take an
+`exec`-style spawn.
 
 The overlay-local hotkeys in the table below (`E`, `R`, `X`, `+`/`-`, …) work
 once a mode is active — the overlay takes exclusive keyboard focus while a tool

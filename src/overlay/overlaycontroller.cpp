@@ -1,6 +1,7 @@
 #include "overlaycontroller.h"
 #include <QtMath>
 #include <cmath>
+#include <QDebug>
 #include <QSettings>
 #include <QStringList>
 
@@ -867,6 +868,9 @@ void OverlayController::setKeyboardInteractivity(bool interactive)
 {
     if (!m_window) return;
     if (auto *layerWindow = LayerShellQt::Window::get(m_window)) {
+        // Logged because "my hotkeys don't work" is otherwise undebuggable from the
+        // outside: nothing about keyboard focus is visible in hyprctl/kwin output.
+        qInfo() << "keyboard interactivity:" << (interactive ? "exclusive" : "none");
         // Exclusive, not OnDemand: OnDemand means "focus me when the user clicks me",
         // and a layer surface has no way to ask for focus itself — QWindow::requestActivate()
         // is a no-op here. KWin happened to hand focus over anyway; Hyprland does not, so

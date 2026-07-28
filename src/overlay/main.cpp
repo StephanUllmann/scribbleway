@@ -63,6 +63,7 @@ int main(int argc, char *argv[])
                                                       {QKeySequence(QStringLiteral("Meta+Shift+X"))});
 
     auto toggleMode = [&controller]() {
+        qInfo() << "toggle requested, current mode:" << controller.currentMode();
         if (controller.currentMode() == QStringLiteral("passthrough")) {
             controller.enterSelectMode();
         } else {

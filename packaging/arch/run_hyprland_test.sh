@@ -41,7 +41,15 @@ docker build -q -t scribbleway-hyprland-test -f Dockerfile.hyprland \
 echo "=== Running nested Hyprland ==="
 # --group-add for /dev/dri: Hyprland's wayland backend still needs a render node
 # for EGL even though the host owns the actual output.
-docker run --rm \
+# Hard timeout unless --keep: a Hyprland that fails to exit on its own (a bad
+# `hyprctl dispatch` will do it) would otherwise hang here forever. Generous for
+# the ~30s of probes in check.sh.
+RUNNER=(timeout "${TIMEOUT:-180}")
+[ -n "$KEEP" ] && RUNNER=()
+# A previous timed-out run leaves the container behind and --name would clash.
+docker rm -f scribbleway-hyprland-test >/dev/null 2>&1 || true
+
+"${RUNNER[@]}" docker run --rm \
     --device /dev/dri \
     $(for g in video render; do echo --group-add "$(getent group "$g" | cut -d: -f3)"; done) \
     -v "$HOST_SOCKET:/tmp/host-wayland.sock" \
@@ -50,6 +58,7 @@ docker run --rm \
     -e "KEEP_OPEN=$KEEP" \
     --name scribbleway-hyprland-test \
     scribbleway-hyprland-test || true
+docker rm -f scribbleway-hyprland-test >/dev/null 2>&1 || true
 
 echo
 echo "=== Results in $OUT ==="
