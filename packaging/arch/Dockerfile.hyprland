@@ -106,13 +106,6 @@ echo "exclusive-grabs at rest: $(grabbed)"
     && echo "PASS overlay holds no keyboard in passthrough" \
     || echo "FAIL overlay grabbed the keyboard while idle — it would eat every keystroke"
 
-# Negative control: keys must not reach the overlay before a mode is entered.
-wtype e 2>&1 || echo "wtype failed"
-sleep 2
-[ "$(grabbed)" = "0" ] \
-    && echo "PASS passthrough ignores 'e'" \
-    || echo "FAIL 'e' woke the overlay up from passthrough"
-
 # Daemon side of the documented path: bind -> exec -> single-instance socket -> daemon.
 # The compositor half cannot be driven from here; see the hl.bind comment above.
 scribbleway-overlay --toggle
@@ -121,30 +114,26 @@ sleep 3
     && echo "PASS --toggle reached the daemon and took exclusive keyboard" \
     || echo "FAIL no keyboard grab after --toggle — local hotkeys cannot work"
 
-# With focus held, a local QML Shortcut must be reachable.
-wtype e 2>&1 || echo "wtype failed"
-sleep 2
-grim -g "0,100 1200x700" /out/ellipse-tool.png 2>/dev/null
-
-# Repeated cycles: the reported failure is that hotkeys die "after a few rounds"
-# while the toggle keeps working, which a single pass would never catch.
+# Repeated cycles: a report of hotkeys dying "after a few rounds" while the toggle
+# kept working. Only the focus half is checkable here — see the wtype note below.
 echo
-echo "=== 5 toggle cycles: does each one still reach QML? ==="
+echo "=== 5 toggle cycles: is the keyboard grab re-taken every time? ==="
 for i in 1 2 3 4 5; do
-    scribbleway-overlay --toggle   # into a mode
-    sleep 1
-    wtype r 2>/dev/null; sleep 1   # rectangle
-    wtype e 2>/dev/null; sleep 1   # ellipse
-    scribbleway-overlay --toggle   # back to passthrough
-    sleep 1
-    TOOLS=$(grep -c "active tool: ellipse" /out/scribbleway.log)
-    echo "cycle $i: cumulative ellipse activations = $TOOLS"
+    scribbleway-overlay --toggle; sleep 1
+    scribbleway-overlay --toggle; sleep 1
 done
-if [ "$(grep -c 'active tool: ellipse' /out/scribbleway.log)" -ge 5 ]; then
-    echo "PASS hotkeys still reached QML on every cycle"
-else
-    echo "FAIL hotkeys stopped reaching QML partway through — reproduced the stuck state"
-fi
+GRABS=$(grep -c "keyboard interactivity: exclusive" /out/scribbleway.log)
+RELEASES=$(grep -c "keyboard interactivity: none" /out/scribbleway.log)
+echo "grabs=$GRABS releases=$RELEASES"
+[ "$GRABS" -ge 6 ] \
+    && echo "PASS focus re-taken on every cycle, no stuck state" \
+    || echo "FAIL focus grab stopped happening after $GRABS cycles"
+
+# NOT tested here: whether a local hotkey reaches QML. wtype drives a
+# zwp_virtual_keyboard whose keys reach neither Hyprland's bind dispatcher nor the
+# overlay's QML Shortcuts, even while the overlay holds exclusive keyboard —
+# "active tool:" never appears in the log for a wtype keypress. Verifying hotkey
+# delivery needs a human on a real keyboard.
 
 wtype -k Escape 2>&1 || true
 sleep 1
