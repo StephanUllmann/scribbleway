@@ -95,7 +95,7 @@ else
 fi
 
 echo
-echo "=== keyboard: --toggle must enter a mode, local hotkeys must reach QML ==="
+echo "=== keyboard: --toggle must enter a mode and take the keyboard ==="
 # Assert on the daemon's own focus log, not on pixels: entering select mode paints
 # nothing on an empty canvas, so screenshot diffing gave both false passes and false
 # failures here. "exclusive" is exactly the state that was broken.
