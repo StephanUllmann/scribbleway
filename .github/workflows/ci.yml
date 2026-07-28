@@ -53,3 +53,37 @@ jobs:
             sleep 3
             ctest --test-dir build --output-on-failure
           '
+
+  # Produces the installable Arch package as a downloadable artifact, so it can
+  # be tried in a VM (or on a real Arch/Hyprland box) without building locally.
+  arch-package:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install build dependencies
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel git cmake extra-cmake-modules \
+            layer-shell-qt kglobalaccel qt6-declarative qt6-base
+
+      - uses: actions/checkout@v4
+        with:
+          # PKGBUILD's pkgver() runs git describe / rev-list against the checkout.
+          fetch-depth: 0
+
+      - name: Build package
+        run: |
+          # makepkg refuses to run as root.
+          useradd -m builduser
+          chown -R builduser:builduser .
+          # Build from this checkout instead of cloning upstream, so the artifact
+          # matches the commit under test.
+          sed -i 's|source=(.*)|source=("scribbleway::git+file://'"$PWD"'")|' packaging/arch/PKGBUILD
+          sudo -u builduser git config --global --add safe.directory "$PWD"
+          sudo -u builduser bash -c 'cd packaging/arch && makepkg --noconfirm'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scribbleway-arch-package
+          path: packaging/arch/*.pkg.tar.zst
