@@ -31,7 +31,9 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("scribbleway"));
     app.setOrganizationDomain(QStringLiteral("kde.org"));
-    app.setDesktopFileName(QStringLiteral("scribbleway"));
+    // Must match the installed org.kde.scribbleway.desktop, not the application name:
+    // this is the Wayland app_id, and the portal looks the desktop file up by it.
+    app.setDesktopFileName(QStringLiteral("org.kde.scribbleway"));
 
     const bool toggleRequest = app.arguments().contains(QStringLiteral("--toggle"));
 
