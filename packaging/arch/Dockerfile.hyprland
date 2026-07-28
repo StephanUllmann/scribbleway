@@ -84,6 +84,29 @@ else
 fi
 
 echo
+echo "=== keyboard: --toggle must grab keyboard, local hotkeys must reach QML ==="
+# KGlobalAccel is inert here, so --toggle is the only way in. Entering a tool mode
+# must flip the overlay to exclusive keyboard, or every QML Shortcut is dead.
+scribbleway-overlay --toggle
+sleep 2
+if hyprctl layers | grep -A2 'namespace: scribbleway-overlay' | grep -qi 'kb_focus\|exclusive' \
+   || [ "$(hyprctl activewindow -j 2>/dev/null | grep -c scribbleway)" != "0" ]; then
+    echo "PASS overlay took keyboard focus after --toggle"
+else
+    echo "INFO no explicit focus marker in hyprctl; relying on the keystroke probe below"
+fi
+# 'e' selects the ellipse tool; the badge/mode change is observable via the log.
+wtype e 2>&1 || echo "wtype failed"
+sleep 1
+wtype -k Escape 2>&1 || true
+sleep 1
+if pgrep -f scribbleway-overlay >/dev/null; then
+    echo "SURVIVED --toggle + local hotkeys"
+else
+    echo "DIED during keyboard probe"
+fi
+
+echo
 echo "=== scribbleway stderr ==="
 cat /out/scribbleway.log 2>/dev/null || echo "(no log)"
 

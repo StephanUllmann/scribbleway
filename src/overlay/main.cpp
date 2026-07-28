@@ -33,9 +33,13 @@ int main(int argc, char *argv[])
     app.setOrganizationDomain(QStringLiteral("kde.org"));
     app.setDesktopFileName(QStringLiteral("scribbleway"));
 
+    const bool toggleRequest = app.arguments().contains(QStringLiteral("--toggle"));
+
     SingleInstanceGuard instanceGuard(QStringLiteral("scribbleway"));
-    if (!instanceGuard.tryAcquire()) {
-        qWarning() << "Scribbleway is already running.";
+    if (!instanceGuard.tryAcquire(toggleRequest ? QByteArray("toggle") : QByteArray())) {
+        if (!toggleRequest) {
+            qWarning() << "Scribbleway is already running.";
+        }
         return 0;
     }
 
@@ -58,12 +62,27 @@ int main(int argc, char *argv[])
     QAction *actionActivateSelect = setupGlobalAction(QStringLiteral("action_activate_select_mode"), QStringLiteral("Enter Selection Mode"), 
                                                       {QKeySequence(QStringLiteral("Meta+Shift+X"))});
 
-    QObject::connect(actionActivateSelect, &QAction::triggered, &controller, [&controller]() {
+    auto toggleMode = [&controller]() {
         if (controller.currentMode() == QStringLiteral("passthrough")) {
             controller.enterSelectMode();
         } else {
             controller.enterPassthroughMode();
         }
+    };
+    QObject::connect(actionActivateSelect, &QAction::triggered, &controller, toggleMode);
+
+    // KGlobalAccel is inert outside Plasma, so `scribbleway-overlay --toggle` re-uses the
+    // single-instance socket as the entry point other compositors can bind:
+    //   bind = SUPER SHIFT, X, exec, scribbleway-overlay --toggle
+    QObject::connect(instanceGuard.server(), &QLocalServer::newConnection, &app, [&instanceGuard, toggleMode]() {
+        QLocalSocket *client = instanceGuard.server()->nextPendingConnection();
+        if (!client) return;
+        QObject::connect(client, &QLocalSocket::readyRead, client, [client, toggleMode]() {
+            if (client->readAll().startsWith("toggle")) {
+                toggleMode();
+            }
+        });
+        QObject::connect(client, &QLocalSocket::disconnected, client, &QLocalSocket::deleteLater);
     });
     // Load QML Engine
     QQmlApplicationEngine engine;

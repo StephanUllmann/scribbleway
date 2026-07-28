@@ -149,8 +149,19 @@ Scribbleway's controls live in a system tray popup, which requires a running
 `tray` module (or an equivalent) before launching Scribbleway, or the tray
 icon won't appear anywhere.
 
-Global keyboard shortcuts are currently KDE/Plasma-only; on Hyprland, use the
-tray popup to switch modes and tools.
+The global `Meta+Shift+X` shortcut goes through KDE's `KGlobalAccel`, which does
+nothing without Plasma's `kglobalacceld`. Bind the compositor's own hotkey to
+`--toggle` instead — it hands the request to the running daemon over the
+single-instance socket, and starts it if it isn't running yet:
+
+```
+# ~/.config/hypr/hyprland.conf
+bind = SUPER SHIFT, X, exec, scribbleway-overlay --toggle
+```
+
+The overlay-local hotkeys in the table below (`E`, `R`, `X`, `+`/`-`, …) work
+once a mode is active — the overlay takes exclusive keyboard focus while a tool
+is in use and releases it in passthrough mode.
 
 ---
 

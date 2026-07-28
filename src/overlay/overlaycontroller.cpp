@@ -867,8 +867,13 @@ void OverlayController::setKeyboardInteractivity(bool interactive)
 {
     if (!m_window) return;
     if (auto *layerWindow = LayerShellQt::Window::get(m_window)) {
-        layerWindow->setKeyboardInteractivity(interactive 
-            ? LayerShellQt::Window::KeyboardInteractivityOnDemand
+        // Exclusive, not OnDemand: OnDemand means "focus me when the user clicks me",
+        // and a layer surface has no way to ask for focus itself — QWindow::requestActivate()
+        // is a no-op here. KWin happened to hand focus over anyway; Hyprland does not, so
+        // every QML Shortcut in main.qml was dead there. Exclusive is what an annotation
+        // overlay wants while a tool is active, and it works on both.
+        layerWindow->setKeyboardInteractivity(interactive
+            ? LayerShellQt::Window::KeyboardInteractivityExclusive
             : LayerShellQt::Window::KeyboardInteractivityNone);
     }
 }
