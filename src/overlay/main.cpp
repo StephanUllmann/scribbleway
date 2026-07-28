@@ -96,7 +96,10 @@ int main(int argc, char *argv[])
                 anchors.setFlag(LayerShellQt::Window::AnchorRight);
                 layerWindow->setAnchors(anchors);
                 layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
-                layerWindow->setExclusiveZone(0);
+                // -1, not 0: an annotation overlay must cover the whole output. 0 means
+                // "reserve nothing but keep me clear of other exclusive zones", which
+                // makes any bar (Waybar, a Plasma panel) shrink the drawable area.
+                layerWindow->setExclusiveZone(-1);
                 layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
                 layerWindow->setScope(QStringLiteral("scribbleway-overlay"));
             }
