@@ -869,23 +869,29 @@ void OverlayController::endEdit()
 
 void OverlayController::setKeyboardInteractivity(bool interactive)
 {
-    // Logged before the guards, because "my hotkeys don't work" is otherwise
-    // undebuggable from outside: neither hyprctl nor kwin exposes layer-shell
-    // keyboard focus, and a missing line here has to be distinguishable from a
-    // line that says "none".
-    qInfo() << "keyboard interactivity:" << (interactive ? "exclusive" : "none")
-            << "window:" << (m_window ? "yes" : "no");
     if (!m_window) return;
-    if (auto *layerWindow = LayerShellQt::Window::get(m_window)) {
-        // Exclusive, not OnDemand: OnDemand means "focus me when the user clicks me",
-        // and a layer surface has no way to ask for focus itself — QWindow::requestActivate()
-        // is a no-op here. KWin happened to hand focus over anyway; Hyprland does not, so
-        // every QML Shortcut in main.qml was dead there. Exclusive is what an annotation
-        // overlay wants while a tool is active, and it works on both.
-        layerWindow->setKeyboardInteractivity(interactive
-            ? LayerShellQt::Window::KeyboardInteractivityExclusive
-            : LayerShellQt::Window::KeyboardInteractivityNone);
-    }
+    auto *layerWindow = LayerShellQt::Window::get(m_window);
+    if (!layerWindow) return;
+
+    // Exclusive, not OnDemand: OnDemand means "focus me when the user clicks me",
+    // and a layer surface has no way to ask for focus itself — QWindow::requestActivate()
+    // is a no-op here. KWin happened to hand focus over anyway; Hyprland does not, so
+    // every QML Shortcut in main.qml was dead there. Exclusive is what an annotation
+    // overlay wants while a tool is active, and it works on both.
+    const auto wanted = interactive
+        ? LayerShellQt::Window::KeyboardInteractivityExclusive
+        : LayerShellQt::Window::KeyboardInteractivityNone;
+
+    // The QML side calls this from requestInputRegionUpdate(), which runs on every
+    // draw event — several times a second while drawing. Only act on real
+    // transitions, so this neither spams the journal nor re-commits the layer
+    // surface for a value it already has.
+    if (layerWindow->keyboardInteractivity() == wanted) return;
+
+    // Logged because "my hotkeys don't work" is otherwise undebuggable from outside:
+    // neither hyprctl nor kwin exposes layer-shell keyboard focus.
+    qInfo() << "keyboard interactivity:" << (interactive ? "exclusive" : "none");
+    layerWindow->setKeyboardInteractivity(wanted);
 }
 
 void OverlayController::setTargetScreen(const QString &screenName)
