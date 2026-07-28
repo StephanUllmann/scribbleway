@@ -1,0 +1,102 @@
+# Nested-Hyprland test harness.
+#
+# Runs the built Arch package inside a real Hyprland session that itself nests
+# inside the host's Wayland compositor (Hyprland's wayland backend). Waybar
+# supplies the StatusNotifierHost that Hyprland does not provide on its own —
+# the exact dependency Phase 2 exists to validate.
+#
+# Driven by run_hyprland_test.sh; not part of the release package build.
+FROM archlinux:latest
+
+RUN pacman -Sy --noconfirm archlinux-keyring && \
+    pacman -Syu --noconfirm && \
+    pacman -S --noconfirm \
+        hyprland waybar dbus grim wtype \
+        layer-shell-qt kglobalaccel qt6-declarative qt6-base qt6-wayland \
+        ttf-dejavu
+
+# Must match the host user: the mounted Wayland socket and the /out bind mount
+# are both owned by them.
+ARG UID=1000
+ARG GID=1000
+RUN groupadd -g "$GID" user && useradd -u "$UID" -g "$GID" -m user && \
+    mkdir -p /out && chown "$UID:$GID" /out
+
+# `monitor=` sizes the nested output window. QT_QPA_PLATFORM=wayland is
+# required or LayerShellQt never attaches.
+RUN mkdir -p /home/user/.config/hypr && cat > /home/user/.config/hypr/hyprland.conf <<'EOF'
+monitor = ,1600x900@60,0x0,1
+
+env = QT_QPA_PLATFORM,wayland
+
+misc {
+    disable_hyprland_logo = true
+    disable_splash_rendering = true
+    force_default_wallpaper = 0
+}
+
+exec-once = waybar > /out/waybar.log 2>&1
+# Delayed so Waybar's StatusNotifierHost has registered first. Starting it
+# immediately is the interesting race; a clean baseline comes first.
+exec-once = sh -c 'sleep 3; exec scribbleway-overlay > /out/scribbleway.log 2>&1'
+exec-once = /usr/local/bin/check.sh
+EOF
+
+# Collects everything in Task 4 that is checkable without a pointer device.
+RUN cat > /usr/local/bin/check.sh <<'EOF'
+#!/bin/bash
+set -u
+sleep 8
+
+exec > /out/report.txt 2>&1
+
+echo "=== processes ==="
+pgrep -a -f 'scribbleway-overlay|waybar' || echo "NONE RUNNING"
+
+echo
+echo "=== StatusNotifier on the session bus ==="
+busctl --user list --no-pager 2>&1 | grep -i statusnotifier || echo "NONE"
+
+echo
+echo "=== layer-shell surfaces (overlay + tray popup live here) ==="
+hyprctl layers
+
+echo
+echo "=== overlay covers the whole output? ==="
+# An annotation overlay must not be pushed out of a bar's exclusive zone.
+# Output size comes from the monitor= line in hyprland.conf.
+GEOM=$(hyprctl layers | grep 'namespace: scribbleway-overlay' \
+       | grep -o 'xywh: [0-9]* [0-9]* [0-9]* [0-9]*' | cut -d' ' -f2-)
+if [ "$GEOM" = "0 0 1600 900" ]; then
+    echo "PASS full-output coverage ($GEOM)"
+else
+    echo "FAIL want '0 0 1600 900', got '$GEOM' — bar exclusive zone is shrinking the overlay"
+fi
+
+echo
+echo "=== global shortcut: must not crash the app ==="
+wtype -M logo -M shift -k x -m shift -m logo 2>&1 || echo "wtype failed"
+sleep 2
+if pgrep -f scribbleway-overlay >/dev/null; then
+    echo "SURVIVED Meta+Shift+X"
+else
+    echo "DIED on Meta+Shift+X"
+fi
+
+echo
+echo "=== scribbleway stderr ==="
+cat /out/scribbleway.log 2>/dev/null || echo "(no log)"
+
+grim /out/screen.png 2>&1 || echo "grim failed"
+
+[ -n "${KEEP_OPEN:-}" ] || hyprctl dispatch exit
+EOF
+RUN chmod +x /usr/local/bin/check.sh && chown -R "$UID:$GID" /home/user
+
+ARG PKG
+COPY ${PKG} /tmp/scribbleway.pkg.tar.zst
+RUN pacman -U --noconfirm /tmp/scribbleway.pkg.tar.zst
+
+USER user
+ENV XDG_RUNTIME_DIR=/tmp/xdg
+CMD ["sh", "-c", "mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR && exec dbus-run-session -- Hyprland"]
