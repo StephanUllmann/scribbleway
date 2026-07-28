@@ -202,6 +202,14 @@ int main(int argc, char *argv[])
         }
         showPopup();
     });
+    // Shown regardless: isSystemTrayAvailable() can be a false negative when the
+    // StatusNotifierHost registers a moment later (documented Waybar/Hyprland race).
+    if (!QSystemTrayIcon::isSystemTrayAvailable()) {
+        qWarning() << "No system tray detected. Scribbleway's controls (color, tools, "
+                      "shortcuts, shape list) will not be reachable without one. "
+                      "On Hyprland, enable a StatusNotifierHost — e.g. Waybar's "
+                      "\"tray\" module — then restart Scribbleway.";
+    }
     trayIcon.show();
 
     return app.exec();
