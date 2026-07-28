@@ -130,6 +130,9 @@ QString OverlayController::activeTool() const
 void OverlayController::setActiveTool(const QString &tool)
 {
     if (m_activeTool != tool) {
+        // The one place that proves a local hotkey actually reached QML — the tool
+        // shortcuts are the first thing to go silent when focus is lost.
+        qInfo() << "active tool:" << (tool.isEmpty() ? QStringLiteral("(none)") : tool);
         m_activeTool = tool;
         Q_EMIT activeToolChanged(m_activeTool);
 

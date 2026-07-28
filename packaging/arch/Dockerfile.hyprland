@@ -126,6 +126,26 @@ wtype e 2>&1 || echo "wtype failed"
 sleep 2
 grim -g "0,100 1200x700" /out/ellipse-tool.png 2>/dev/null
 
+# Repeated cycles: the reported failure is that hotkeys die "after a few rounds"
+# while the toggle keeps working, which a single pass would never catch.
+echo
+echo "=== 5 toggle cycles: does each one still reach QML? ==="
+for i in 1 2 3 4 5; do
+    scribbleway-overlay --toggle   # into a mode
+    sleep 1
+    wtype r 2>/dev/null; sleep 1   # rectangle
+    wtype e 2>/dev/null; sleep 1   # ellipse
+    scribbleway-overlay --toggle   # back to passthrough
+    sleep 1
+    TOOLS=$(grep -c "active tool: ellipse" /out/scribbleway.log)
+    echo "cycle $i: cumulative ellipse activations = $TOOLS"
+done
+if [ "$(grep -c 'active tool: ellipse' /out/scribbleway.log)" -ge 5 ]; then
+    echo "PASS hotkeys still reached QML on every cycle"
+else
+    echo "FAIL hotkeys stopped reaching QML partway through — reproduced the stuck state"
+fi
+
 wtype -k Escape 2>&1 || true
 sleep 1
 if pgrep -f scribbleway-overlay >/dev/null; then
