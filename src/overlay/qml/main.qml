@@ -619,6 +619,15 @@ Window {
             if (visible) {
                 forceActiveFocus();
                 selectAll();
+            } else {
+                // Hiding an item does not release its active focus: the editor stays
+                // the window's activeFocusItem and keeps claiming plain keys through
+                // ShortcutOverride, so every single-letter tool shortcut dies until
+                // restart. Escape survives only because TextArea doesn't claim it —
+                // which is exactly how this presents. Done here rather than in
+                // commitText() so cancelInteraction() and the mode handlers are
+                // covered by the same line.
+                focus = false;
             }
             canvasWindow.requestInputRegionUpdate();
         }
