@@ -235,5 +235,6 @@ int main(int argc, char *argv[])
     }
     trayIcon.show();
 
+    qInfo() << "scribbleway-overlay ready";
     return app.exec();
 }
