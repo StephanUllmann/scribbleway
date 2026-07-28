@@ -84,26 +84,42 @@ else
 fi
 
 echo
-echo "=== keyboard: --toggle must grab keyboard, local hotkeys must reach QML ==="
-# KGlobalAccel is inert here, so --toggle is the only way in. Entering a tool mode
-# must flip the overlay to exclusive keyboard, or every QML Shortcut is dead.
+echo "=== keyboard: --toggle must enter a mode, local hotkeys must reach QML ==="
+# There is no compositor-side query for "who holds keyboard focus", so assert on
+# what the user would see instead: a mode change has to repaint. Crop away the
+# waybar clock, which ticks on its own and would differ every capture.
+shot() { grim -g "0,100 1200x700" "/out/$1.png" 2>/dev/null && md5sum "/out/$1.png" | cut -c1-8; }
+
+# Entering select mode paints nothing on an empty canvas, so the toggle isn't
+# directly observable. Probe it with the ellipse tool instead, which draws a cursor
+# badge — and press it once beforehand as a negative control.
+BASE=$(shot 1-passthrough)
+
+# Negative control: passthrough must not hold the keyboard at all.
+wtype e 2>&1 || echo "wtype failed"
+sleep 2
+LEAKED=$(shot 2-passthrough-after-e)
+[ "$LEAKED" = "$BASE" ] \
+    && echo "PASS passthrough ignores 'e' ($BASE)" \
+    || echo "FAIL passthrough reacted to 'e' ($BASE -> $LEAKED) — overlay is eating keys it should pass through"
+
+# KGlobalAccel is inert here, so --toggle is the only way in. If it doesn't reach the
+# daemon, the overlay stays in passthrough and 'e' below stays inert too.
 scribbleway-overlay --toggle
 sleep 2
-if hyprctl layers | grep -A2 'namespace: scribbleway-overlay' | grep -qi 'kb_focus\|exclusive' \
-   || [ "$(hyprctl activewindow -j 2>/dev/null | grep -c scribbleway)" != "0" ]; then
-    echo "PASS overlay took keyboard focus after --toggle"
-else
-    echo "INFO no explicit focus marker in hyprctl; relying on the keystroke probe below"
-fi
-# 'e' selects the ellipse tool; the badge/mode change is observable via the log.
 wtype e 2>&1 || echo "wtype failed"
-sleep 1
+sleep 2
+ACTIVE=$(shot 3-ellipse-tool)
+[ "$ACTIVE" != "$BASE" ] \
+    && echo "PASS --toggle entered a mode and 'e' reached QML ($BASE -> $ACTIVE)" \
+    || echo "FAIL still inert after --toggle ($BASE) — toggle never landed, or no keyboard focus"
+
 wtype -k Escape 2>&1 || true
 sleep 1
 if pgrep -f scribbleway-overlay >/dev/null; then
-    echo "SURVIVED --toggle + local hotkeys"
+    echo "SURVIVED the keyboard probe"
 else
-    echo "DIED during keyboard probe"
+    echo "DIED during the keyboard probe"
 fi
 
 echo
