@@ -226,7 +226,9 @@ Window {
         let needsKeyboard = !isPassthrough || textEditor.visible;
 
         controller.setKeyboardInteractivity(needsKeyboard);
-        if (needsKeyboard) {
+        // Not while the tray popup is up: it dismisses on focus loss, and this fires on
+        // every selection change — including the ones the popup itself just caused.
+        if (needsKeyboard && !controller.trayPopupOpen) {
             canvasWindow.requestActivate();
         }
 

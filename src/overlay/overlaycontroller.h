@@ -71,6 +71,7 @@ class OverlayController : public QObject
     Q_PROPERTY(QVariantList shapesMetadata READ shapesMetadata NOTIFY shapesMetadataChanged)
     Q_PROPERTY(QStringList screenNames READ screenNames CONSTANT)
     Q_PROPERTY(QString targetScreen READ targetScreen NOTIFY targetScreenChanged)
+    Q_PROPERTY(bool trayPopupOpen READ trayPopupOpen NOTIFY trayPopupOpenChanged)
 
 public:
     explicit OverlayController(QObject *parent = nullptr);
@@ -149,6 +150,8 @@ public:
     // window (the Tray Popup) stays clickable while a tool is active. Empty = none.
     void setPopupExclusion(const QRect &rect);
     Q_INVOKABLE void setKeyboardInteractivity(bool interactive);
+    bool trayPopupOpen() const;
+    void setTrayPopupOpen(bool open);
     Q_INVOKABLE void beginEdit();
     Q_INVOKABLE void endEdit();
     Q_INVOKABLE QVariantMap getShape(int index) const;
@@ -221,6 +224,7 @@ Q_SIGNALS:
     void shortcutsChanged(const QVariantList &shortcuts);
     void localShortcutsChanged();
     void targetScreenChanged();
+    void trayPopupOpenChanged();
 
     // Command signals to QML
     void enterSelectModeRequested();
@@ -261,6 +265,10 @@ private:
     QString m_defaultFillColor;
     double m_defaultFillOpacity = 0.12;
     int m_defaultFreehandSmoothing = 2;
+
+    bool m_trayPopupOpen = false;
+    bool m_wantsKeyboard = false;
+    void applyKeyboardInteractivity();
 
     QRegion m_lastInputMask;
     QRegion m_baseInputMask;

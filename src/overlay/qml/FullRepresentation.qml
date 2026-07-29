@@ -30,6 +30,14 @@ Item {
 
     readonly property var backend: controller
 
+    // Read side of the same routing as the setters below. The selected* properties notify
+    // on selectionChanged only, so a binding straight to them goes stale when a default is
+    // written with nothing selected — pass both and let this pick, so the binding depends
+    // on both signals.
+    function pick(selected, fallback) {
+        return backend.hasSelection ? selected : fallback
+    }
+
     // Route property changes: to the selected shape if there is one, else to defaults.
     function setColor(color) {
         if (backend.hasSelection) backend.updateProperties({color: color})
@@ -231,6 +239,9 @@ Item {
                     }
 
                     Controls.ComboBox {
+                        // In-window dropdown: a Popup.Window one is a separate Wayland
+                        // surface, and the tray popup dismisses itself on focus loss.
+                        Component.onCompleted: popup.popupType = Controls.Popup.Item
                         Layout.fillWidth: true
                         model: ["Freehand", "Arrow", "Rectangle", "Ellipse", "Line", "Text"]
                         currentIndex: {
@@ -255,6 +266,9 @@ Item {
                     }
 
                     Controls.ComboBox {
+                        // In-window dropdown: a Popup.Window one is a separate Wayland
+                        // surface, and the tray popup dismisses itself on focus loss.
+                        Component.onCompleted: popup.popupType = Controls.Popup.Item
                         Layout.fillWidth: true
                         model: backend.screenNames
                         currentIndex: {
@@ -282,7 +296,7 @@ Item {
                         spacing: theme.smallSpacing
 
                         property var colors: ["#e63946", "#f4a261", "#e9c46a", "#2a9d8f", "#457b9d", "#8338ec"]
-                        property string activeColor: backend.hasSelection ? backend.selectedColor : backend.defaultColor
+                        property string activeColor: fullRoot.pick(backend.selectedColor, backend.defaultColor)
 
                         Repeater {
                             model: parent.colors
@@ -328,12 +342,12 @@ Item {
                         from: 1
                         to: 15
                         stepSize: 1
-                        value: backend.hasSelection ? backend.selectedStrokeWidth : backend.defaultStrokeWidth
+                        value: fullRoot.pick(backend.selectedStrokeWidth, backend.defaultStrokeWidth)
                         onMoved: { fullRoot.setStrokeWidth(value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(backend.hasSelection ? backend.selectedStrokeWidth : backend.defaultStrokeWidth) + "px"
+                        text: Math.round(fullRoot.pick(backend.selectedStrokeWidth, backend.defaultStrokeWidth)) + "px"
                     }
                 }
 
@@ -352,12 +366,12 @@ Item {
                         from: 0.1
                         to: 1.0
                         stepSize: 0.05
-                        value: backend.hasSelection ? backend.selectedOpacity : backend.defaultOpacity
+                        value: fullRoot.pick(backend.selectedOpacity, backend.defaultOpacity)
                         onMoved: { fullRoot.setOpacity(value) }
                     }
 
                     Controls.Label {
-                        text: Math.round((backend.hasSelection ? backend.selectedOpacity : backend.defaultOpacity) * 100) + "%"
+                        text: Math.round(fullRoot.pick(backend.selectedOpacity, backend.defaultOpacity) * 100) + "%"
                     }
                 }
 
@@ -382,7 +396,7 @@ Item {
                             spacing: theme.smallSpacing
 
                             property var colors: ["#e63946", "#f4a261", "#e9c46a", "#2a9d8f", "#457b9d", "#8338ec"]
-                            property string activeFill: backend.selectedFillColor
+                            property string activeFill: fullRoot.pick(backend.selectedFillColor, backend.defaultFillColor)
 
                             Rectangle {
                                 width: theme.gridUnit * 1.5
@@ -449,12 +463,12 @@ Item {
                             from: 0.0
                             to: 1.0
                             stepSize: 0.05
-                            value: backend.selectedFillOpacity
+                            value: fullRoot.pick(backend.selectedFillOpacity, backend.defaultFillOpacity)
                             onMoved: { fullRoot.setFillOpacity(value) }
                         }
 
                         Controls.Label {
-                            text: Math.round(backend.selectedFillOpacity * 100) + "%"
+                            text: Math.round(fullRoot.pick(backend.selectedFillOpacity, backend.defaultFillOpacity) * 100) + "%"
                         }
                     }
                 }
@@ -474,12 +488,12 @@ Item {
                         from: 0
                         to: 30
                         stepSize: 1
-                        value: backend.selectedGlow
+                        value: fullRoot.pick(backend.selectedGlow, backend.defaultGlow)
                         onMoved: { fullRoot.setGlow(value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(backend.selectedGlow) + "px"
+                        text: Math.round(fullRoot.pick(backend.selectedGlow, backend.defaultGlow)) + "px"
                     }
                 }
 
@@ -498,13 +512,13 @@ Item {
                         from: 0
                         to: 3
                         stepSize: 1
-                        value: backend.selectedFreehandSmoothing
+                        value: fullRoot.pick(backend.selectedFreehandSmoothing, backend.defaultFreehandSmoothing)
                         onMoved: { fullRoot.setFreehandSmoothing(value) }
                     }
 
                     Controls.Label {
                         text: {
-                            let v = Math.round(backend.selectedFreehandSmoothing)
+                            let v = Math.round(fullRoot.pick(backend.selectedFreehandSmoothing, backend.defaultFreehandSmoothing))
                             if (v <= 0) return "Off"
                             if (v === 1) return "Low"
                             if (v === 2) return "Med"
@@ -523,9 +537,12 @@ Item {
                     }
 
                     Controls.ComboBox {
+                        // In-window dropdown: a Popup.Window one is a separate Wayland
+                        // surface, and the tray popup dismisses itself on focus loss.
+                        Component.onCompleted: popup.popupType = Controls.Popup.Item
                         Layout.fillWidth: true
                         model: ["Neat (0)", "Artist (1)", "Cartoon (2)"]
-                        currentIndex: Math.min(2, Math.max(0, Math.round(backend.selectedRoughness)))
+                        currentIndex: Math.min(2, Math.max(0, Math.round(fullRoot.pick(backend.selectedRoughness, backend.defaultRoughness))))
                         onActivated: { fullRoot.setRoughness(index) }
                     }
 
@@ -539,12 +556,12 @@ Item {
                         from: 0
                         to: 50
                         stepSize: 1
-                        value: backend.selectedBorderRadius
+                        value: fullRoot.pick(backend.selectedBorderRadius, backend.defaultBorderRadius)
                         onMoved: { fullRoot.setBorderRadius(value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(backend.selectedBorderRadius) + "px"
+                        text: Math.round(fullRoot.pick(backend.selectedBorderRadius, backend.defaultBorderRadius)) + "px"
                     }
                 }
 
@@ -562,10 +579,11 @@ Item {
                         }
 
                         Controls.ComboBox {
+                            Component.onCompleted: popup.popupType = Controls.Popup.Item
                             Layout.fillWidth: true
                             model: ["sans-serif", "serif", "monospace", "Comic Sans MS"]
                             currentIndex: {
-                                let f = backend.selectedFontFamily
+                                let f = fullRoot.pick(backend.selectedFontFamily, backend.defaultFontFamily)
                                 let idx = model.indexOf(f)
                                 return idx >= 0 ? idx : 0
                             }
@@ -585,12 +603,12 @@ Item {
                             from: 10
                             to: 72
                             stepSize: 1
-                            value: backend.selectedFontSize
+                            value: fullRoot.pick(backend.selectedFontSize, backend.defaultFontSize)
                             onMoved: { fullRoot.setFontSize(value) }
                         }
 
                         Controls.Label {
-                            text: Math.round(backend.selectedFontSize) + "px"
+                            text: Math.round(fullRoot.pick(backend.selectedFontSize, backend.defaultFontSize)) + "px"
                         }
                     }
                 }

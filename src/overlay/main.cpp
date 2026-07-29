@@ -146,6 +146,7 @@ int main(int argc, char *argv[])
             w->hide();
             hiddenTimer.restart();
             controller.setPopupExclusion(QRect());
+            controller.setTrayPopupOpen(false);
         }
     };
     // Anchor to the bottom-right corner: adjacent edges keep the window's natural size
@@ -182,6 +183,9 @@ int main(int argc, char *argv[])
         if (!popupWindow) return;
 
         configurePopupLayer();
+        // Before show(): the overlay must drop its exclusive keyboard grab, or the
+        // compositor never hands focus to the popup.
+        controller.setTrayPopupOpen(true);
         popupWindow->show();
         popupWindow->raise();
         popupWindow->requestActivate();

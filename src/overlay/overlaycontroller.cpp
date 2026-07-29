@@ -869,9 +869,34 @@ void OverlayController::endEdit()
 
 void OverlayController::setKeyboardInteractivity(bool interactive)
 {
+    m_wantsKeyboard = interactive;
+    applyKeyboardInteractivity();
+}
+
+bool OverlayController::trayPopupOpen() const
+{
+    return m_trayPopupOpen;
+}
+
+// The tray popup is a layer surface too, and an exclusive one always outranks it for
+// keyboard focus — the popup would lose focus and dismiss itself the moment a tool
+// activated. So the overlay yields the keyboard while the popup is open and takes back
+// whatever QML last asked for when it closes.
+void OverlayController::setTrayPopupOpen(bool open)
+{
+    if (m_trayPopupOpen == open) return;
+    m_trayPopupOpen = open;
+    applyKeyboardInteractivity();
+    Q_EMIT trayPopupOpenChanged();
+}
+
+void OverlayController::applyKeyboardInteractivity()
+{
     if (!m_window) return;
     auto *layerWindow = LayerShellQt::Window::get(m_window);
     if (!layerWindow) return;
+
+    const bool interactive = m_wantsKeyboard && !m_trayPopupOpen;
 
     // Exclusive, not OnDemand: OnDemand means "focus me when the user clicks me",
     // and a layer surface has no way to ask for focus itself — QWindow::requestActivate()
