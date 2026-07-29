@@ -29,58 +29,29 @@ Item {
 
     readonly property var backend: controller
 
-    // Read side of the same routing as the setters below. The selected* properties notify
-    // on selectionChanged only, so a binding straight to them goes stale when a default is
-    // written with nothing selected — pass both and let this pick, so the binding depends
-    // on both signals.
-    function pick(selected, fallback) {
+    function cap(key) { return key.charAt(0).toUpperCase() + key.slice(1) }
+
+    // Read side of the routing below: the selected shape's value if there is one, else
+    // the matching default. Both are read eagerly on purpose — the selected* properties
+    // notify on selectionChanged only, so a binding that touched just one of them would
+    // go stale when a default is written with nothing selected.
+    function get(key) {
+        const selected = backend["selected" + cap(key)]
+        const fallback = backend["default" + cap(key)]
         return backend.hasSelection ? selected : fallback
     }
 
-    // Route property changes: to the selected shape if there is one, else to defaults.
-    function setColor(color) {
-        if (backend.hasSelection) backend.updateProperties({color: color})
-        else backend.defaultColor = color
-    }
-    function setStrokeWidth(width) {
-        if (backend.hasSelection) backend.updateProperties({strokeWidth: width})
-        else backend.defaultStrokeWidth = width
-    }
-    function setOpacity(opacity) {
-        if (backend.hasSelection) backend.updateProperties({opacity: opacity})
-        else backend.defaultOpacity = opacity
-    }
-    function setFillColor(color) {
-        if (backend.hasSelection) backend.updateProperties({fillColor: color})
-        else backend.defaultFillColor = color
-    }
-    function setFillOpacity(opacity) {
-        if (backend.hasSelection) backend.updateProperties({fillOpacity: opacity})
-        else backend.defaultFillOpacity = opacity
-    }
-    function setGlow(glow) {
-        if (backend.hasSelection) backend.updateProperties({glow: glow})
-        else backend.defaultGlow = glow
-    }
-    function setFreehandSmoothing(level) {
-        if (backend.hasSelection) backend.updateProperties({freehandSmoothing: level})
-        else backend.defaultFreehandSmoothing = level
-    }
-    function setRoughness(roughness) {
-        if (backend.hasSelection) backend.updateProperties({roughness: roughness})
-        else backend.defaultRoughness = roughness
-    }
-    function setBorderRadius(radius) {
-        if (backend.hasSelection) backend.updateProperties({borderRadius: radius})
-        else backend.defaultBorderRadius = radius
-    }
-    function setFontFamily(family) {
-        if (backend.hasSelection) backend.updateProperties({fontFamily: family})
-        else backend.defaultFontFamily = family
-    }
-    function setFontSize(size) {
-        if (backend.hasSelection) backend.updateProperties({fontSize: size})
-        else backend.defaultFontSize = size
+    // Route a property change: to the selected shape if there is one, else to the
+    // matching default. Every shape key has a default<Key> property, so one function
+    // covers all of them.
+    function set(key, value) {
+        if (backend.hasSelection) {
+            let props = {}
+            props[key] = value
+            backend.updateProperties(props)
+        } else {
+            backend["default" + cap(key)] = value
+        }
     }
 
     // Track the currently selected tool name for draw mode
@@ -106,8 +77,7 @@ Item {
     signal customColorRequested(string current, bool isFill)
 
     function applyCustomColor(c, isFill) {
-        if (isFill) setFillColor(c.toString())
-        else setColor(c.toString())
+        set(isFill ? "fillColor" : "color", c.toString())
     }
 
     Controls.ScrollView {
@@ -288,11 +258,10 @@ Item {
                         Layout.fillWidth: true
                         spacing: theme.smallSpacing
 
-                        property var colors: ["#e63946", "#f4a261", "#e9c46a", "#2a9d8f", "#457b9d", "#8338ec"]
-                        property string activeColor: fullRoot.pick(backend.selectedColor, backend.defaultColor)
+                        property string activeColor: fullRoot.get("color")
 
                         Repeater {
-                            model: parent.colors
+                            model: backend.presetColors
 
                             Rectangle {
                                 width: theme.gridUnit * 1.5
@@ -304,7 +273,7 @@ Item {
 
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: { fullRoot.setColor(modelData) }
+                                    onClicked: { fullRoot.set("color", modelData) }
                                 }
                             }
                         }
@@ -332,12 +301,12 @@ Item {
                         from: 1
                         to: 15
                         stepSize: 1
-                        value: fullRoot.pick(backend.selectedStrokeWidth, backend.defaultStrokeWidth)
-                        onMoved: { fullRoot.setStrokeWidth(value) }
+                        value: fullRoot.get("strokeWidth")
+                        onMoved: { fullRoot.set("strokeWidth", value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(fullRoot.pick(backend.selectedStrokeWidth, backend.defaultStrokeWidth)) + "px"
+                        text: Math.round(fullRoot.get("strokeWidth")) + "px"
                     }
                 }
 
@@ -356,12 +325,12 @@ Item {
                         from: 0.1
                         to: 1.0
                         stepSize: 0.05
-                        value: fullRoot.pick(backend.selectedOpacity, backend.defaultOpacity)
-                        onMoved: { fullRoot.setOpacity(value) }
+                        value: fullRoot.get("opacity")
+                        onMoved: { fullRoot.set("opacity", value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(fullRoot.pick(backend.selectedOpacity, backend.defaultOpacity) * 100) + "%"
+                        text: Math.round(fullRoot.get("opacity") * 100) + "%"
                     }
                 }
 
@@ -385,8 +354,7 @@ Item {
                             Layout.fillWidth: true
                             spacing: theme.smallSpacing
 
-                            property var colors: ["#e63946", "#f4a261", "#e9c46a", "#2a9d8f", "#457b9d", "#8338ec"]
-                            property string activeFill: fullRoot.pick(backend.selectedFillColor, backend.defaultFillColor)
+                                property string activeFill: fullRoot.get("fillColor")
 
                             Rectangle {
                                 width: theme.gridUnit * 1.5
@@ -406,12 +374,12 @@ Item {
 
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: { fullRoot.setFillColor("transparent") }
+                                    onClicked: { fullRoot.set("fillColor", "transparent") }
                                 }
                             }
 
                             Repeater {
-                                model: parent.colors
+                                model: backend.presetColors
 
                                 Rectangle {
                                     width: theme.gridUnit * 1.5
@@ -423,7 +391,7 @@ Item {
 
                                     MouseArea {
                                         anchors.fill: parent
-                                        onClicked: { fullRoot.setFillColor(modelData) }
+                                        onClicked: { fullRoot.set("fillColor", modelData) }
                                     }
                                 }
                             }
@@ -451,12 +419,12 @@ Item {
                             from: 0.0
                             to: 1.0
                             stepSize: 0.05
-                            value: fullRoot.pick(backend.selectedFillOpacity, backend.defaultFillOpacity)
-                            onMoved: { fullRoot.setFillOpacity(value) }
+                            value: fullRoot.get("fillOpacity")
+                            onMoved: { fullRoot.set("fillOpacity", value) }
                         }
 
                         Controls.Label {
-                            text: Math.round(fullRoot.pick(backend.selectedFillOpacity, backend.defaultFillOpacity) * 100) + "%"
+                            text: Math.round(fullRoot.get("fillOpacity") * 100) + "%"
                         }
                     }
                 }
@@ -476,12 +444,12 @@ Item {
                         from: 0
                         to: 30
                         stepSize: 1
-                        value: fullRoot.pick(backend.selectedGlow, backend.defaultGlow)
-                        onMoved: { fullRoot.setGlow(value) }
+                        value: fullRoot.get("glow")
+                        onMoved: { fullRoot.set("glow", value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(fullRoot.pick(backend.selectedGlow, backend.defaultGlow)) + "px"
+                        text: Math.round(fullRoot.get("glow")) + "px"
                     }
                 }
 
@@ -500,13 +468,13 @@ Item {
                         from: 0
                         to: 3
                         stepSize: 1
-                        value: fullRoot.pick(backend.selectedFreehandSmoothing, backend.defaultFreehandSmoothing)
-                        onMoved: { fullRoot.setFreehandSmoothing(value) }
+                        value: fullRoot.get("freehandSmoothing")
+                        onMoved: { fullRoot.set("freehandSmoothing", value) }
                     }
 
                     Controls.Label {
                         text: {
-                            let v = Math.round(fullRoot.pick(backend.selectedFreehandSmoothing, backend.defaultFreehandSmoothing))
+                            let v = Math.round(fullRoot.get("freehandSmoothing"))
                             if (v <= 0) return "Off"
                             if (v === 1) return "Low"
                             if (v === 2) return "Med"
@@ -530,8 +498,8 @@ Item {
                         Component.onCompleted: popup.popupType = Controls.Popup.Item
                         Layout.fillWidth: true
                         model: ["Neat (0)", "Artist (1)", "Cartoon (2)"]
-                        currentIndex: Math.min(2, Math.max(0, Math.round(fullRoot.pick(backend.selectedRoughness, backend.defaultRoughness))))
-                        onActivated: { fullRoot.setRoughness(index) }
+                        currentIndex: Math.min(2, Math.max(0, Math.round(fullRoot.get("roughness"))))
+                        onActivated: { fullRoot.set("roughness", index) }
                     }
 
                     Controls.Label {
@@ -544,12 +512,12 @@ Item {
                         from: 0
                         to: 50
                         stepSize: 1
-                        value: fullRoot.pick(backend.selectedBorderRadius, backend.defaultBorderRadius)
-                        onMoved: { fullRoot.setBorderRadius(value) }
+                        value: fullRoot.get("borderRadius")
+                        onMoved: { fullRoot.set("borderRadius", value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(fullRoot.pick(backend.selectedBorderRadius, backend.defaultBorderRadius)) + "px"
+                        text: Math.round(fullRoot.get("borderRadius")) + "px"
                     }
                 }
 
@@ -571,11 +539,11 @@ Item {
                             Layout.fillWidth: true
                             model: ["sans-serif", "serif", "monospace", "Comic Sans MS"]
                             currentIndex: {
-                                let f = fullRoot.pick(backend.selectedFontFamily, backend.defaultFontFamily)
+                                let f = fullRoot.get("fontFamily")
                                 let idx = model.indexOf(f)
                                 return idx >= 0 ? idx : 0
                             }
-                            onActivated: { fullRoot.setFontFamily(currentValue) }
+                            onActivated: { fullRoot.set("fontFamily", currentValue) }
                         }
                     }
 
@@ -591,12 +559,12 @@ Item {
                             from: 10
                             to: 72
                             stepSize: 1
-                            value: fullRoot.pick(backend.selectedFontSize, backend.defaultFontSize)
-                            onMoved: { fullRoot.setFontSize(value) }
+                            value: fullRoot.get("fontSize")
+                            onMoved: { fullRoot.set("fontSize", value) }
                         }
 
                         Controls.Label {
-                            text: Math.round(fullRoot.pick(backend.selectedFontSize, backend.defaultFontSize)) + "px"
+                            text: Math.round(fullRoot.get("fontSize")) + "px"
                         }
                     }
                 }
@@ -616,17 +584,28 @@ Item {
 
                     ListView {
                         id: shapesListView
-                        model: backend.shapesMetadata
+                        objectName: "shapesListView"
+                        // The shapes model itself, not a parallel metadata copy of it:
+                        // it already carries type/selected/locked and signals its own
+                        // changes.
+                        model: backend.shapesModel
 
                         delegate: Controls.ItemDelegate {
+                            id: shapeRow
+                            required property int index
+                            required property string type
+                            // var, not bool: these keys are optional on a shape map, and
+                            // an absent one arrives as undefined.
+                            required property var selected
+                            required property var locked
+
                             width: shapesListView.width
                             height: theme.gridUnit * 2
 
                             background: Rectangle {
-                                color: (modelData && modelData.selected)
-                                       ? theme.highlightColor
-                                       : (hovered ? theme.hoverColor : "transparent")
-                                opacity: (modelData && modelData.selected) ? 0.3 : 1.0
+                                color: !!shapeRow.selected ? theme.highlightColor
+                                                         : (shapeRow.hovered ? theme.hoverColor : "transparent")
+                                opacity: shapeRow.selected ? 0.3 : 1.0
                                 radius: 4
                             }
 
@@ -635,8 +614,7 @@ Item {
 
                                 Image {
                                     source: {
-                                        let t = modelData && modelData.type ? modelData.type.toLowerCase() : "";
-                                        switch(t) {
+                                        switch (shapeRow.type.toLowerCase()) {
                                             case "rectangle": return "qrc:/icons/draw-rectangle.svg";
                                             case "ellipse": return "qrc:/icons/draw-ellipse.svg";
                                             case "arrow": return "qrc:/icons/draw-arrow.svg";
@@ -651,29 +629,25 @@ Item {
                                 }
 
                                 Controls.Label {
-                                    text: (modelData && modelData.name) ? modelData.name : ("Shape " + (index + 1))
-                                    font.bold: modelData ? !!modelData.selected : false
+                                    text: shapeRow.type.charAt(0).toUpperCase() + shapeRow.type.slice(1)
+                                          + " " + (shapeRow.index + 1)
+                                    font.bold: !!shapeRow.selected
                                     Layout.fillWidth: true
                                 }
 
                                 Controls.ToolButton {
-                                    icon.source: (modelData && modelData.locked) ? "qrc:/icons/object-locked.svg" : "qrc:/icons/object-unlocked.svg"
-                                    onClicked: {
-                                        backend.setShapeLocked(index, !(modelData && modelData.locked))
-                                    }
+                                    icon.source: !!shapeRow.locked ? "qrc:/icons/object-locked.svg"
+                                                                 : "qrc:/icons/object-unlocked.svg"
+                                    onClicked: backend.setShapeLocked(shapeRow.index, !shapeRow.locked)
                                 }
 
                                 Controls.ToolButton {
                                     icon.source: "qrc:/icons/edit-delete.svg"
-                                    onClicked: {
-                                        backend.deleteShape(index)
-                                    }
+                                    onClicked: backend.deleteShape(shapeRow.index)
                                 }
                             }
 
-                            onClicked: {
-                                backend.selectShape(index)
-                            }
+                            onClicked: backend.selectShape(shapeRow.index)
                         }
 
                         Controls.Label {

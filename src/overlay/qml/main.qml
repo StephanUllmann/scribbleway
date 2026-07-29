@@ -1,4 +1,5 @@
 import QtQuick
+import QtQml
 import QtQuick.Window
 import QtQuick.Controls as Controls
 import QtQuick.Shapes
@@ -788,158 +789,61 @@ Window {
             controller.pasteFromClipboard(canvasWindow.lastMousePos.x, canvasWindow.lastMousePos.y);
         }
     }
-    // Modal unmodified-key and action shortcuts, enabled via shortcutGuard
-    Shortcut {
-        sequence: controller.localShortcutSequences["tool_arrow"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.toggleTool("arrow")
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["tool_rectangle"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.toggleTool("rectangle")
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["tool_freehand"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.toggleTool("freehand")
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["tool_ellipse"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.toggleTool("ellipse")
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["tool_line"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.toggleTool("line")
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["tool_text"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.toggleTool("text")
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["color_cycle"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.cycleColor()
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["action_grow"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.growSelected()
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["action_shrink"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.shrinkSelected()
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["action_increase_border_radius"]
-        enabled: canvasWindow.shortcutGuard && controller.selectedShapeType === "rectangle"
-        onActivated: controller.increaseBorderRadius()
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["action_decrease_border_radius"]
-        enabled: canvasWindow.shortcutGuard && controller.selectedShapeType === "rectangle"
-        onActivated: controller.decreaseBorderRadius()
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["action_select"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.enterSelectMode()
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["action_cycle_roughness"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.cycleRoughness()
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["action_undo"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.undo()
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["action_redo"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.redo()
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["action_clear"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.clear()
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["color_1"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.selectPresetColor(0)
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["color_2"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.selectPresetColor(1)
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["color_3"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.selectPresetColor(2)
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["color_4"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.selectPresetColor(3)
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["color_5"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.selectPresetColor(4)
-    }
-    Shortcut {
-        sequence: controller.localShortcutSequences["color_6"]
-        enabled: canvasWindow.shortcutGuard
-        onActivated: controller.selectPresetColor(5)
+    // Modal unmodified-key and action shortcuts. A table beats 22 near-identical
+    // Shortcut blocks; `needs` narrows the guard where a shortcut only applies to one
+    // shape type. Instantiator rather than Repeater: Shortcut is not an Item.
+    Instantiator {
+        model: [
+            { key: "tool_arrow",             run: () => controller.toggleTool("arrow") },
+            { key: "tool_rectangle",         run: () => controller.toggleTool("rectangle") },
+            { key: "tool_freehand",          run: () => controller.toggleTool("freehand") },
+            { key: "tool_ellipse",           run: () => controller.toggleTool("ellipse") },
+            { key: "tool_line",              run: () => controller.toggleTool("line") },
+            { key: "tool_text",              run: () => controller.toggleTool("text") },
+            { key: "color_cycle",            run: () => controller.cycleColor() },
+            { key: "color_1",                run: () => controller.selectPresetColor(0) },
+            { key: "color_2",                run: () => controller.selectPresetColor(1) },
+            { key: "color_3",                run: () => controller.selectPresetColor(2) },
+            { key: "color_4",                run: () => controller.selectPresetColor(3) },
+            { key: "color_5",                run: () => controller.selectPresetColor(4) },
+            { key: "color_6",                run: () => controller.selectPresetColor(5) },
+            { key: "action_grow",            run: () => controller.growSelected() },
+            { key: "action_shrink",          run: () => controller.shrinkSelected() },
+            { key: "action_select",          run: () => controller.enterSelectMode() },
+            { key: "action_cycle_roughness", run: () => controller.cycleRoughness() },
+            { key: "action_undo",            run: () => controller.undo() },
+            { key: "action_redo",            run: () => controller.redo() },
+            { key: "action_clear",           run: () => controller.clear() },
+            { key: "action_increase_border_radius", needs: "rectangle", run: () => controller.increaseBorderRadius() },
+            { key: "action_decrease_border_radius", needs: "rectangle", run: () => controller.decreaseBorderRadius() }
+        ]
+        delegate: Shortcut {
+            required property var modelData
+            sequence: controller.localShortcutSequences[modelData.key]
+            enabled: canvasWindow.shortcutGuard
+                     && (!modelData.needs || controller.selectedType === modelData.needs)
+            onActivated: modelData.run()
+        }
     }
 
-    // Arrow-key nudge: move selected shape(s) by 1px, or 10px with Shift
-    Shortcut {
-        sequence: "Left"
-        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
-        onActivated: controller.nudgeSelected(-1, 0)
-    }
-    Shortcut {
-        sequence: "Right"
-        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
-        onActivated: controller.nudgeSelected(1, 0)
-    }
-    Shortcut {
-        sequence: "Up"
-        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
-        onActivated: controller.nudgeSelected(0, -1)
-    }
-    Shortcut {
-        sequence: "Down"
-        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
-        onActivated: controller.nudgeSelected(0, 1)
-    }
-    Shortcut {
-        sequence: "Shift+Left"
-        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
-        onActivated: controller.nudgeSelected(-10, 0)
-    }
-    Shortcut {
-        sequence: "Shift+Right"
-        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
-        onActivated: controller.nudgeSelected(10, 0)
-    }
-    Shortcut {
-        sequence: "Shift+Up"
-        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
-        onActivated: controller.nudgeSelected(0, -10)
-    }
-    Shortcut {
-        sequence: "Shift+Down"
-        enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
-        onActivated: controller.nudgeSelected(0, 10)
+    // Arrow-key nudge: move selected shape(s) by 1px, or 10px with Shift.
+    Instantiator {
+        model: [
+            { seq: "Left",        dx:  -1, dy:   0 },
+            { seq: "Right",       dx:   1, dy:   0 },
+            { seq: "Up",          dx:   0, dy:  -1 },
+            { seq: "Down",        dx:   0, dy:   1 },
+            { seq: "Shift+Left",  dx: -10, dy:   0 },
+            { seq: "Shift+Right", dx:  10, dy:   0 },
+            { seq: "Shift+Up",    dx:   0, dy: -10 },
+            { seq: "Shift+Down",  dx:   0, dy:  10 }
+        ]
+        delegate: Shortcut {
+            required property var modelData
+            sequence: modelData.seq
+            enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
+            onActivated: controller.nudgeSelected(modelData.dx, modelData.dy)
+        }
     }
 
 

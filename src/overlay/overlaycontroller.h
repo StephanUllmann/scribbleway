@@ -10,6 +10,7 @@
 #include <QAction>
 #include <QHash>
 #include <QSet>
+#include <limits>
 #include "shapesmodel.h"
 
 struct ShortcutAction {
@@ -52,7 +53,6 @@ class OverlayController : public QObject
     Q_PROPERTY(double defaultFillOpacity READ defaultFillOpacity WRITE setDefaultFillOpacity NOTIFY defaultFillOpacityChanged)
     Q_PROPERTY(int defaultFreehandSmoothing READ defaultFreehandSmoothing WRITE setDefaultFreehandSmoothing NOTIFY defaultFreehandSmoothingChanged)
     Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
-    Q_PROPERTY(QString selectedShapeType READ selectedShapeType NOTIFY selectionChanged)
     Q_PROPERTY(QVariantMap localShortcutSequences READ localShortcutSequences NOTIFY localShortcutsChanged)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
     Q_PROPERTY(QString selectedType READ selectedType NOTIFY selectionChanged)
@@ -67,8 +67,7 @@ class OverlayController : public QObject
     Q_PROPERTY(QString selectedFillColor READ selectedFillColor NOTIFY selectionChanged)
     Q_PROPERTY(double selectedFillOpacity READ selectedFillOpacity NOTIFY selectionChanged)
     Q_PROPERTY(int selectedFreehandSmoothing READ selectedFreehandSmoothing NOTIFY selectionChanged)
-    Q_PROPERTY(bool selectedLocked READ selectedLocked NOTIFY selectionChanged)
-    Q_PROPERTY(QVariantList shapesMetadata READ shapesMetadata NOTIFY shapesMetadataChanged)
+    Q_PROPERTY(QStringList presetColors READ presetColors CONSTANT)
     Q_PROPERTY(QStringList screenNames READ screenNames CONSTANT)
     Q_PROPERTY(QString targetScreen READ targetScreen NOTIFY targetScreenChanged)
     Q_PROPERTY(bool trayPopupOpen READ trayPopupOpen NOTIFY trayPopupOpenChanged)
@@ -82,7 +81,6 @@ public:
 
     int selectedIndex() const;
     bool hasMultiSelection() const;
-    QString selectedShapeType() const;
 
     bool hasSelection() const;
     QString selectedType() const;
@@ -97,7 +95,9 @@ public:
     QString selectedFillColor() const;
     double selectedFillOpacity() const;
     int selectedFreehandSmoothing() const;
-    bool selectedLocked() const;
+    // The same list selectPresetColor()/the number hotkeys index, so the swatches
+    // in the menu cannot drift out of step with them.
+    static QStringList presetColors();
     QStringList screenNames() const;
     QString targetScreen() const;
 
@@ -138,7 +138,6 @@ public:
     void registerAction(QAction *action, const QString &actionId, const QString &displayName);
     Q_INVOKABLE int indexForId(const QString &id) const;
     QPointF pointFromBinding(const QVariantMap &targetShape, double focus) const;
-    Q_INVOKABLE QPointF findSnapPoint(double px, double py, int excludeIndex = -1) const;
     Q_INVOKABLE QVariantMap findSnapInfo(double px, double py, int excludeIndex = -1) const;
     Q_INVOKABLE void createBindingsForShape(int lineIndex);
     Q_INVOKABLE void breakEndpointBinding(int lineIndex, bool isStart);
@@ -182,7 +181,6 @@ public:
 
     // DBus-invokable slots (also used in C++)
 public Q_SLOTS:
-    QVariantList shapesMetadata() const;
     QString activeTool() const;
     void setActiveTool(const QString &tool);
     QVariantList getShortcuts();
@@ -224,8 +222,7 @@ Q_SIGNALS:
     void defaultFreehandSmoothingChanged();
     
     // DBus signals (matched by AppletBackend slots)
-    void selectionChanged(const QVariantMap &selectionState);
-    void shapesMetadataChanged(const QVariantList &metadata);
+    void selectionChanged();
     void modeChanged(const QString &mode);
     void shortcutsChanged(const QVariantList &shortcuts);
     void localShortcutsChanged();
@@ -240,8 +237,15 @@ Q_SIGNALS:
 
 private:
     void notifySelectionChanged();
-    void notifyShapesChanged();
     void ensureSelectMode();
+    bool selectedTypeIs(const QString &type) const;
+    // grow / shrink / border-radius are all the same move: read one int off the
+    // selection, add a delta, clamp, write it back.
+    void bumpSelected(const QString &key, int delta, int lo,
+                      int hi = std::numeric_limits<int>::max());
+    // Move one shape by (dx, dy). Each shape type stores its geometry differently, and
+    // paste, drag and nudge all need the same walk.
+    static void translateShape(QVariantMap &shape, double dx, double dy);
     QJsonObject convertToExcalidraw(const QVariantMap &shape);
     QJsonObject convertAttachedTextToExcalidraw(const QVariantMap &shape, const QVariantMap &attachedText) const;
     QVariantMap convertFromExcalidraw(const QJsonObject &elem);
@@ -291,7 +295,6 @@ private:
     QPointF nearestPointOnEllipse(double cx, double cy, double a, double b, double px, double py) const;
     void updateBoundEndpoints(int shapeIndex, const QSet<int> *skipIndices = nullptr);
     void cleanupBindingsForDelete(int deletedIndex);
-    void breakBinding(int lineIndex, bool isStart);
     void addBackReference(const QString &targetId, const QString &lineId);
     void removeBackReference(const QString &targetId, const QString &lineId);
 };

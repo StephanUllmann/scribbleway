@@ -36,8 +36,6 @@ qt_add_resources(scribbleway-overlay "icons"
     PREFIX "/icons"
     BASE icons
     FILES
-        icons/arrow-down.svg
-        icons/arrow-right.svg
         icons/color-picker.svg
         icons/draw-freehand.svg
         icons/draw-rectangle.svg
@@ -54,7 +52,6 @@ qt_add_resources(scribbleway-overlay "icons"
         icons/go-up.svg
         icons/object-locked.svg
         icons/object-unlocked.svg
-        icons/run-build.svg
 )
 
 target_link_libraries(scribbleway-overlay PRIVATE

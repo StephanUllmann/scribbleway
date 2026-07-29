@@ -13,6 +13,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJSEngine>
+#include <QQmlEngine>
+#include <QQmlComponent>
+#include <QQmlContext>
+#include <QAbstractItemModel>
 #include <QFile>
 #include <QRegularExpression>
 #include <QSet>
@@ -40,6 +44,7 @@ private Q_SLOTS:
     void testOverlayControllerProperties();
     void testDefaultsReachableFromQml();
     void testEveryQmlControllerCallExists();
+    void testShapeListDelegateReadsModelRoles();
     void testOverlayControllerSelectionProperties();
     void testSingleInstanceGuard();
     void testMoveShape();
@@ -744,8 +749,8 @@ void ShapesModelTest::testBorderRadius()
     QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 20);
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 20);
 
-    // Test selectedShapeType() when shape is selected
-    QCOMPARE(controller.selectedShapeType(), QStringLiteral("rectangle"));
+    // Test selectedType() when shape is selected
+    QCOMPARE(controller.selectedType(), QStringLiteral("rectangle"));
 
     // Test increaseBorderRadius()
     controller.increaseBorderRadius();
@@ -767,9 +772,9 @@ void ShapesModelTest::testBorderRadius()
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 0);
     QCOMPARE(controller.defaultBorderRadius(), 0);
 
-    // Deselect and verify selectedShapeType() is empty
+    // Deselect and verify selectedType() is empty
     controller.setSelectedIndex(-1);
-    QCOMPARE(controller.selectedShapeType(), QString());
+    QCOMPARE(controller.selectedType(), QString());
 
     // Test increaseBorderRadius() when no shape is selected (should do nothing)
     controller.increaseBorderRadius();
@@ -780,7 +785,7 @@ void ShapesModelTest::testBorderRadius()
     lineShape[QStringLiteral("type")] = QStringLiteral("line");
     controller.addShape(lineShape); // selects it automatically
 
-    QCOMPARE(controller.selectedShapeType(), QStringLiteral("line"));
+    QCOMPARE(controller.selectedType(), QStringLiteral("line"));
 
     // increaseBorderRadius() on line should do nothing
     controller.increaseBorderRadius();
@@ -1719,14 +1724,10 @@ void ShapesModelTest::testRoughPathGenerator()
     engine.globalObject().setProperty(QStringLiteral("Qt"), qtMock);
 
     // Read and evaluate RoughPathGenerator.js
-    QFile file(QStringLiteral("src/overlay/qml/shapes/RoughPathGenerator.js"));
-    if (!file.exists()) {
-        file.setFileName(QStringLiteral("../src/overlay/qml/shapes/RoughPathGenerator.js"));
-    }
-    if (!file.exists()) {
-        file.setFileName(QStringLiteral("../../src/overlay/qml/shapes/RoughPathGenerator.js"));
-    }
-    QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), "Failed to open RoughPathGenerator.js file");
+    // QML_SOURCE_DIR, not a walk up from the cwd: the old relative-path hunt only found
+    // the file when the build directory happened to sit inside the source tree.
+    QFile file(QStringLiteral(QML_SOURCE_DIR) + QStringLiteral("/shapes/RoughPathGenerator.js"));
+    QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(file.fileName()));
     QString jsCode = QString::fromUtf8(file.readAll());
     file.close();
 
@@ -2142,13 +2143,13 @@ void ShapesModelTest::testBindingGeometry()
     QPointF p50 = ctrl.pointFromBinding(rect, 0.5);
     QCOMPARE(p50, QPointF(200.0, 200.0));
 
-    // findSnapPoint: point at (201, 95) is 5px from top edge -> should snap to (201, 100)
-    QPointF hit = ctrl.findSnapPoint(201.0, 95.0);
-    QCOMPARE(hit.y(), 100.0);
+    // findSnapInfo: point at (201, 95) is 5px from top edge -> should snap to (201, 100)
+    const QVariantMap hit = ctrl.findSnapInfo(201.0, 95.0);
+    QVERIFY(hit[QStringLiteral("valid")].toBool());
+    QCOMPARE(hit[QStringLiteral("snapY")].toDouble(), 100.0);
 
-    // Point at (201, 50) is 50px from top edge -> should NOT snap (returns empty QPointF)
-    QPointF miss = ctrl.findSnapPoint(201.0, 50.0);
-    QVERIFY(miss.isNull());
+    // Point at (201, 50) is 50px from top edge -> should NOT snap
+    QVERIFY(!ctrl.findSnapInfo(201.0, 50.0)[QStringLiteral("valid")].toBool());
 
     // Create an ellipse
     QVariantMap ell;
@@ -2163,10 +2164,10 @@ void ShapesModelTest::testBindingGeometry()
     ctrl.addShape(ell);
 
     // Point near right side of ellipse -> should snap
-    QPointF hitEll = ctrl.findSnapPoint(505.0, 130.0);
-    QVERIFY(!hitEll.isNull());
+    const QVariantMap hitEll = ctrl.findSnapInfo(505.0, 130.0);
+    QVERIFY(hitEll[QStringLiteral("valid")].toBool());
     // snapPoint should be on the ellipse perimeter, close to (500, 130)
-    QVERIFY(qAbs(hitEll.x() - 500.0) < 5.0);
+    QVERIFY(qAbs(hitEll[QStringLiteral("snapX")].toDouble() - 500.0) < 5.0);
 }
 
 void ShapesModelTest::testBindingMovePropagate()
@@ -2681,6 +2682,41 @@ void ShapesModelTest::testDefaultsReachableFromQml()
     controller.setPopupWantsKeyboard(true);
     controller.setTrayPopupOpen(false);
     QVERIFY(!controller.popupWantsKeyboard());
+}
+
+// The shape manager list binds straight to ShapesModel, so its delegate pulls `type`,
+// `selected` and `locked` out of the model by role name. A renamed or missing role is a
+// run-time-only failure in a hidden popup, so instantiate the real menu over a real model
+// and confirm the rows come out with the values the delegate claims to need.
+void ShapesModelTest::testShapeListDelegateReadsModelRoles()
+{
+    OverlayController controller;
+    controller.addShape({{QStringLiteral("type"), QStringLiteral("rectangle")}});
+    controller.addShape({{QStringLiteral("type"), QStringLiteral("ellipse")},
+                         {QStringLiteral("locked"), true}});
+
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QStringLiteral(QML_SOURCE_DIR) + QStringLiteral("/FullRepresentation.qml")));
+    QScopedPointer<QObject> menu(component.create());
+    QVERIFY2(menu, qPrintable(component.errorString()));
+
+    QObject *list = menu->findChild<QObject*>(QStringLiteral("shapesListView"));
+    QVERIFY2(list, "FullRepresentation no longer has a ListView named shapesListView");
+    QCOMPARE(list->property("count").toInt(), 2);
+
+    // The roles the delegate declares as required properties.
+    QAbstractItemModel *model = list->property("model").value<QAbstractItemModel*>();
+    QVERIFY(model);
+    const QHash<int, QByteArray> roles = model->roleNames();
+    for (const char *needed : {"type", "selected", "locked"}) {
+        QVERIFY2(roles.values().contains(QByteArray(needed)),
+                 qPrintable(QStringLiteral("ShapesModel no longer exposes the '%1' role the "
+                                           "shape list delegate requires").arg(QLatin1String(needed))));
+    }
+    QCOMPARE(model->data(model->index(1, 0), roles.key("type")).toString(), QStringLiteral("ellipse"));
+    QCOMPARE(model->data(model->index(1, 0), roles.key("locked")).toBool(), true);
 }
 
 // The real guard for the class of bug above: walk every `controller.foo(...)` /

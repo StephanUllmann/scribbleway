@@ -41,15 +41,16 @@ add_subdirectory(tests)
 install(FILES org.kde.scribbleway.desktop DESTINATION ${KDE_INSTALL_APPDIR})
 install(FILES org.kde.scribbleway-autostart.desktop DESTINATION ${KDE_INSTALL_AUTOSTARTDIR})
 
-option(BUILD_DEB_PACKAGE "Automatically rebuild the .deb package after a successful build" ON)
+# Off by default: the .deb build configures and builds a second full tree in build-deb/,
+# which is not what an ordinary `cmake --build` should do. Run packaging/build_deb.sh
+# directly when releasing, or configure with -DBUILD_DEB_PACKAGE=ON.
+option(BUILD_DEB_PACKAGE "Automatically rebuild the .deb package after a successful build" OFF)
 
-if(BUILD_DEB_PACKAGE)
-    if(NOT DEFINED ENV{DEB_BUILD_ARCH} AND NOT DEFINED ENV{DPKG_RUNNING_VERSION})
-        add_custom_target(rebuild_debian_package ALL
-            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/packaging/build_deb.sh ${CMAKE_BINARY_DIR}
-            DEPENDS scribbleway-overlay
-            COMMENT "Building Debian package (.deb) from build outputs"
-            VERBATIM
-        )
-    endif()
+if(BUILD_DEB_PACKAGE AND NOT DEFINED ENV{DEB_BUILD_ARCH} AND NOT DEFINED ENV{DPKG_RUNNING_VERSION})
+    add_custom_target(rebuild_debian_package ALL
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/packaging/build_deb.sh ${CMAKE_BINARY_DIR}
+        DEPENDS scribbleway-overlay
+        COMMENT "Building Debian package (.deb) from build outputs"
+        VERBATIM
+    )
 endif()

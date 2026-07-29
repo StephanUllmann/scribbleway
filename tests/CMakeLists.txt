@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Test Quick QuickTest DBus)
+find_package(Qt6 REQUIRED COMPONENTS Test Quick QuickTest)
 find_package(KF6 REQUIRED COMPONENTS GlobalAccel)
 find_package(LayerShellQt REQUIRED)
 
@@ -17,14 +17,12 @@ target_compile_definitions(shapesmodeltest PRIVATE
 
 target_include_directories(shapesmodeltest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/overlay
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/common
 )
 
 target_link_libraries(shapesmodeltest PRIVATE
     Qt6::Core
     Qt6::Test
     Qt6::Quick
-    Qt6::DBus
     KF6::GlobalAccel
     LayerShellQt::Interface
 )

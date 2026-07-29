@@ -88,7 +88,8 @@ if [ -f "$BUILD_DIR/install_manifest.txt" ]; then
     done < "$BUILD_DIR/install_manifest.txt"
 fi
 
-# Explicit purge of standard binary and applet/plugin locations
+# Explicit purge of standard binary and desktop-file locations, which catches
+# installs made at a different prefix than the current build manifest covers.
 TARGET_FILES=(
     "$HOME/.local/bin/scribbleway-overlay"
     "/usr/local/bin/scribbleway-overlay"
@@ -111,30 +112,8 @@ for file in "${TARGET_FILES[@]}"; do
 done
 
 
-TARGET_DIRS=(
-    "$HOME/.local/lib/qml/org/kde/scribbleway"
-    "$HOME/.local/lib/x86_64-linux-gnu/qml/org/kde/scribbleway"
-    "/usr/lib/qt6/qml/org/kde/scribbleway"
-    "/usr/lib64/qt6/qml/org/kde/scribbleway"
-    "/usr/local/lib/qt6/qml/org/kde/scribbleway"
-    "/usr/local/lib/x86_64-linux-gnu/qt6/qml/org/kde/scribbleway"
-)
-
-for dir in "${TARGET_DIRS[@]}"; do
-    if [ -d "$dir" ]; then
-        if [ -w "$dir" ] || [ -w "$(dirname "$dir")" ]; then
-            rm -rf "$dir" || true
-        elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-            sudo rm -rf "$dir" 2>/dev/null || true
-        fi
-    fi
-done
-
-
-echo "Clearing QML and Plasma disk caches..."
+echo "Clearing the QML disk cache..."
 rm -rf "$HOME/.cache/qmlcache"
-rm -rf "$HOME/.cache/plasmashell"
-rm -rf "$HOME/.cache/plasma"* 2>/dev/null || true
 
 echo "Wiping build directory and leftover packaging artifacts..."
 if [ -d "$BUILD_DIR" ]; then
@@ -145,15 +124,9 @@ rm -f ./*.deb 2>/dev/null || true
 echo "=== 3. Configuring clean build ==="
 NUM_CORES=$(nproc 2>/dev/null || echo 2)
 
-EXTRA_ARGS=()
-if [ "$PREFIX" = "$HOME/.local" ]; then
-    EXTRA_ARGS+=("-DKDE_INSTALL_QMLDIR=lib/qml")
-fi
-
 cmake -B "$BUILD_DIR" -S . \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    "${EXTRA_ARGS[@]}"
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 
 echo "=== 4. Building project ==="
 cmake --build "$BUILD_DIR" -j"$NUM_CORES"

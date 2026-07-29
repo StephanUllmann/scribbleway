@@ -5,7 +5,7 @@
 #include <QSettings>
 #include <QStringList>
 
-static const QStringList presetColors = {
+static const QStringList kPresetColors = {
     QStringLiteral("#e63946"),
     QStringLiteral("#f4a261"),
     QStringLiteral("#e9c46a"),
@@ -27,6 +27,7 @@ static const QStringList presetColors = {
 #include <QPointF>
 #include <QLineF>
 #include <limits>
+#include <numbers>
 
 OverlayController::OverlayController(QObject *parent)
     : QObject(parent)
@@ -84,33 +85,6 @@ void OverlayController::setWindow(QQuickWindow *window)
     }
 }
 
-
-QVariantList OverlayController::shapesMetadata() const
-{
-    QVariantList list;
-    const auto shapesList = m_shapesModel.shapes();
-    int index = 0;
-    for (const auto &shape : shapesList) {
-        QVariantMap metadata;
-        QString type = shape.value(QStringLiteral("type")).toString();
-        metadata.insert(QStringLiteral("type"), type);
-        metadata.insert(QStringLiteral("locked"), shape.value(QStringLiteral("locked"), false).toBool());
-        metadata.insert(QStringLiteral("selected"), shape.value(QStringLiteral("selected"), false).toBool());
-        metadata.insert(QStringLiteral("color"), shape.value(QStringLiteral("color")).toString());
-
-        // Generate the display name server-side
-        QString typeCap = type;
-        if (!typeCap.isEmpty()) {
-            typeCap[0] = typeCap[0].toUpper();
-        }
-        QString displayName = QStringLiteral("%1 %2").arg(typeCap).arg(index + 1);
-        metadata.insert(QStringLiteral("name"), displayName);
-
-        list.append(metadata);
-        index++;
-    }
-    return list;
-}
 
 ShapesModel* OverlayController::shapesModel()
 {
@@ -315,7 +289,6 @@ void OverlayController::addShape(const QVariantMap &shape)
     m_shapesModel.addShape(newShape);
     setSelectedIndex(m_shapesModel.rowCount() - 1);
     m_shapesModel.endEdit();
-    notifyShapesChanged();
 }
 
 int OverlayController::indexForId(const QString &id) const
@@ -411,7 +384,6 @@ QVariantMap OverlayController::ensureAttachedTextForShape(int index)
     }
     
     m_shapesModel.updateShape(index, updates);
-    notifyShapesChanged();
     if (index == m_selectedIndex) {
         notifySelectionChanged();
     }
@@ -457,7 +429,6 @@ void OverlayController::setAttachedText(int index, const QString &text)
     }
 
     m_shapesModel.updateShape(index, updates);
-    notifyShapesChanged();
     if (index == m_selectedIndex) {
         notifySelectionChanged();
     }
@@ -476,7 +447,6 @@ void OverlayController::removeAttachedText(int index)
     }
 
     m_shapesModel.updateShape(index, {{QStringLiteral("bindings"), bindings}});
-    notifyShapesChanged();
     if (index == m_selectedIndex) {
         notifySelectionChanged();
     }
@@ -485,7 +455,6 @@ void OverlayController::removeAttachedText(int index)
 void OverlayController::updateShape(int index, const QVariantMap &properties)
 {
     m_shapesModel.updateShape(index, properties);
-    notifyShapesChanged();
 
     if (index == m_selectedIndex) {
         notifySelectionChanged();
@@ -561,7 +530,6 @@ void OverlayController::setSelectedIndex(int index)
         }
         m_shapesModel.endEdit();
         
-        notifyShapesChanged();
         notifySelectionChanged();
     }
 }
@@ -717,9 +685,9 @@ int OverlayController::selectedFreehandSmoothing() const
     return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("freehandSmoothing")).toInt();
 }
 
-bool OverlayController::selectedLocked() const
+QStringList OverlayController::presetColors()
 {
-    return const_cast<OverlayController*>(this)->getSelectionState().value(QStringLiteral("locked")).toBool();
+    return kPresetColors;
 }
 
 QStringList OverlayController::screenNames() const
@@ -741,89 +709,60 @@ QString OverlayController::targetScreen() const
 void OverlayController::updateProperties(const QVariantMap &properties)
 {
     QVariantMap demarshalled = properties;
-    if (demarshalled.contains(QStringLiteral("color"))) {
-        setDefaultColor(demarshalled[QStringLiteral("color")].toString());
-    }
-    if (demarshalled.contains(QStringLiteral("strokeWidth"))) {
-        setDefaultStrokeWidth(demarshalled[QStringLiteral("strokeWidth")].toInt());
-    }
-    if (demarshalled.contains(QStringLiteral("opacity"))) {
-        setDefaultOpacity(demarshalled[QStringLiteral("opacity")].toDouble());
-    }
-    if (demarshalled.contains(QStringLiteral("fontFamily"))) {
-        setDefaultFontFamily(demarshalled[QStringLiteral("fontFamily")].toString());
-    }
-    if (demarshalled.contains(QStringLiteral("fontSize"))) {
-        setDefaultFontSize(demarshalled[QStringLiteral("fontSize")].toInt());
-    }
-    if (demarshalled.contains(QStringLiteral("borderRadius"))) {
-        setDefaultBorderRadius(demarshalled[QStringLiteral("borderRadius")].toInt());
-    }
+
     if (demarshalled.contains(QStringLiteral("roughness"))) {
-        int r = qBound(0, demarshalled[QStringLiteral("roughness")].toInt(), 2);
-        demarshalled[QStringLiteral("roughness")] = r;
-        setDefaultRoughness(r);
+        demarshalled[QStringLiteral("roughness")] = qBound(0, demarshalled[QStringLiteral("roughness")].toInt(), 2);
     }
-    if (demarshalled.contains(QStringLiteral("glow"))) {
-        setDefaultGlow(demarshalled[QStringLiteral("glow")].toInt());
-    }
-    if (demarshalled.contains(QStringLiteral("fillColor"))) {
-        setDefaultFillColor(demarshalled[QStringLiteral("fillColor")].toString());
-    }
-    if (demarshalled.contains(QStringLiteral("fillOpacity"))) {
-        setDefaultFillOpacity(demarshalled[QStringLiteral("fillOpacity")].toDouble());
-    }
-    if (demarshalled.contains(QStringLiteral("freehandSmoothing"))) {
-        setDefaultFreehandSmoothing(demarshalled[QStringLiteral("freehandSmoothing")].toInt());
-        demarshalled.remove(QStringLiteral("freehandSmoothing"));
+    // App-level default only: shapes store the smoothed points, not the setting.
+    const QVariant smoothing = demarshalled.take(QStringLiteral("freehandSmoothing"));
+    if (smoothing.isValid()) {
+        setDefaultFreehandSmoothing(smoothing.toInt());
     }
 
-    m_shapesModel.beginEdit();
-    bool updatedAny = false;
+    // Every shape key has a matching `default<Key>` Q_PROPERTY, so route through the
+    // metaobject instead of writing one near-identical branch per property -- the branch
+    // someone forgets to add is exactly how defaults silently stop sticking. Keys with no
+    // such property (bindings, text, geometry) simply don't match and fall through.
+    // testDefaultsReachableFromQml() pins that these properties stay writable.
+    for (auto it = demarshalled.cbegin(); it != demarshalled.cend(); ++it) {
+        const QString name = QStringLiteral("default") + it.key().at(0).toUpper() + it.key().mid(1);
+        setProperty(name.toUtf8().constData(), it.value());
+    }
+
     const bool hasFontUpdate = demarshalled.contains(QStringLiteral("fontFamily")) || demarshalled.contains(QStringLiteral("fontSize"));
-    for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
-        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
-            QVariantMap shapeProps = demarshalled;
-            const QVariantMap shape = m_shapesModel.shapes()[i];
-            const QVariantMap attached = ShapesModel::firstAttachedTextBinding(shape);
-            if (!attached.isEmpty() && hasFontUpdate) {
-                QVariantList bindings = withoutAttachedTextBinding(shape);
-                QVariantMap updatedAttached = attached;
-                if (demarshalled.contains(QStringLiteral("fontFamily"))) {
-                    updatedAttached.insert(QStringLiteral("fontFamily"), demarshalled[QStringLiteral("fontFamily")]);
-                }
-                if (demarshalled.contains(QStringLiteral("fontSize"))) {
-                    updatedAttached.insert(QStringLiteral("fontSize"), demarshalled[QStringLiteral("fontSize")]);
-                }
-                bindings.append(updatedAttached);
-                shapeProps.insert(QStringLiteral("bindings"), bindings);
-            }
-            m_shapesModel.updateShape(i, shapeProps);
-            updatedAny = true;
-        }
-    }
-
-    if (!updatedAny && m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
+    // A container's attached text carries its own font, so a font change has to reach
+    // the binding as well as the shape.
+    auto applyTo = [this, &demarshalled, hasFontUpdate](int index) {
         QVariantMap shapeProps = demarshalled;
-        const QVariantMap shape = m_shapesModel.shapes()[m_selectedIndex];
+        const QVariantMap shape = m_shapesModel.shapes()[index];
         const QVariantMap attached = ShapesModel::firstAttachedTextBinding(shape);
         if (!attached.isEmpty() && hasFontUpdate) {
             QVariantList bindings = withoutAttachedTextBinding(shape);
             QVariantMap updatedAttached = attached;
-            if (demarshalled.contains(QStringLiteral("fontFamily"))) {
-                updatedAttached.insert(QStringLiteral("fontFamily"), demarshalled[QStringLiteral("fontFamily")]);
-            }
-            if (demarshalled.contains(QStringLiteral("fontSize"))) {
-                updatedAttached.insert(QStringLiteral("fontSize"), demarshalled[QStringLiteral("fontSize")]);
+            for (const QString &key : {QStringLiteral("fontFamily"), QStringLiteral("fontSize")}) {
+                if (demarshalled.contains(key)) {
+                    updatedAttached.insert(key, demarshalled[key]);
+                }
             }
             bindings.append(updatedAttached);
             shapeProps.insert(QStringLiteral("bindings"), bindings);
         }
-        m_shapesModel.updateShape(m_selectedIndex, shapeProps);
+        m_shapesModel.updateShape(index, shapeProps);
+    };
+
+    m_shapesModel.beginEdit();
+    bool updatedAny = false;
+    for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
+        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+            applyTo(i);
+            updatedAny = true;
+        }
+    }
+    if (!updatedAny && m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
+        applyTo(m_selectedIndex);
     }
     m_shapesModel.endEdit();
 
-    notifyShapesChanged();
     notifySelectionChanged();
 }
 
@@ -831,7 +770,6 @@ void OverlayController::undo()
 {
     m_shapesModel.undo();
     m_selectedIndex = -1;
-    notifyShapesChanged();
     notifySelectionChanged();
 }
 
@@ -839,7 +777,6 @@ void OverlayController::redo()
 {
     m_shapesModel.redo();
     m_selectedIndex = -1;
-    notifyShapesChanged();
     notifySelectionChanged();
 }
 
@@ -847,7 +784,6 @@ void OverlayController::clear()
 {
     m_shapesModel.clear();
     m_selectedIndex = -1;
-    notifyShapesChanged();
     notifySelectionChanged();
 }
 
@@ -1029,7 +965,6 @@ void OverlayController::raiseSelected()
     if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount() - 1) {
         if (m_shapesModel.moveShape(m_selectedIndex, m_selectedIndex + 1)) {
             m_selectedIndex++;
-            notifyShapesChanged();
             notifySelectionChanged();
         }
     }
@@ -1040,7 +975,6 @@ void OverlayController::lowerSelected()
     if (m_selectedIndex > 0 && m_selectedIndex < m_shapesModel.rowCount()) {
         if (m_shapesModel.moveShape(m_selectedIndex, m_selectedIndex - 1)) {
             m_selectedIndex--;
-            notifyShapesChanged();
             notifySelectionChanged();
         }
     }
@@ -1054,8 +988,6 @@ void OverlayController::setShapeLocked(int index, bool locked)
         // If locked, we deselect it
         if (locked && index == m_selectedIndex) {
             setSelectedIndex(-1);
-        } else {
-            notifyShapesChanged();
         }
         m_shapesModel.endEdit();
     }
@@ -1073,7 +1005,6 @@ void OverlayController::deleteShape(int index)
             m_selectedIndex--;
             notifySelectionChanged();
         }
-        notifyShapesChanged();
     }
 }
 
@@ -1106,7 +1037,6 @@ void OverlayController::selectShape(int index, bool shiftHeld)
                 m_selectedIndex = newSelected;
             }
         }
-        notifyShapesChanged();
         notifySelectionChanged();
     } else {
         if (wasSelected) {
@@ -1126,7 +1056,6 @@ void OverlayController::selectShape(int index, bool shiftHeld)
             m_shapesModel.endEdit();
 
             ensureSelectMode();
-            notifyShapesChanged();
             notifySelectionChanged();
         }
     }
@@ -1134,12 +1063,7 @@ void OverlayController::selectShape(int index, bool shiftHeld)
 
 void OverlayController::notifySelectionChanged()
 {
-    Q_EMIT selectionChanged(getSelectionState());
-}
-
-void OverlayController::notifyShapesChanged()
-{
-    Q_EMIT shapesMetadataChanged(shapesMetadata());
+    Q_EMIT selectionChanged();
 }
 
 void OverlayController::ensureSelectMode()
@@ -1291,8 +1215,8 @@ QVariantMap OverlayController::localShortcutSequences() const
 
 void OverlayController::selectPresetColor(int index)
 {
-    if (index >= 0 && index < presetColors.size()) {
-        updateProperties({{QStringLiteral("color"), presetColors[index]}});
+    if (index >= 0 && index < kPresetColors.size()) {
+        updateProperties({{QStringLiteral("color"), kPresetColors[index]}});
     }
 }
 
@@ -1309,9 +1233,9 @@ void OverlayController::cycleColor()
 {
     QVariantMap state = getSelectionState();
     QString currentColor = state.value(QStringLiteral("color")).toString().toLower();
-    int idx = presetColors.indexOf(currentColor);
-    int nextIdx = (idx + 1) % presetColors.size();
-    updateProperties({{QStringLiteral("color"), presetColors[nextIdx]}});
+    int idx = kPresetColors.indexOf(currentColor);
+    int nextIdx = (idx + 1) % kPresetColors.size();
+    updateProperties({{QStringLiteral("color"), kPresetColors[nextIdx]}});
 }
 
 void OverlayController::cycleRoughness()
@@ -1335,55 +1259,50 @@ void OverlayController::cycleRoughness()
     updateProperties({{QStringLiteral("roughness"), nextRoughness}});
 }
 
+bool OverlayController::selectedTypeIs(const QString &type) const
+{
+    return selectedType().compare(type, Qt::CaseInsensitive) == 0;
+}
+
+void OverlayController::bumpSelected(const QString &key, int delta, int lo, int hi)
+{
+    const QVariantMap state = getSelectionState();
+    if (!state.value(QStringLiteral("hasSelection")).toBool()) return;
+    updateProperties({{key, qBound(lo, state.value(key).toInt() + delta, hi)}});
+}
+
 void OverlayController::growSelected()
 {
-    QVariantMap state = getSelectionState();
-    if (!state.value(QStringLiteral("hasSelection")).toBool()) return;
-    QString type = state.value(QStringLiteral("type")).toString();
-    if (type.toLower() == QStringLiteral("text")) {
-        int fontSize = state.value(QStringLiteral("fontSize"), 20).toInt();
-        updateProperties({{QStringLiteral("fontSize"), fontSize + 2}});
+    if (selectedTypeIs(QStringLiteral("text"))) {
+        bumpSelected(QStringLiteral("fontSize"), 2, 10);
     } else {
-        int strokeWidth = state.value(QStringLiteral("strokeWidth"), 2).toInt();
-        updateProperties({{QStringLiteral("strokeWidth"), qMin(strokeWidth + 1, 15)}});
+        bumpSelected(QStringLiteral("strokeWidth"), 1, 1, 15);
     }
 }
 
 void OverlayController::shrinkSelected()
 {
-    QVariantMap state = getSelectionState();
-    if (!state.value(QStringLiteral("hasSelection")).toBool()) return;
-    QString type = state.value(QStringLiteral("type")).toString();
-    if (type.toLower() == QStringLiteral("text")) {
-        int fontSize = state.value(QStringLiteral("fontSize"), 20).toInt();
-        updateProperties({{QStringLiteral("fontSize"), qMax(fontSize - 2, 10)}});
+    if (selectedTypeIs(QStringLiteral("text"))) {
+        bumpSelected(QStringLiteral("fontSize"), -2, 10);
     } else {
-        int strokeWidth = state.value(QStringLiteral("strokeWidth"), 2).toInt();
-        updateProperties({{QStringLiteral("strokeWidth"), qMax(strokeWidth - 1, 1)}});
+        bumpSelected(QStringLiteral("strokeWidth"), -1, 1);
     }
 }
 
 void OverlayController::increaseBorderRadius()
 {
-    QVariantMap state = getSelectionState();
-    if (!state.value(QStringLiteral("hasSelection")).toBool()) return;
-    QString type = state.value(QStringLiteral("type")).toString();
-    if (type.toLower() == QStringLiteral("rectangle")) {
-        int borderRadius = state.value(QStringLiteral("borderRadius"), m_defaultBorderRadius).toInt();
-        updateProperties({{QStringLiteral("borderRadius"), borderRadius + 2}});
+    if (selectedTypeIs(QStringLiteral("rectangle"))) {
+        bumpSelected(QStringLiteral("borderRadius"), 2, 0);
     }
 }
 
 void OverlayController::decreaseBorderRadius()
 {
-    QVariantMap state = getSelectionState();
-    if (!state.value(QStringLiteral("hasSelection")).toBool()) return;
-    QString type = state.value(QStringLiteral("type")).toString();
-    if (type.toLower() == QStringLiteral("rectangle")) {
-        int borderRadius = state.value(QStringLiteral("borderRadius"), m_defaultBorderRadius).toInt();
-        updateProperties({{QStringLiteral("borderRadius"), qMax(borderRadius - 2, 0)}});
+    if (selectedTypeIs(QStringLiteral("rectangle"))) {
+        bumpSelected(QStringLiteral("borderRadius"), -2, 0);
     }
 }
+
 void OverlayController::copySelected()
 {
     QJsonArray elements;
@@ -1575,34 +1494,9 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
     QList<int> pastedIndices;
     for (const QVariant &sv : list) {
         QVariantMap shape = sv.toMap();
-        QString type = shape[QStringLiteral("type")].toString();
         shape.insert(QStringLiteral("selected"), true);
         shape.insert(QStringLiteral("locked"), false);
-
-        if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
-            shape.insert(QStringLiteral("x"), shape[QStringLiteral("x")].toDouble() + dx);
-            shape.insert(QStringLiteral("y"), shape[QStringLiteral("y")].toDouble() + dy);
-        } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
-            shape.insert(QStringLiteral("fromX"), shape[QStringLiteral("fromX")].toDouble() + dx);
-            shape.insert(QStringLiteral("toX"), shape[QStringLiteral("toX")].toDouble() + dx);
-            shape.insert(QStringLiteral("fromY"), shape[QStringLiteral("fromY")].toDouble() + dy);
-            shape.insert(QStringLiteral("toY"), shape[QStringLiteral("toY")].toDouble() + dy);
-        } else if (type == QStringLiteral("freehand")) {
-            QVariantList points = shape[QStringLiteral("points")].toList();
-            QVariantList newPoints;
-            for (const QVariant &pv : points) {
-                if (pv.canConvert<QPointF>()) {
-                    QPointF p = pv.toPointF();
-                    newPoints.append(QPointF(p.x() + dx, p.y() + dy));
-                } else if (pv.typeId() == QMetaType::QVariantMap) {
-                    QVariantMap pm = pv.toMap();
-                    pm.insert(QStringLiteral("x"), pm[QStringLiteral("x")].toDouble() + dx);
-                    pm.insert(QStringLiteral("y"), pm[QStringLiteral("y")].toDouble() + dy);
-                    newPoints.append(pm);
-                }
-            }
-            shape.insert(QStringLiteral("points"), newPoints);
-        }
+        translateShape(shape, dx, dy);
 
         m_shapesModel.addShape(shape);
         pastedIndices.append(m_shapesModel.rowCount() - 1);
@@ -1613,7 +1507,6 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
     }
 
     m_shapesModel.endEdit();
-    notifyShapesChanged();
     notifySelectionChanged();
 }
 
@@ -2152,14 +2045,6 @@ bool OverlayController::hasMultiSelection() const
     return false;
 }
 
-QString OverlayController::selectedShapeType() const
-{
-    if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
-        return m_shapesModel.shapes()[m_selectedIndex].value(QStringLiteral("type")).toString();
-    }
-    return QString();
-}
-
 void OverlayController::beginDragSelection(bool shiftHeld)
 {
     m_preDragSelection.clear();
@@ -2245,8 +2130,38 @@ void OverlayController::selectShapesInRect(double rx, double ry, double rw, doub
         m_selectedIndex = -1;
     }
 
-    notifyShapesChanged();
     notifySelectionChanged();
+}
+
+void OverlayController::translateShape(QVariantMap &shape, double dx, double dy)
+{
+    const QString type = shape.value(QStringLiteral("type")).toString();
+    auto shift = [&shape, dx, dy](QLatin1String xKey, QLatin1String yKey) {
+        shape[xKey] = shape.value(xKey).toDouble() + dx;
+        shape[yKey] = shape.value(yKey).toDouble() + dy;
+    };
+
+    if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
+        shift(QLatin1String("x"), QLatin1String("y"));
+    } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+        shift(QLatin1String("fromX"), QLatin1String("fromY"));
+        shift(QLatin1String("toX"), QLatin1String("toY"));
+    } else if (type == QStringLiteral("freehand")) {
+        QVariantList newPoints;
+        const QVariantList points = shape.value(QStringLiteral("points")).toList();
+        for (const QVariant &pv : points) {
+            if (pv.canConvert<QPointF>()) {
+                const QPointF p = pv.toPointF();
+                newPoints.append(QPointF(p.x() + dx, p.y() + dy));
+            } else if (pv.typeId() == QMetaType::QVariantMap) {
+                QVariantMap pm = pv.toMap();
+                pm.insert(QStringLiteral("x"), pm.value(QStringLiteral("x")).toDouble() + dx);
+                pm.insert(QStringLiteral("y"), pm.value(QStringLiteral("y")).toDouble() + dy);
+                newPoints.append(pm);
+            }
+        }
+        shape.insert(QStringLiteral("points"), newPoints);
+    }
 }
 
 void OverlayController::dragSelected(double dx, double dy)
@@ -2257,42 +2172,12 @@ void OverlayController::dragSelected(double dx, double dy)
 
     m_shapesModel.beginEdit();
     for (auto it = m_dragStartShapes.begin(); it != m_dragStartShapes.end(); ++it) {
-        int index = it.key();
         QVariantMap shape = it.value();
-        QString type = shape[QStringLiteral("type")].toString();
-
-        if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
-            shape.insert(QStringLiteral("x"), shape[QStringLiteral("x")].toDouble() + dx);
-            shape.insert(QStringLiteral("y"), shape[QStringLiteral("y")].toDouble() + dy);
-        } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
-            shape.insert(QStringLiteral("fromX"), shape[QStringLiteral("fromX")].toDouble() + dx);
-            shape.insert(QStringLiteral("toX"), shape[QStringLiteral("toX")].toDouble() + dx);
-            shape.insert(QStringLiteral("fromY"), shape[QStringLiteral("fromY")].toDouble() + dy);
-            shape.insert(QStringLiteral("toY"), shape[QStringLiteral("toY")].toDouble() + dy);
-        } else if (type == QStringLiteral("freehand")) {
-            QVariantList startPoints = shape[QStringLiteral("points")].toList();
-            QVariantList newPoints;
-            for (const QVariant &pv : startPoints) {
-                if (pv.canConvert<QPointF>()) {
-                    QPointF p = pv.toPointF();
-                    newPoints.append(QPointF(p.x() + dx, p.y() + dy));
-                } else if (pv.typeId() == QMetaType::QVariantMap) {
-                    QVariantMap pm = pv.toMap();
-                    pm.insert(QStringLiteral("x"), pm[QStringLiteral("x")].toDouble() + dx);
-                    pm.insert(QStringLiteral("y"), pm[QStringLiteral("y")].toDouble() + dy);
-                    newPoints.append(pm);
-                }
-            }
-            shape.insert(QStringLiteral("points"), newPoints);
-        }
-
-        m_shapesModel.updateShape(index, shape);
+        translateShape(shape, dx, dy);
+        m_shapesModel.updateShape(it.key(), shape);
     }
 
-    QSet<int> draggedIndices;
-    for (auto it = m_dragStartShapes.begin(); it != m_dragStartShapes.end(); ++it) {
-        draggedIndices.insert(it.key());
-    }
+    const QSet<int> draggedIndices(m_dragStartShapes.keyBegin(), m_dragStartShapes.keyEnd());
     for (auto it = m_dragStartShapes.begin(); it != m_dragStartShapes.end(); ++it) {
         QString type = m_shapesModel.shapes()[it.key()][QStringLiteral("type")].toString();
         if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse")) {
@@ -2314,33 +2199,7 @@ void OverlayController::nudgeSelected(double dx, double dy)
         if (shape.value(QStringLiteral("locked"), false).toBool())
             continue;
 
-        QString type = shape[QStringLiteral("type")].toString();
-
-        if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
-            shape.insert(QStringLiteral("x"), shape[QStringLiteral("x")].toDouble() + dx);
-            shape.insert(QStringLiteral("y"), shape[QStringLiteral("y")].toDouble() + dy);
-        } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
-            shape.insert(QStringLiteral("fromX"), shape[QStringLiteral("fromX")].toDouble() + dx);
-            shape.insert(QStringLiteral("toX"), shape[QStringLiteral("toX")].toDouble() + dx);
-            shape.insert(QStringLiteral("fromY"), shape[QStringLiteral("fromY")].toDouble() + dy);
-            shape.insert(QStringLiteral("toY"), shape[QStringLiteral("toY")].toDouble() + dy);
-        } else if (type == QStringLiteral("freehand")) {
-            QVariantList points = shape[QStringLiteral("points")].toList();
-            QVariantList newPoints;
-            for (const QVariant &pv : points) {
-                if (pv.canConvert<QPointF>()) {
-                    QPointF p = pv.toPointF();
-                    newPoints.append(QPointF(p.x() + dx, p.y() + dy));
-                } else if (pv.typeId() == QMetaType::QVariantMap) {
-                    QVariantMap pm = pv.toMap();
-                    pm.insert(QStringLiteral("x"), pm[QStringLiteral("x")].toDouble() + dx);
-                    pm.insert(QStringLiteral("y"), pm[QStringLiteral("y")].toDouble() + dy);
-                    newPoints.append(pm);
-                }
-            }
-            shape.insert(QStringLiteral("points"), newPoints);
-        }
-
+        translateShape(shape, dx, dy);
         m_shapesModel.updateShape(i, shape);
         moved = true;
     }
@@ -2363,26 +2222,17 @@ void OverlayController::nudgeSelected(double dx, double dy)
     }
 
     m_shapesModel.endEdit();
-
-    if (moved) {
-        notifyShapesChanged();
-    }
 }
 
 
 
 QPointF OverlayController::nearestPointOnRect(double rx, double ry, double rw, double rh, double px, double py) const
 {
-    auto clamp = [](double v, double lo, double hi) { return qBound(lo, v, hi); };
-
-    // Top edge: y = ry, x in [rx, rx+rw]
-    QPointF top(clamp(px, rx, rx + rw), ry);
-    // Bottom edge: y = ry+rh, x in [rx, rx+rw]
-    QPointF bottom(clamp(px, rx, rx + rw), ry + rh);
-    // Left edge: x = rx, y in [ry, ry+rh]
-    QPointF left(rx, clamp(py, ry, ry + rh));
-    // Right edge: x = rx+rw, y in [ry, ry+rh]
-    QPointF right(rx + rw, clamp(py, ry, ry + rh));
+    // Nearest point on each edge, then keep the closest of the four.
+    QPointF top(qBound(rx, px, rx + rw), ry);
+    QPointF bottom(qBound(rx, px, rx + rw), ry + rh);
+    QPointF left(rx, qBound(ry, py, ry + rh));
+    QPointF right(rx + rw, qBound(ry, py, ry + rh));
 
     auto dist2 = [&](const QPointF &a) {
         double dx = a.x() - px, dy = a.y() - py;
@@ -2429,7 +2279,6 @@ QPointF OverlayController::nearestPointOnEllipse(double cx, double cy, double a,
 double OverlayController::focusForPoint(const QVariantMap &shape, double px, double py) const
 {
     QString type = shape.value(QStringLiteral("type")).toString();
-    const double kPi = 3.14159265358979323846;
 
     if (type == QStringLiteral("rectangle")) {
         double rx = shape[QStringLiteral("x")].toDouble();
@@ -2461,8 +2310,8 @@ double OverlayController::focusForPoint(const QVariantMap &shape, double px, dou
         double cy = shape[QStringLiteral("y")].toDouble() + shape[QStringLiteral("height")].toDouble() / 2.0;
 
         double angle = qAtan2(py - cy, px - cx);
-        if (angle < 0) angle += 2.0 * kPi;
-        return angle / (2.0 * kPi);
+        if (angle < 0) angle += 2.0 * std::numbers::pi;
+        return angle / (2.0 * std::numbers::pi);
     }
 
     return 0.0;
@@ -2471,7 +2320,6 @@ double OverlayController::focusForPoint(const QVariantMap &shape, double px, dou
 QPointF OverlayController::pointFromBinding(const QVariantMap &shape, double focus) const
 {
     QString type = shape.value(QStringLiteral("type")).toString();
-    const double kPi = 3.14159265358979323846;
 
     if (type == QStringLiteral("rectangle")) {
         double rx = shape[QStringLiteral("x")].toDouble();
@@ -2505,7 +2353,7 @@ QPointF OverlayController::pointFromBinding(const QVariantMap &shape, double foc
         double a = shape[QStringLiteral("width")].toDouble() / 2.0;
         double b = shape[QStringLiteral("height")].toDouble() / 2.0;
 
-        double angle = focus * 2.0 * kPi;
+        double angle = focus * 2.0 * std::numbers::pi;
         return QPointF(cx + a * qCos(angle), cy + b * qSin(angle));
     }
 
@@ -2555,15 +2403,6 @@ BindingHit OverlayController::findSnapTarget(double px, double py, int excludeIn
     }
 
     return best;
-}
-
-QPointF OverlayController::findSnapPoint(double px, double py, int excludeIndex) const
-{
-    BindingHit hit = findSnapTarget(px, py, excludeIndex);
-    if (hit.valid) {
-        return hit.snapPoint;
-    }
-    return QPointF();
 }
 
 QVariantMap OverlayController::findSnapInfo(double px, double py, int excludeIndex) const
@@ -2689,7 +2528,7 @@ void OverlayController::updateBoundEndpoints(int shapeIndex, const QSet<int> *sk
     }
 }
 
-void OverlayController::breakBinding(int lineIndex, bool isStart)
+void OverlayController::breakEndpointBinding(int lineIndex, bool isStart)
 {
     if (lineIndex < 0 || lineIndex >= m_shapesModel.rowCount()) return;
     const QVariantMap lineShape = m_shapesModel.shapes().at(lineIndex);
@@ -2742,12 +2581,6 @@ void OverlayController::cleanupBindingsForDelete(int deletedIndex)
             }
         }
     }
-}
-
-
-void OverlayController::breakEndpointBinding(int lineIndex, bool isStart)
-{
-    breakBinding(lineIndex, isStart);
 }
 
 void OverlayController::resnapEndpoint(int lineIndex, bool isStart)
