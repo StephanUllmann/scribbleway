@@ -76,7 +76,7 @@ Item {
             spacing: theme.smallSpacing
 
             Controls.Label {
-                text: "Custom Colour"
+                text: "Custom Color"
                 font.bold: true
                 font.pixelSize: 11
                 color: theme.highlightColor

@@ -179,20 +179,15 @@ int main(int argc, char *argv[])
     // force or detect the screen. Instead configurePopupLayer() uses ScreenFromCompositor,
     // which makes KWin map the popup on whichever output is currently active. That is the
     // behaviour we want: the popup follows the screen you're working on.
-    auto showPopup = [&popupWindow, &controller, &configurePopupLayer]() {
-        if (!popupWindow) return;
+    // Keep the popup clickable even when a drawing tool has the overlay grabbing input:
+    // carve the popup's rect out of the overlay's input region when they share a screen
+    // (bottom-right corner, matching the popup's layer-shell anchor). Re-run on every
+    // width change, not just on show — opening the colour picker widens the popup, and a
+    // rect left at the old width leaves the new strip unclickable, but only while a tool
+    // is active, which is exactly where nobody looks for it.
+    auto updatePopupExclusion = [&popupWindow, &controller]() {
+        if (!popupWindow || !popupWindow->isVisible()) return;
 
-        configurePopupLayer();
-        // Before show(): the overlay must drop its exclusive keyboard grab, or the
-        // compositor never hands focus to the popup.
-        controller.setTrayPopupOpen(true);
-        popupWindow->show();
-        popupWindow->raise();
-        popupWindow->requestActivate();
-
-        // Keep the popup clickable even when a drawing tool has the overlay grabbing
-        // input: carve the popup's rect out of the overlay's input region when they
-        // share a screen (bottom-right corner, matching the popup's layer-shell anchor).
         QRect exclusion;
         if (QQuickWindow *ov = controller.window()) {
             if (ov->screen() == popupWindow->screen()) {
@@ -203,13 +198,29 @@ int main(int argc, char *argv[])
         }
         controller.setPopupExclusion(exclusion);
     };
+    auto showPopup = [&popupWindow, &controller, &configurePopupLayer, &updatePopupExclusion]() {
+        if (!popupWindow) return;
+
+        configurePopupLayer();
+        // Before show(): the overlay must drop its exclusive keyboard grab, or the
+        // compositor never hands focus to the popup.
+        controller.setTrayPopupOpen(true);
+        popupWindow->show();
+        popupWindow->raise();
+        popupWindow->requestActivate();
+
+        updatePopupExclusion();
+    };
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
-                     &app, [trayPopupUrl, &popupWindow, &hidePopup, &configurePopupLayer](QObject *obj, const QUrl &objUrl) {
+                     &app, [trayPopupUrl, &popupWindow, &hidePopup, &configurePopupLayer,
+                            &updatePopupExclusion](QObject *obj, const QUrl &objUrl) {
         if (objUrl != trayPopupUrl) return;
         popupWindow = qobject_cast<QQuickWindow*>(obj);
         if (!popupWindow) return;
 
         configurePopupLayer();
+
+        QObject::connect(popupWindow, &QWindow::widthChanged, popupWindow, updatePopupExclusion);
 
         // Dismiss on focus loss (click outside).
         QObject::connect(popupWindow, &QWindow::activeChanged, popupWindow, [&popupWindow, &hidePopup]() {

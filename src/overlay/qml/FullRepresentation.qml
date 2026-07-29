@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
-import QtQuick.Dialogs
 
 Item {
     id: fullRoot
@@ -101,20 +100,14 @@ Item {
         return activeDrawTool === "text";
     }
 
-    ColorDialog {
-        id: colorDialog
-        title: "Choose Custom Color"
-        onAccepted: {
-            fullRoot.setColor(colorDialog.selectedColor.toString())
-        }
-    }
+    // Handled by whoever hosts this menu (TrayPopup), which owns the picker panel — a
+    // QtQuick.Dialogs ColorDialog is an xdg-desktop-portal dialog and opens fullscreen
+    // on the primary output, which is never where the popup is.
+    signal customColorRequested(string current, bool isFill)
 
-    ColorDialog {
-        id: fillColorDialog
-        title: "Choose Fill Color"
-        onAccepted: {
-            fullRoot.setFillColor(fillColorDialog.selectedColor.toString())
-        }
+    function applyCustomColor(c, isFill) {
+        if (isFill) setFillColor(c.toString())
+        else setColor(c.toString())
     }
 
     Controls.ScrollView {
@@ -319,10 +312,7 @@ Item {
                         Controls.Button {
                             icon.source: "qrc:/icons/color-picker.svg"
                             text: "Custom"
-                            onClicked: {
-                                colorDialog.selectedColor = parent.activeColor
-                                colorDialog.open()
-                            }
+                            onClicked: fullRoot.customColorRequested(parent.activeColor, false)
                         }
                     }
                 }
@@ -441,10 +431,8 @@ Item {
                             Controls.Button {
                                 icon.source: "qrc:/icons/color-picker.svg"
                                 text: "Custom"
-                                onClicked: {
-                                    fillColorDialog.selectedColor = parent.activeFill !== "transparent" ? parent.activeFill : "#e63946"
-                                    fillColorDialog.open()
-                                }
+                                onClicked: fullRoot.customColorRequested(
+                                    parent.activeFill !== "transparent" ? parent.activeFill : "#e63946", true)
                             }
                         }
                     }
