@@ -47,23 +47,27 @@ Item {
         recompose()
     }
 
+    function pickHue(mx) {
+        hue = Math.max(0, Math.min(1, mx / hueStrip.width))
+        recompose()
+    }
+
     onSelectedColorChanged: {
+        // Above the latch: this fires for recompose() too, and the field froze when it
+        // sat below the early return.
+        if (!hexField.activeFocus) {
+            hexField.text = selectedColor.toString()
+        }
         if (updating) return
         updating = true
         // hsvHue is -1 for achromatic colours (black, white, grey) — there is no hue to
         // read, so keep the one the user last chose instead of snapping the square to red.
         if (selectedColor.hsvHue >= 0) {
             hue = selectedColor.hsvHue
-            hueSlider.value = hue
         }
         sat = selectedColor.hsvSaturation
         val = selectedColor.hsvValue
         updating = false
-        // Assigned, not bound: typing in the field would break a binding on the first
-        // keystroke anyway, and re-seeding mid-edit would fight the user.
-        if (!hexField.activeFocus) {
-            hexField.text = selectedColor.toString()
-        }
     }
 
     ColumnLayout {
@@ -147,32 +151,53 @@ Item {
             }
         }
 
-        Controls.Slider {
-            id: hueSlider
+        // Drawn, not a Controls.Slider. Under org.kde.desktop the whole slider — groove
+        // *and* handle — is painted by QStyle into the background item, so replacing the
+        // background to get this gradient left it with nothing to grab. Drawing it the
+        // same way as the square above also keeps the picker identical across styles.
+        Rectangle {
+            id: hueStrip
+            objectName: "hueStrip"
             Layout.fillWidth: true
-            from: 0
-            to: 1
-            value: root.hue
-            onMoved: {
-                root.hue = value
-                root.recompose()
+            Layout.topMargin: theme.smallSpacing
+            Layout.preferredHeight: 16
+            radius: 4
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.000; color: "#ff0000" }
+                GradientStop { position: 0.167; color: "#ffff00" }
+                GradientStop { position: 0.333; color: "#00ff00" }
+                GradientStop { position: 0.500; color: "#00ffff" }
+                GradientStop { position: 0.667; color: "#0000ff" }
+                GradientStop { position: 0.833; color: "#ff00ff" }
+                GradientStop { position: 1.000; color: "#ff0000" }
             }
 
-            background: Rectangle {
-                x: hueSlider.leftPadding
-                y: hueSlider.topPadding + hueSlider.availableHeight / 2 - height / 2
-                width: hueSlider.availableWidth
-                height: 8
-                radius: 4
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0.000; color: "#ff0000" }
-                    GradientStop { position: 0.167; color: "#ffff00" }
-                    GradientStop { position: 0.333; color: "#00ff00" }
-                    GradientStop { position: 0.500; color: "#00ffff" }
-                    GradientStop { position: 0.667; color: "#0000ff" }
-                    GradientStop { position: 0.833; color: "#ff00ff" }
-                    GradientStop { position: 1.000; color: "#ff0000" }
+            Rectangle {
+                width: 7
+                height: parent.height + 6
+                y: -3
+                x: root.hue * hueStrip.width - width / 2
+                radius: 3
+                color: "transparent"
+                border.width: 2
+                border.color: "white"
+
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: -1
+                    radius: 4
+                    color: "transparent"
+                    border.width: 1
+                    border.color: "#60000000"
+                }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                onPressed: (mouse) => root.pickHue(mouse.x)
+                onPositionChanged: (mouse) => {
+                    if (pressed) root.pickHue(mouse.x)
                 }
             }
         }
@@ -192,6 +217,7 @@ Item {
 
             Controls.TextField {
                 id: hexField
+                objectName: "hexField"
                 Layout.fillWidth: true
                 text: root.selectedColor.toString()
                 validator: RegularExpressionValidator {

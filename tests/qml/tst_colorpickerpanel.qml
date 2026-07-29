@@ -68,4 +68,39 @@ TestCase {
         picker.recompose()
         compare(picker.selectedColor.toString(), "#2a9d8f")
     }
+
+    // The hue control is drawn by hand precisely because a styled Slider hid its own
+    // handle here, so drive it as a user does: press and drag on the strip itself.
+    function test_hue_strip_changes_the_colour() {
+        picker.selectedColor = "#e63946"
+        var before = picker.selectedColor.toString()
+        var strip = findChild(picker, "hueStrip")
+        verify(strip !== null, "hue strip not reachable")
+        verify(strip.width > 0, "hue strip has no width")
+
+        mousePress(strip, strip.width * 0.05, strip.height / 2)
+        mouseMove(strip, strip.width * 0.45, strip.height / 2)
+        mouseRelease(strip, strip.width * 0.45, strip.height / 2)
+
+        verify(picker.selectedColor.toString() !== before,
+               "colour unchanged after dragging hue: " + picker.selectedColor.toString())
+        fuzzyCompare(picker.hue, 0.45, 0.05)
+    }
+
+    // A press with no drag must jump straight to that hue.
+    function test_hue_strip_jumps_on_click() {
+        var strip = findChild(picker, "hueStrip")
+        mouseClick(strip, strip.width * 0.75, strip.height / 2)
+        fuzzyCompare(picker.hue, 0.75, 0.05)
+    }
+
+    // The hex field must keep up with every path, not just external assignment.
+    function test_hex_field_follows_recompose() {
+        picker.selectedColor = "#e63946"
+        picker.hue = 0.5
+        picker.recompose()
+        var field = findChild(picker, "hexField")
+        verify(field !== null, "hex field not reachable")
+        compare(field.text, picker.selectedColor.toString())
+    }
 }
