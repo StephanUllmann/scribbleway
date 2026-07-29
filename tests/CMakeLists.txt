@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Test Quick DBus)
+find_package(Qt6 REQUIRED COMPONENTS Test Quick QuickTest DBus)
 find_package(KF6 REQUIRED COMPONENTS GlobalAccel)
 find_package(LayerShellQt REQUIRED)
 
@@ -26,3 +26,9 @@ target_link_libraries(shapesmodeltest PRIVATE
 )
 
 add_test(NAME shapesmodeltest COMMAND shapesmodeltest)
+
+# The QML-only tests run through the stock qmltestrunner: the components under test
+# resolve by directory, so they need no qmldir and no separate QML module.
+add_test(NAME qmltests
+         COMMAND Qt6::qmltestrunner -input ${CMAKE_CURRENT_SOURCE_DIR}/qml)
+set_tests_properties(qmltests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

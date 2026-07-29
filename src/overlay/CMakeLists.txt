@@ -29,6 +29,7 @@ qt_add_qml_module(scribbleway-overlay
         qml/shapes/RoughStroke.qml
         qml/FullRepresentation.qml
         qml/TrayPopup.qml
+        qml/ColorPickerPanel.qml
 )
 
 qt_add_resources(scribbleway-overlay "icons"
