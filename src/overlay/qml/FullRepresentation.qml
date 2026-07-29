@@ -40,47 +40,47 @@ Item {
     // Route property changes: to the selected shape if there is one, else to defaults.
     function setColor(color) {
         if (backend.hasSelection) backend.updateProperties({color: color})
-        else backend.setDefaultColor(color)
+        else backend.defaultColor = color
     }
     function setStrokeWidth(width) {
         if (backend.hasSelection) backend.updateProperties({strokeWidth: width})
-        else backend.setDefaultStrokeWidth(width)
+        else backend.defaultStrokeWidth = width
     }
     function setOpacity(opacity) {
         if (backend.hasSelection) backend.updateProperties({opacity: opacity})
-        else backend.setDefaultOpacity(opacity)
+        else backend.defaultOpacity = opacity
     }
     function setFillColor(color) {
         if (backend.hasSelection) backend.updateProperties({fillColor: color})
-        else backend.setDefaultFillColor(color)
+        else backend.defaultFillColor = color
     }
     function setFillOpacity(opacity) {
         if (backend.hasSelection) backend.updateProperties({fillOpacity: opacity})
-        else backend.setDefaultFillOpacity(opacity)
+        else backend.defaultFillOpacity = opacity
     }
     function setGlow(glow) {
         if (backend.hasSelection) backend.updateProperties({glow: glow})
-        else backend.setDefaultGlow(glow)
+        else backend.defaultGlow = glow
     }
     function setFreehandSmoothing(level) {
         if (backend.hasSelection) backend.updateProperties({freehandSmoothing: level})
-        else backend.setDefaultFreehandSmoothing(level)
+        else backend.defaultFreehandSmoothing = level
     }
     function setRoughness(roughness) {
         if (backend.hasSelection) backend.updateProperties({roughness: roughness})
-        else backend.setDefaultRoughness(roughness)
+        else backend.defaultRoughness = roughness
     }
     function setBorderRadius(radius) {
         if (backend.hasSelection) backend.updateProperties({borderRadius: radius})
-        else backend.setDefaultBorderRadius(radius)
+        else backend.defaultBorderRadius = radius
     }
     function setFontFamily(family) {
         if (backend.hasSelection) backend.updateProperties({fontFamily: family})
-        else backend.setDefaultFontFamily(family)
+        else backend.defaultFontFamily = family
     }
     function setFontSize(size) {
         if (backend.hasSelection) backend.updateProperties({fontSize: size})
-        else backend.setDefaultFontSize(size)
+        else backend.defaultFontSize = size
     }
 
     // Track the currently selected tool name for draw mode

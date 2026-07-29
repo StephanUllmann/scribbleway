@@ -878,16 +878,34 @@ bool OverlayController::trayPopupOpen() const
     return m_trayPopupOpen;
 }
 
-// The tray popup is a layer surface too, and an exclusive one always outranks it for
-// keyboard focus — the popup would lose focus and dismiss itself the moment a tool
-// activated. So the overlay yields the keyboard while the popup is open and takes back
-// whatever QML last asked for when it closes.
 void OverlayController::setTrayPopupOpen(bool open)
 {
     if (m_trayPopupOpen == open) return;
     m_trayPopupOpen = open;
-    applyKeyboardInteractivity();
+    if (!open) setPopupWantsKeyboard(false);
     Q_EMIT trayPopupOpenChanged();
+}
+
+bool OverlayController::popupWantsKeyboard() const
+{
+    return m_popupWantsKeyboard;
+}
+
+// Only the popup's text fields take the keyboard away from the overlay, and only while
+// they are focused. Yielding it for the whole time the popup is open killed every tool
+// hotkey the moment the popup was touched — the shortcuts live on the overlay window,
+// so an overlay with no keyboard is an overlay with no hotkeys.
+void OverlayController::setPopupWantsKeyboard(bool wants)
+{
+    if (m_popupWantsKeyboard == wants) return;
+    m_popupWantsKeyboard = wants;
+    applyKeyboardInteractivity();
+    Q_EMIT popupWantsKeyboardChanged();
+}
+
+void OverlayController::closeTrayPopup()
+{
+    Q_EMIT trayPopupCloseRequested();
 }
 
 void OverlayController::applyKeyboardInteractivity()
@@ -896,7 +914,7 @@ void OverlayController::applyKeyboardInteractivity()
     auto *layerWindow = LayerShellQt::Window::get(m_window);
     if (!layerWindow) return;
 
-    const bool interactive = m_wantsKeyboard && !m_trayPopupOpen;
+    const bool interactive = m_wantsKeyboard && !m_popupWantsKeyboard;
 
     // Exclusive, not OnDemand: OnDemand means "focus me when the user clicks me",
     // and a layer surface has no way to ask for focus itself — QWindow::requestActivate()

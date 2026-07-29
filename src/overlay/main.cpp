@@ -149,6 +149,10 @@ int main(int argc, char *argv[])
             controller.setTrayPopupOpen(false);
         }
     };
+    // Escape inside the popup, and Escape or a click on the overlay canvas, all close it
+    // from QML — which has no handle on this window.
+    QObject::connect(&controller, &OverlayController::trayPopupCloseRequested, &app,
+                     [&popupWindow, &hidePopup]() { hidePopup(popupWindow); });
     // Anchor to the bottom-right corner: adjacent edges keep the window's natural size
     // (menu-sized), unlike the overlay's opposite-edge fullscreen anchoring. Re-applied
     // before every show so it survives the destroy()/recreate used to move screens.
@@ -213,7 +217,7 @@ int main(int argc, char *argv[])
     };
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [trayPopupUrl, &popupWindow, &hidePopup, &configurePopupLayer,
-                            &updatePopupExclusion](QObject *obj, const QUrl &objUrl) {
+                            &updatePopupExclusion, &controller](QObject *obj, const QUrl &objUrl) {
         if (objUrl != trayPopupUrl) return;
         popupWindow = qobject_cast<QQuickWindow*>(obj);
         if (!popupWindow) return;
@@ -222,11 +226,16 @@ int main(int argc, char *argv[])
 
         QObject::connect(popupWindow, &QWindow::widthChanged, popupWindow, updatePopupExclusion);
 
-        // Dismiss on focus loss (click outside).
-        QObject::connect(popupWindow, &QWindow::activeChanged, popupWindow, [&popupWindow, &hidePopup]() {
-            if (popupWindow && !popupWindow->isActive()) {
-                hidePopup(popupWindow);
-            }
+        // Dismiss on focus loss (click outside) — but the overlay is our own window and
+        // holds an exclusive keyboard grab whenever a tool is active, so it takes focus
+        // constantly. Treating that as "clicked outside" is what made the popup close on
+        // its own actions. A click on the overlay canvas dismisses via the explicit
+        // close request instead (see main.qml), which is what the user means by outside.
+        QObject::connect(popupWindow, &QWindow::activeChanged, popupWindow,
+                         [&popupWindow, &hidePopup, &controller]() {
+            if (!popupWindow || popupWindow->isActive()) return;
+            if (QGuiApplication::focusWindow() == controller.window()) return;
+            hidePopup(popupWindow);
         });
     }, Qt::QueuedConnection);
     engine.load(trayPopupUrl);

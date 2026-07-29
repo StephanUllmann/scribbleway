@@ -11,6 +11,10 @@ add_executable(shapesmodeltest
     ../src/overlay/singleinstance.h
 )
 
+target_compile_definitions(shapesmodeltest PRIVATE
+    QML_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../src/overlay/qml"
+)
+
 target_include_directories(shapesmodeltest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/overlay
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/common

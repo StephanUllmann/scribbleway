@@ -13,6 +13,14 @@ Item {
     property color selectedColor: "#e63946"
     signal closeRequested()
 
+    // The host uses this to hand the keyboard over: the overlay holds an exclusive grab
+    // for its hotkeys, so typing here only works while it lets go. `focus`, not
+    // `activeFocus` — activeFocus additionally requires the *window* to be active, and
+    // this window deliberately is not until the overlay has already let go. Waiting for
+    // activeFocus would deadlock: no focus without the keyboard, no keyboard without the
+    // focus.
+    readonly property bool textEditing: hexField.focus
+
     implicitWidth: 208
     implicitHeight: layout.implicitHeight
 
@@ -55,7 +63,7 @@ Item {
     onSelectedColorChanged: {
         // Above the latch: this fires for recompose() too, and the field froze when it
         // sat below the early return.
-        if (!hexField.activeFocus) {
+        if (!hexField.focus) {
             hexField.text = selectedColor.toString()
         }
         if (updating) return

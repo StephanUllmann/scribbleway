@@ -72,6 +72,7 @@ class OverlayController : public QObject
     Q_PROPERTY(QStringList screenNames READ screenNames CONSTANT)
     Q_PROPERTY(QString targetScreen READ targetScreen NOTIFY targetScreenChanged)
     Q_PROPERTY(bool trayPopupOpen READ trayPopupOpen NOTIFY trayPopupOpenChanged)
+    Q_PROPERTY(bool popupWantsKeyboard READ popupWantsKeyboard WRITE setPopupWantsKeyboard NOTIFY popupWantsKeyboardChanged)
 
 public:
     explicit OverlayController(QObject *parent = nullptr);
@@ -152,6 +153,11 @@ public:
     Q_INVOKABLE void setKeyboardInteractivity(bool interactive);
     bool trayPopupOpen() const;
     void setTrayPopupOpen(bool open);
+    bool popupWantsKeyboard() const;
+    void setPopupWantsKeyboard(bool wants);
+    // Q_INVOKABLE, not just public: a plain public method is invisible to QML — only
+    // property WRITEs, slots and Q_INVOKABLEs reach the metaobject's method table.
+    Q_INVOKABLE void closeTrayPopup();
     Q_INVOKABLE void beginEdit();
     Q_INVOKABLE void endEdit();
     Q_INVOKABLE QVariantMap getShape(int index) const;
@@ -225,6 +231,8 @@ Q_SIGNALS:
     void localShortcutsChanged();
     void targetScreenChanged();
     void trayPopupOpenChanged();
+    void popupWantsKeyboardChanged();
+    void trayPopupCloseRequested();
 
     // Command signals to QML
     void enterSelectModeRequested();
@@ -267,6 +275,7 @@ private:
     int m_defaultFreehandSmoothing = 2;
 
     bool m_trayPopupOpen = false;
+    bool m_popupWantsKeyboard = false;
     bool m_wantsKeyboard = false;
     void applyKeyboardInteractivity();
 

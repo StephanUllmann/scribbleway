@@ -14,6 +14,8 @@
 #include <QJsonObject>
 #include <QJSEngine>
 #include <QFile>
+#include <QRegularExpression>
+#include <QSet>
 
 class ShapesModelTest : public QObject
 {
@@ -36,6 +38,8 @@ private Q_SLOTS:
     void testRedoStackCapped();
     void testOverlayControllerRedo();
     void testOverlayControllerProperties();
+    void testDefaultsReachableFromQml();
+    void testEveryQmlControllerCallExists();
     void testOverlayControllerSelectionProperties();
     void testSingleInstanceGuard();
     void testMoveShape();
@@ -2633,4 +2637,87 @@ void ShapesModelTest::testDecoupledAttachedTextFontProperties()
     QVariantMap textShapeFinal = controller.getShape(1);
     QCOMPARE(textShapeFinal.value(QStringLiteral("fontSize")).toInt(), 36);
     QCOMPARE(textShapeFinal.value(QStringLiteral("fontFamily")).toString(), QStringLiteral("Cascadia Code"));
+}
+
+// QML only ever sees a QObject through its metaobject: property WRITEs, slots and
+// Q_INVOKABLEs. A plain public setter is invisible, so `controller.setDefaultColor(c)`
+// was a silent TypeError and every default silently failed to stick with nothing
+// selected. Pin the two ways QML actually reaches this object.
+void ShapesModelTest::testDefaultsReachableFromQml()
+{
+    OverlayController controller;
+
+    const QVariantMap defaults = {
+        {QStringLiteral("defaultColor"), QStringLiteral("#123456")},
+        {QStringLiteral("defaultStrokeWidth"), 7},
+        {QStringLiteral("defaultOpacity"), 0.42},
+        {QStringLiteral("defaultFontFamily"), QStringLiteral("Cascadia Code")},
+        {QStringLiteral("defaultFontSize"), 33},
+        {QStringLiteral("defaultBorderRadius"), 11},
+        {QStringLiteral("defaultRoughness"), 2},
+        {QStringLiteral("defaultGlow"), 21},
+        {QStringLiteral("defaultFillColor"), QStringLiteral("#654321")},
+        {QStringLiteral("defaultFillOpacity"), 0.33},
+        {QStringLiteral("defaultFreehandSmoothing"), 3},
+    };
+
+    for (auto it = defaults.cbegin(); it != defaults.cend(); ++it) {
+        QVERIFY2(controller.setProperty(it.key().toUtf8().constData(), it.value()),
+                 qPrintable(QStringLiteral("%1 is not writable through the metaobject")
+                            .arg(it.key())));
+        QCOMPARE(controller.property(it.key().toUtf8().constData()), it.value());
+    }
+
+    // The menu calls this by name when Escape or a canvas click should dismiss the popup.
+    QVERIFY2(QMetaObject::invokeMethod(&controller, "closeTrayPopup"),
+             "closeTrayPopup is not in the metaobject's method table");
+    QVERIFY(controller.setProperty("popupWantsKeyboard", true));
+    QVERIFY(controller.popupWantsKeyboard());
+
+    // Closing the popup must hand the keyboard back unconditionally. The overlay owns
+    // every tool hotkey, so a stuck claim here leaves the app with no shortcuts at all
+    // and no visible cause.
+    controller.setTrayPopupOpen(true);
+    controller.setPopupWantsKeyboard(true);
+    controller.setTrayPopupOpen(false);
+    QVERIFY(!controller.popupWantsKeyboard());
+}
+
+// The real guard for the class of bug above: walk every `controller.foo(...)` /
+// `backend.foo(...)` call in the QML and confirm foo is actually in the metaobject's
+// method table. QML resolves these at run time, so a missing one is a silent TypeError
+// in a log nobody reads, not a build failure.
+void ShapesModelTest::testEveryQmlControllerCallExists()
+{
+    QSet<QString> callable;
+    const QMetaObject *mo = &OverlayController::staticMetaObject;
+    for (int i = 0; i < mo->methodCount(); ++i) {
+        callable.insert(QString::fromUtf8(mo->method(i).name()));
+    }
+
+    const QStringList files = {
+        QStringLiteral("main.qml"), QStringLiteral("FullRepresentation.qml"),
+        QStringLiteral("TrayPopup.qml"), QStringLiteral("ColorPickerPanel.qml"),
+    };
+    const QRegularExpression call(
+        QStringLiteral("\\b(?:controller|backend)\\.([A-Za-z_][A-Za-z0-9_]*)\\s*\\("));
+
+    QStringList missing;
+    for (const QString &name : files) {
+        QFile f(QStringLiteral(QML_SOURCE_DIR) + QLatin1Char('/') + name);
+        QVERIFY2(f.open(QIODevice::ReadOnly), qPrintable(f.fileName()));
+        const QString src = QString::fromUtf8(f.readAll());
+
+        auto it = call.globalMatch(src);
+        while (it.hasNext()) {
+            const QString method = it.next().captured(1);
+            if (!callable.contains(method)) {
+                missing << (name + QStringLiteral(": controller.") + method + QStringLiteral("()"));
+            }
+        }
+    }
+
+    QVERIFY2(missing.isEmpty(),
+             qPrintable(QStringLiteral("QML calls methods QML cannot see (needs Q_INVOKABLE, "
+                                       "a slot, or a property write): ") + missing.join(QStringLiteral(", "))));
 }

@@ -730,7 +730,23 @@ Window {
         if (textEditor.visible) {
             textEditor.commitText();
         }
+        controller.closeTrayPopup();
         controller.enterPassthroughMode();
+    }
+
+    // A press anywhere the overlay can receive one is by construction outside the popup:
+    // the popup's rect is carved out of the overlay's input region. A passive
+    // PointHandler sees it without competing with the draw/select MouseAreas for the
+    // grab, which beats bolting the same call onto all six press handlers.
+    Item {
+        anchors.fill: parent
+        z: 1000
+
+        PointHandler {
+            enabled: controller.trayPopupOpen
+            acceptedButtons: Qt.AllButtons
+            onActiveChanged: if (active) controller.closeTrayPopup()
+        }
     }
 
     // Cancel selection or focus when Escape is pressed

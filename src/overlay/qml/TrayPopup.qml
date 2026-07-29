@@ -25,6 +25,18 @@ Window {
         id: sysPalette
     }
 
+    // Escape reaches whichever of the two windows holds the keyboard, so it is handled
+    // on both sides. Closing goes through the controller, since main.cpp owns this
+    // window's visibility bookkeeping.
+    Shortcut {
+        sequence: "Escape"
+        onActivated: {
+            picker.visible = false
+            controller.closeTrayPopup()
+            controller.enterPassthroughMode()
+        }
+    }
+
     RowLayout {
         anchors.fill: parent
         anchors.margins: 8
@@ -44,6 +56,11 @@ Window {
                 if (visible) menu.applyCustomColor(selectedColor, trayPopup.pickerIsFill)
             }
             onCloseRequested: visible = false
+
+            // Hand the keyboard back and forth as the hex field takes and loses focus,
+            // so the overlay keeps its hotkeys the rest of the time.
+            onTextEditingChanged: controller.popupWantsKeyboard = textEditing
+            onVisibleChanged: if (!visible) controller.popupWantsKeyboard = false
         }
 
         FullRepresentation {
