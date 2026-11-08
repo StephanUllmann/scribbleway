@@ -5,6 +5,7 @@
 #include <QAction>
 #include <QKeySequence>
 #include <QScreen>
+#include <QStandardPaths>
 #include <QSystemTrayIcon>
 #include <QIcon>
 #include <QElapsedTimer>
@@ -38,8 +39,14 @@ int main(int argc, char *argv[])
 
     const bool toggleRequest = app.arguments().contains(QStringLiteral("--toggle"));
 
-    SingleInstanceGuard instanceGuard(QStringLiteral("scribbleway"));
+    // In the per-user runtime directory: a bare name lands in /tmp, shared by every user.
+    SingleInstanceGuard instanceGuard(QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation)
+                                      + QStringLiteral("/scribbleway.sock"));
     if (!instanceGuard.tryAcquire(toggleRequest ? QByteArray("toggle") : QByteArray())) {
+        if (!instanceGuard.foundRunningInstance()) {
+            qCritical() << "Cannot open the single-instance socket:" << instanceGuard.server()->errorString();
+            return 1;
+        }
         if (!toggleRequest) {
             qWarning() << "Scribbleway is already running.";
         }
@@ -49,7 +56,7 @@ int main(int argc, char *argv[])
     OverlayController controller;
 
     // Setup global actions and connect to KGlobalAccel
-    auto setupGlobalAction = [&](const QString &objName, const QString &text, 
+    auto setupGlobalAction = [&app](const QString &objName, const QString &text, 
                                  const QList<QKeySequence> &defaultShortcuts) {
         QAction *action = new QAction(&app);
         action->setObjectName(objName);
@@ -58,7 +65,6 @@ int main(int argc, char *argv[])
         KGlobalAccel::self()->setDefaultShortcut(action, defaultShortcuts);
         KGlobalAccel::self()->setShortcut(action, defaultShortcuts);
         
-        controller.registerAction(action, objName, text);
         return action;
     };
 

@@ -92,6 +92,27 @@ QVariantMap ShapesModel::firstAttachedTextBinding(const QVariantMap &shape)
     return QVariantMap();
 }
 
+QVariantList ShapesModel::withoutAttachedTextBinding(const QVariantMap &shape)
+{
+    QVariantList filtered;
+    const QVariantList bindings = shape.value(QStringLiteral("bindings")).toList();
+    for (const QVariant &bindingValue : bindings) {
+        const QVariantMap binding = bindingValue.toMap();
+        if (binding.value(QStringLiteral("type")).toString() != QStringLiteral("attachedText")) {
+            filtered.append(binding);
+        }
+    }
+    return filtered;
+}
+
+bool ShapesModel::supportsAttachedText(const QString &type)
+{
+    return type == QStringLiteral("rectangle")
+        || type == QStringLiteral("ellipse")
+        || type == QStringLiteral("line")
+        || type == QStringLiteral("arrow");
+}
+
 ShapesModel::ShapesModel(QObject *parent)
     : QAbstractListModel(parent)
 {
@@ -145,11 +166,29 @@ void ShapesModel::saveHistorySnapshot()
     m_redo.clear();
 }
 
+// Every mutator calls this before a real change. An edit group stores one snapshot, at
+// its first real change, so a press or a selection change alone costs no undo step.
+void ShapesModel::recordHistory()
+{
+    if (m_isApplyingUndo) {
+        return;
+    }
+    if (m_inEditTransaction > 0) {
+        if (m_editSnapshotTaken) {
+            return;
+        }
+        m_editSnapshotTaken = true;
+    }
+    saveHistorySnapshot();
+}
+
 void ShapesModel::undo()
 {
     if (m_history.isEmpty()) {
         return;
     }
+    // The model reset destroys the delegate whose release would have closed an open group.
+    m_inEditTransaction = 0;
     m_isApplyingUndo = true;
     // Preserve the state we are leaving so redo can restore it.
     m_redo.append(m_shapes);
@@ -166,6 +205,7 @@ void ShapesModel::redo()
     if (m_redo.isEmpty()) {
         return;
     }
+    m_inEditTransaction = 0;
     m_isApplyingUndo = true;
     // Current state becomes undoable again.
     m_history.append(m_shapes);
@@ -181,7 +221,7 @@ void ShapesModel::beginEdit()
 {
     if (!m_isApplyingUndo) {
         if (m_inEditTransaction == 0) {
-            saveHistorySnapshot();
+            m_editSnapshotTaken = false;
         }
         m_inEditTransaction++;
     }
@@ -196,24 +236,20 @@ void ShapesModel::endEdit()
 
 void ShapesModel::setShapes(const QList<QVariantMap> &shapes)
 {
-    if (!m_isApplyingUndo) {
-        saveHistorySnapshot();
-    }
+    recordHistory();
     beginResetModel();
     m_shapes = shapes;
     endResetModel();
 }
 
-QList<QVariantMap> ShapesModel::shapes() const
+const QList<QVariantMap> &ShapesModel::shapes() const
 {
     return m_shapes;
 }
 
 void ShapesModel::addShape(const QVariantMap &shape)
 {
-    if (!m_isApplyingUndo) {
-        saveHistorySnapshot();
-    }
+    recordHistory();
     QVariantMap normalizedShape = shape;
     if (!normalizedShape.contains(QStringLiteral("id")) || normalizedShape.value(QStringLiteral("id")).toString().isEmpty()) {
         normalizedShape.insert(QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces));
@@ -233,14 +269,18 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
         bool hasRealChanges = false;
         const auto &currentShape = m_shapes[index];
         for (auto it = properties.begin(); it != properties.end(); ++it) {
-            if (it.key() != QStringLiteral("selected") && currentShape.value(it.key()) != it.value()) {
+            // A text shape's size just follows its rendered text, so it is not an edit either.
+            const bool derived = it.key() == QStringLiteral("selected")
+                || (currentShape.value(QStringLiteral("type")).toString() == QStringLiteral("text")
+                    && (it.key() == QStringLiteral("width") || it.key() == QStringLiteral("height")));
+            if (!derived && currentShape.value(it.key()) != it.value()) {
                 hasRealChanges = true;
                 break;
             }
         }
 
-        if (hasRealChanges && !m_isApplyingUndo && m_inEditTransaction == 0) {
-            saveHistorySnapshot();
+        if (hasRealChanges) {
+            recordHistory();
         }
 
         auto &shape = m_shapes[index];
@@ -273,9 +313,7 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
 void ShapesModel::removeShape(int index)
 {
     if (index >= 0 && index < m_shapes.size()) {
-        if (!m_isApplyingUndo) {
-            saveHistorySnapshot();
-        }
+        recordHistory();
         beginRemoveRows(QModelIndex(), index, index);
         m_shapes.removeAt(index);
         endRemoveRows();
@@ -290,9 +328,7 @@ bool ShapesModel::moveShape(int fromIndex, int toIndex)
     if (fromIndex == toIndex) {
         return true;
     }
-    if (!m_isApplyingUndo) {
-        saveHistorySnapshot();
-    }
+    recordHistory();
     int destination = (fromIndex < toIndex) ? (toIndex + 1) : toIndex;
     beginMoveRows(QModelIndex(), fromIndex, fromIndex, QModelIndex(), destination);
     m_shapes.move(fromIndex, toIndex);
@@ -303,9 +339,8 @@ bool ShapesModel::moveShape(int fromIndex, int toIndex)
 void ShapesModel::clear()
 {
     if (!m_shapes.isEmpty()) {
-        if (!m_isApplyingUndo) {
-            saveHistorySnapshot();
-        }
+        recordHistory();
+        m_inEditTransaction = 0;
         beginResetModel();
         m_shapes.clear();
         endResetModel();

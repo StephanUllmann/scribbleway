@@ -26,11 +26,10 @@ jobs:
             cmake \
             extra-cmake-modules \
             libkf6globalaccel-dev \
-            kglobalacceld \
-            dbus \
             liblayershellqtinterface-dev \
             qt6-base-dev \
             qt6-declarative-dev \
+            qml6-module-qtquick-window \
             qml6-module-qtquick-layouts \
             qml6-module-qtquick-controls \
             qml6-module-qtquick-templates \
@@ -44,15 +43,7 @@ jobs:
         run: cmake --build build -j"$(nproc)"
 
       - name: Test
-        # QTEST_MAIN needs a QPA platform (offscreen), and OverlayController's shortcut
-        # tests need the kglobalacceld daemon on a session bus or KGlobalAccel segfaults.
-        run: |
-          export QT_QPA_PLATFORM=offscreen
-          dbus-run-session -- bash -c '
-            /usr/lib/x86_64-linux-gnu/libexec/kglobalacceld >/dev/null 2>&1 &
-            sleep 3
-            ctest --test-dir build --output-on-failure
-          '
+        run: ctest --test-dir build --output-on-failure
 
   # Produces the installable Arch package as a downloadable artifact, so it can
   # be tried in a VM (or on a real Arch/Hyprland box) without building locally.

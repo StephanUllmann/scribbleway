@@ -9,8 +9,11 @@ Item {
 
     MultiEffect {
         id: glowEffect
-        anchors.fill: shapeContent
-        source: shapeContent
+        x: glowClip.x
+        y: glowClip.y
+        width: glowClip.width
+        height: glowClip.height
+        source: glowClip
         visible: baseShapeRoot.modelGlow > 0
 
         shadowEnabled: true
@@ -21,10 +24,23 @@ Item {
         autoPaddingEnabled: true
     }
 
+    // The glow renders only this box. Rendering the full-size canvas would cost a
+    // screen-sized texture per shape.
     Item {
-        id: shapeContent
-        anchors.fill: parent
+        id: glowClip
+        x: baseShapeRoot.contentBounds.x
+        y: baseShapeRoot.contentBounds.y
+        width: baseShapeRoot.contentBounds.width
+        height: baseShapeRoot.contentBounds.height
         visible: baseShapeRoot.modelGlow === 0
+
+        Item {
+            id: shapeContent
+            x: -glowClip.x
+            y: -glowClip.y
+            width: baseShapeRoot.width
+            height: baseShapeRoot.height
+        }
     }
     Text {
         id: attachedTextLabel
@@ -32,6 +48,7 @@ Item {
         enabled: false
         z: 1
         text: baseShapeRoot.modelAttachedText.text || ""
+        textFormat: Text.PlainText
         color: baseShapeRoot.modelColor
         opacity: baseShapeRoot.modelOpacity
         font.family: {
@@ -130,7 +147,28 @@ Item {
     property real shapeHeight: 0
     property real minSize: 15
 
-    property bool isResizing: false
+    // Room for the arrowhead and for the sketchy strokes that wander off the outline.
+    readonly property real boundsMargin: 40 + modelStrokeWidth * 2
+    readonly property rect contentBounds: mode === "line"
+        ? Qt.rect(Math.min(shapeFromX, shapeToX) - boundsMargin, Math.min(shapeFromY, shapeToY) - boundsMargin,
+                  Math.abs(shapeToX - shapeFromX) + boundsMargin * 2, Math.abs(shapeToY - shapeFromY) + boundsMargin * 2)
+        : Qt.rect(shapeX - boundsMargin, shapeY - boundsMargin,
+                  shapeWidth + boundsMargin * 2, shapeHeight + boundsMargin * 2)
+
+    // A press opens an edit group. Its release can be lost when the gesture is cancelled
+    // or this shape is destroyed mid-drag, and an unclosed group merges all later edits.
+    property bool gestureOpen: false
+    function beginGesture() {
+        gestureOpen = true;
+        controller.beginEdit();
+    }
+    function endGesture() {
+        if (gestureOpen) {
+            gestureOpen = false;
+            controller.endEdit();
+        }
+    }
+    Component.onDestruction: endGesture()
 
     // Line-mode properties
     property real shapeFromX: 0
@@ -178,7 +216,7 @@ Item {
 
         onPressed: (mouse) => {
             controller.selectShape(shapeIndex, mouse.modifiers & Qt.ShiftModifier);
-            controller.beginEdit();
+            baseShapeRoot.beginGesture();
             let pos = mapToItem(baseShapeRoot, mouse.x, mouse.y);
             startMouseX = pos.x;
             startMouseY = pos.y;
@@ -190,9 +228,8 @@ Item {
             startTY = shapeToY;
         }
 
-        onReleased: {
-            controller.endEdit();
-        }
+        onReleased: baseShapeRoot.endGesture()
+        onCanceled: baseShapeRoot.endGesture()
 
         onPositionChanged: (mouse) => {
             if (typeof canvasWindow !== "undefined") {
@@ -307,8 +344,7 @@ Item {
                     property real originalH: 0
 
                     onPressed: (mouse) => {
-                        controller.beginEdit();
-                        baseShapeRoot.isResizing = true;
+                        baseShapeRoot.beginGesture();
                         let pos = mapToItem(baseShapeRoot, mouse.x, mouse.y);
                         dragStartX = pos.x;
                         dragStartY = pos.y;
@@ -318,10 +354,8 @@ Item {
                         originalH = shapeHeight;
                     }
 
-                    onReleased: {
-                        baseShapeRoot.isResizing = false;
-                        controller.endEdit();
-                    }
+                    onReleased: baseShapeRoot.endGesture()
+                    onCanceled: baseShapeRoot.endGesture()
 
                     onPositionChanged: (mouse) => {
                         if (pressed) {
@@ -407,8 +441,7 @@ Item {
                     property real originalY: 0
 
                     onPressed: (mouse) => {
-                        controller.beginEdit();
-                        baseShapeRoot.isResizing = true;
+                        baseShapeRoot.beginGesture();
                         let pos = mapToItem(baseShapeRoot, mouse.x, mouse.y);
                         dragStartX = pos.x;
                         dragStartY = pos.y;
@@ -424,9 +457,9 @@ Item {
                         }
                         // Try to snap to a nearby shape
                         controller.resnapEndpoint(shapeIndex, index === 0);
-                        baseShapeRoot.isResizing = false;
-                        controller.endEdit();
+                        baseShapeRoot.endGesture();
                     }
+                    onCanceled: baseShapeRoot.endGesture()
 
                     onPositionChanged: (mouse) => {
                         if (pressed) {

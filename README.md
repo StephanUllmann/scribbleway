@@ -1,6 +1,6 @@
 # Scribbleway
 
-A modern, Excalidraw-style screen annotation utility designed for **Wayland** and **KDE Plasma 6**.
+A modern, Excalidraw-style screen annotation utility designed for **Wayland**, on KDE Plasma 6 and other layer-shell compositors.
 
 Scribbleway allows you to draw shapes, lines, arrows, and text directly over your screen, providing a rich, interactive overlay for presentations, demonstrations, or general desktop markup.
 
@@ -12,18 +12,16 @@ Scribbleway allows you to draw shapes, lines, arrows, and text directly over you
 - **Live Shape Manipulation**: Select, move, resize, layer-reorder (raise/lower), lock, or delete shapes after drawing them.
 - **Rich Property Controls**: Adjust stroke colors (preset palettes or custom pickers), width, and opacity per shape or globally.
 - **Wayland Overlay Layer**: Built on `LayerShellQt` to provide full-screen coverage that handles keyboard and pointer focus transparently.
-- **KDE Plasma 6 Widget**: A companion Plasmoid applet for easy status viewing, drawn shape management, and property adjustments.
-- **Decoupled D-Bus Architecture**: A clean D-Bus interface connects the applet plugin (`AppletBackend`) to the overlay daemon (`OverlayController`).
-- **Customizable Global Hotkeys**: Configured through KDE `KGlobalAccel` and adjustable directly from the Plasmoid UI.
+- **Tray Popup**: A system tray popup for tools, properties and the list of drawn shapes.
+- **Global Hotkey**: `Meta+Shift+X` through KDE `KGlobalAccel`, or `scribbleway-overlay --toggle` on other compositors.
 
 ---
 
 ## Repository Structure
 
-- **[src/overlay/](file:///home/stephan/coding/projects/scribbleway/src/overlay)**: The main drawing overlay daemon (`scribbleway-overlay`). Contains the C++/Qt engine (`OverlayController`, `ShapesModel`) and the QML overlay elements.
-- **[src/applet-plugin/](file:///home/stephan/coding/projects/scribbleway/src/applet-plugin)**: The C++ bridge backend (`AppletBackend`) registering D-Bus communication to expose the overlay status and actions to the widget.
-- **[applet/](file:///home/stephan/coding/projects/scribbleway/applet)**: The KDE Plasma 6 desktop widget UI and metadata configurations.
-- **[tests/](file:///home/stephan/coding/projects/scribbleway/tests)**: Automated unit tests covering core drawing and shape management logic (`ShapesModel`).
+- **`src/overlay/`**: The single `scribbleway-overlay` binary: the C++/Qt engine (`OverlayController`, `ShapesModel`, the Excalidraw clipboard translation) and the QML overlay and tray popup.
+- **`tests/`**: C++ and QML tests for shape handling, undo, the clipboard format and the overlay QML.
+- **`packaging/`, `debian/`**: Arch, Flatpak and Debian packaging.
 
 ---
 
@@ -31,7 +29,7 @@ Scribbleway allows you to draw shapes, lines, arrows, and text directly over you
 
 ### Requirements & Dependencies
 
-**KDE Plasma 6 and Qt 6 are strictly required.** Scribbleway is built specifically for Qt 6 and KDE Plasma 6; older versions (such as Qt 5 or Plasma 5) are not supported.
+**Qt 6.6 or newer and KDE Frameworks 6 are required.** Scribbleway runs on KDE Plasma 6 and on other Wayland compositors with layer-shell support, such as Hyprland.
 
 Install the appropriate system package dependencies for your distribution below:
 
@@ -52,49 +50,20 @@ sudo apt install extra-cmake-modules libkf6globalaccel-dev liblayershellqtinterf
 
 ### Installation
 
-#### 1. Quick Installation (User-Local)
-You can build and install Scribbleway user-locally under `~/.local/` using the automated installation script:
+To build and install under `~/.local`:
 
 ```bash
-chmod +x install.sh
-./install.sh
-```
-
-To run the installation script unattended (automatically configuring shell profiles without prompts):
-```bash
-./install.sh --yes
-```
-
-#### 2. Manual Building & Installation
-To build and install the project manually:
-
-```bash
-# 1. Configure the build
 cmake -B build -S . -DCMAKE_INSTALL_PREFIX="$HOME/.local" -DCMAKE_BUILD_TYPE=Release
-
-# 2. Compile the binaries and plugins
 cmake --build build -j$(nproc)
-
-# 3. Install
 cmake --install build
 ```
 
-*Note: For manual installations, you may need to export the following environment variables in your `~/.bashrc` or `~/.profile` for the QML plugin to load correctly:*
-```bash
-export QML2_IMPORT_PATH="$HOME/.local/lib/qml:$HOME/.local/lib/x86_64-linux-gnu/qml${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}"
-export QT_PLUGIN_PATH="$HOME/.local/lib/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
-```
+For development, `./dev-reinstall.sh` removes the old install, rebuilds, installs and restarts the overlay.
 
-#### 3. Uninstallation
-To completely revert a user-local installation and clean up desktop shortcuts/autostart files:
-```bash
-chmod +x uninstall.sh
-./uninstall.sh
-```
+To uninstall, remove the files CMake recorded:
 
-To run the uninstallation unattended:
 ```bash
-./uninstall.sh --yes
+xargs rm < build/install_manifest.txt
 ```
 
 ### Packaging
@@ -113,8 +82,6 @@ dpkg-buildpackage -us -uc -b
 ```
 
 #### Flatpak
-A Flatpak manifest ships the **overlay daemon only** (`scribbleway-overlay`). The Plasma applet and QML backend remain host packages (`install.sh`, `.deb`, or Arch `PKGBUILD`) because plasmoids load from the host Plasma shell.
-
 Prerequisites: `flatpak`, `flatpak-builder`, and Flathub access.
 
 ```bash
@@ -123,7 +90,7 @@ Prerequisites: `flatpak`, `flatpak-builder`, and Flathub access.
 flatpak run org.kde.scribbleway
 ```
 
-Global shortcut (`Meta+Shift+X`) needs host `plasma-kglobalaccel`. Host-installed applet can talk to the Flatpak daemon over D-Bus (`org.kde.scribbleway`). Autostart is not provided by the Flatpak; start the daemon manually or keep the native autostart desktop file from a host install.
+The global shortcut (`Meta+Shift+X`) needs the host's `plasma-kglobalaccel`. Autostart is not provided by the Flatpak; start the daemon manually or keep the native autostart desktop file from a host install.
 
 ### Running the Daemon
 
@@ -201,4 +168,4 @@ Scribbleway uses a two-tier modal shortcut model. A single global shortcut opens
 | **Clear All Shapes** | `Ctrl` + `Delete` |
 | **Exit Overlay (Passthrough)** | `Escape` |
 
-*(Note: The global overlay toggle shortcut can be rebound dynamically in the Plasma applet settings).*
+There is no screen for changing hotkeys. To override a local one, add it to `~/.config/scribbleway/shortcuts.conf`, for example `tool_arrow=W` under a `[local]` section, and restart the overlay.

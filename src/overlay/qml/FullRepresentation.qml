@@ -32,11 +32,11 @@ Item {
     function cap(key) { return key.charAt(0).toUpperCase() + key.slice(1) }
 
     // Read side of the routing below: the selected shape's value if there is one, else
-    // the matching default. Both are read eagerly on purpose — the selected* properties
-    // notify on selectionChanged only, so a binding that touched just one of them would
+    // the matching default. Both are read eagerly on purpose — `selection` notifies on
+    // selectionChanged only, so a binding that touched just one of them would
     // go stale when a default is written with nothing selected.
     function get(key) {
-        const selected = backend["selected" + cap(key)]
+        const selected = backend.selection[key]
         const fallback = backend["default" + cap(key)]
         return backend.hasSelection ? selected : fallback
     }
@@ -54,22 +54,14 @@ Item {
         }
     }
 
-    // Track the currently selected tool name for draw mode
-    property string activeDrawTool: "freehand"
-    property bool isFillableActive: {
-        if (backend.hasSelection) {
-            let t = backend.selectedType.toLowerCase();
-            return t === "rectangle" || t === "ellipse";
-        }
-        return activeDrawTool === "rectangle" || activeDrawTool === "ellipse";
+    // A slider drag is one undo step, however many values it passes through.
+    component EditSlider: Controls.Slider {
+        onPressedChanged: pressed ? controller.beginEdit() : controller.endEdit()
     }
 
-    property bool isTextActive: {
-        if (backend.hasSelection) {
-            return backend.selectedType.toLowerCase() === "text";
-        }
-        return activeDrawTool === "text";
-    }
+    readonly property string activeType: (backend.hasSelection ? backend.selection.type : backend.activeTool).toLowerCase()
+    readonly property bool isFillableActive: activeType === "rectangle" || activeType === "ellipse"
+    readonly property bool isTextActive: activeType === "text"
 
     // Handled by whoever hosts this menu (TrayPopup), which owns the picker panel — a
     // QtQuick.Dialogs ColorDialog is an xdg-desktop-portal dialog and opens fullscreen
@@ -115,25 +107,22 @@ Item {
                     Controls.Button {
                         icon.source: "qrc:/icons/draw-freehand.svg"
                         text: "Draw"
-                        checkable: true
-                        checked: backend.activeTool !== "select"
+                        checked: backend.currentMode === "draw"
                         Layout.fillWidth: true
                         onClicked: {
-                            if (backend.activeTool === "select") {
-                                backend.setActiveTool(fullRoot.activeDrawTool)
+                            if (backend.currentMode !== "draw") {
+                                backend.setActiveTool("freehand")
                             }
                         }
                     }
 
                     Controls.Button {
                         icon.source: "qrc:/icons/edit-select.svg"
+                        objectName: "selectModeButton"
                         text: "Select"
-                        checkable: true
-                        checked: backend.activeTool === "select"
+                        checked: backend.currentMode === "select"
                         Layout.fillWidth: true
-                        onClicked: {
-                            backend.setActiveTool("select")
-                        }
+                        onClicked: backend.enterSelectMode()
                     }
 
                     Controls.Button {
@@ -160,7 +149,7 @@ Item {
 
                 // Section Header
                 Controls.Label {
-                    text: backend.hasSelection ? "Edit Selection (" + backend.selectedType + ")" : "Default Properties & Tool"
+                    text: backend.hasSelection ? "Edit Selection (" + backend.selection.type + ")" : "Default Properties & Tool"
                     font.bold: true
                     font.pixelSize: 11
                     color: theme.highlightColor
@@ -218,9 +207,7 @@ Item {
                         }
                         onActivated: {
                             let tools = ["freehand", "arrow", "rectangle", "ellipse", "line", "text"]
-                            let selected = tools[index]
-                            fullRoot.activeDrawTool = selected
-                            backend.setActiveTool(selected)
+                            backend.setActiveTool(tools[index])
                         }
                     }
 
@@ -296,7 +283,7 @@ Item {
                         width: theme.gridUnit * 3
                     }
 
-                    Controls.Slider {
+                    EditSlider {
                         Layout.fillWidth: true
                         from: 1
                         to: 15
@@ -320,7 +307,7 @@ Item {
                         width: theme.gridUnit * 3
                     }
 
-                    Controls.Slider {
+                    EditSlider {
                         Layout.fillWidth: true
                         from: 0.1
                         to: 1.0
@@ -414,7 +401,7 @@ Item {
                             width: theme.gridUnit * 3
                         }
 
-                        Controls.Slider {
+                        EditSlider {
                             Layout.fillWidth: true
                             from: 0.0
                             to: 1.0
@@ -439,7 +426,7 @@ Item {
                         width: theme.gridUnit * 3
                     }
 
-                    Controls.Slider {
+                    EditSlider {
                         Layout.fillWidth: true
                         from: 0
                         to: 30
@@ -463,7 +450,7 @@ Item {
                         width: theme.gridUnit * 4
                     }
 
-                    Controls.Slider {
+                    EditSlider {
                         Layout.fillWidth: true
                         from: 0
                         to: 3
@@ -507,7 +494,7 @@ Item {
                         width: theme.gridUnit * 3
                     }
 
-                    Controls.Slider {
+                    EditSlider {
                         Layout.fillWidth: true
                         from: 0
                         to: 50
@@ -554,7 +541,7 @@ Item {
                             width: theme.gridUnit * 3
                         }
 
-                        Controls.Slider {
+                        EditSlider {
                             Layout.fillWidth: true
                             from: 10
                             to: 72

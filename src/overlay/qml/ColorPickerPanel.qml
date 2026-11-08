@@ -20,6 +20,8 @@ Item {
     // activeFocus would deadlock: no focus without the keyboard, no keyboard without the
     // focus.
     readonly property bool textEditing: hexField.focus
+    // True during a drag on the square or the strip; the host makes that one undo step.
+    readonly property bool dragging: svArea.pressed || hueArea.pressed
 
     implicitWidth: 208
     implicitHeight: layout.implicitHeight
@@ -151,6 +153,7 @@ Item {
             }
 
             MouseArea {
+                id: svArea
                 anchors.fill: parent
                 onPressed: (mouse) => root.pickSaturationValue(mouse.x, mouse.y)
                 onPositionChanged: (mouse) => {
@@ -202,6 +205,7 @@ Item {
             }
 
             MouseArea {
+                id: hueArea
                 anchors.fill: parent
                 onPressed: (mouse) => root.pickHue(mouse.x)
                 onPositionChanged: (mouse) => {

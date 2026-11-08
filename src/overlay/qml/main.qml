@@ -187,8 +187,11 @@ Window {
                 shape["fromY"] = drawStartPoint.y;
                 shape["toX"] = drawStartPoint.x + dx;
                 shape["toY"] = drawStartPoint.y + dy;
+                // One edit group, so the arrow and its attachments undo in one step.
+                controller.beginEdit();
                 controller.addShape(shape);
                 controller.createBindingsForShape(controller.shapesModel.rowCount() - 1);
+                controller.endEdit();
             }
         } else if (activeDrawTool === "text") {
             shape["x"] = drawStartPoint.x;
@@ -280,7 +283,8 @@ Window {
             }
             onLoaded: {
                 if (item) {
-                    item.index = index;
+                    // A binding: rows shift on delete, raise and lower without a new delegate.
+                    item.index = Qt.binding(() => index);
                 }
                 canvasWindow.requestInputRegionUpdate();
             }
@@ -574,6 +578,7 @@ Window {
     Text {
         id: textMeasurer
         visible: false
+        textFormat: Text.PlainText
         font.family: textEditor.font.family
         font.pixelSize: textEditor.font.pixelSize
         text: textEditor.text
@@ -821,7 +826,7 @@ Window {
             required property var modelData
             sequence: controller.localShortcutSequences[modelData.key]
             enabled: canvasWindow.shortcutGuard
-                     && (!modelData.needs || controller.selectedType === modelData.needs)
+                     && (!modelData.needs || controller.selection.type === modelData.needs)
             onActivated: modelData.run()
         }
     }

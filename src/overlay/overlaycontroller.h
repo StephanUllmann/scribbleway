@@ -3,28 +3,13 @@
 #include <QObject>
 #include <QVariantList>
 #include <QVariantMap>
-#include <QJsonObject>
 #include <QQuickWindow>
 #include <QRegion>
 #include <QRect>
-#include <QAction>
 #include <QHash>
 #include <QSet>
 #include <limits>
 #include "shapesmodel.h"
-
-struct ShortcutAction {
-    QAction *action = nullptr;
-    QString id;
-    QString displayName;
-};
-
-struct LocalShortcutDef {
-    QString id;
-    QString displayName;
-    QString defaultSequence;
-    QString currentSequence;
-};
 
 struct BindingHit {
     QString targetId;
@@ -53,22 +38,11 @@ class OverlayController : public QObject
     Q_PROPERTY(double defaultFillOpacity READ defaultFillOpacity WRITE setDefaultFillOpacity NOTIFY defaultFillOpacityChanged)
     Q_PROPERTY(int defaultFreehandSmoothing READ defaultFreehandSmoothing WRITE setDefaultFreehandSmoothing NOTIFY defaultFreehandSmoothingChanged)
     Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
-    Q_PROPERTY(QVariantMap localShortcutSequences READ localShortcutSequences NOTIFY localShortcutsChanged)
+    Q_PROPERTY(QVariantMap localShortcutSequences READ localShortcutSequences CONSTANT)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
-    Q_PROPERTY(QString selectedType READ selectedType NOTIFY selectionChanged)
-    Q_PROPERTY(QString selectedColor READ selectedColor NOTIFY selectionChanged)
-    Q_PROPERTY(int selectedStrokeWidth READ selectedStrokeWidth NOTIFY selectionChanged)
-    Q_PROPERTY(double selectedOpacity READ selectedOpacity NOTIFY selectionChanged)
-    Q_PROPERTY(QString selectedFontFamily READ selectedFontFamily NOTIFY selectionChanged)
-    Q_PROPERTY(int selectedFontSize READ selectedFontSize NOTIFY selectionChanged)
-    Q_PROPERTY(int selectedBorderRadius READ selectedBorderRadius NOTIFY selectionChanged)
-    Q_PROPERTY(int selectedRoughness READ selectedRoughness NOTIFY selectionChanged)
-    Q_PROPERTY(int selectedGlow READ selectedGlow NOTIFY selectionChanged)
-    Q_PROPERTY(QString selectedFillColor READ selectedFillColor NOTIFY selectionChanged)
-    Q_PROPERTY(double selectedFillOpacity READ selectedFillOpacity NOTIFY selectionChanged)
-    Q_PROPERTY(int selectedFreehandSmoothing READ selectedFreehandSmoothing NOTIFY selectionChanged)
+    Q_PROPERTY(QVariantMap selection READ getSelectionState NOTIFY selectionChanged)
     Q_PROPERTY(QStringList presetColors READ presetColors CONSTANT)
-    Q_PROPERTY(QStringList screenNames READ screenNames CONSTANT)
+    Q_PROPERTY(QStringList screenNames READ screenNames NOTIFY screensChanged)
     Q_PROPERTY(QString targetScreen READ targetScreen NOTIFY targetScreenChanged)
     Q_PROPERTY(bool trayPopupOpen READ trayPopupOpen NOTIFY trayPopupOpenChanged)
     Q_PROPERTY(bool popupWantsKeyboard READ popupWantsKeyboard WRITE setPopupWantsKeyboard NOTIFY popupWantsKeyboardChanged)
@@ -83,18 +57,8 @@ public:
     bool hasMultiSelection() const;
 
     bool hasSelection() const;
-    QString selectedType() const;
-    QString selectedColor() const;
-    int selectedStrokeWidth() const;
-    double selectedOpacity() const;
-    QString selectedFontFamily() const;
-    int selectedFontSize() const;
-    int selectedBorderRadius() const;
-    int selectedRoughness() const;
-    int selectedGlow() const;
-    QString selectedFillColor() const;
-    double selectedFillOpacity() const;
-    int selectedFreehandSmoothing() const;
+    // The selected shape's properties, or the defaults when nothing is selected.
+    QVariantMap getSelectionState() const;
     // The same list selectPresetColor()/the number hotkeys index, so the swatches
     // in the menu cannot drift out of step with them.
     static QStringList presetColors();
@@ -135,7 +99,6 @@ public:
     ShapesModel* shapesModel();
     QVariantMap localShortcutSequences() const;
 
-    void registerAction(QAction *action, const QString &actionId, const QString &displayName);
     Q_INVOKABLE int indexForId(const QString &id) const;
     QPointF pointFromBinding(const QVariantMap &targetShape, double focus) const;
     Q_INVOKABLE QVariantMap findSnapInfo(double px, double py, int excludeIndex = -1) const;
@@ -179,22 +142,17 @@ public:
     Q_INVOKABLE void cycleRoughness();
     Q_INVOKABLE void selectPresetColor(int index);
 
-    // DBus-invokable slots (also used in C++)
 public Q_SLOTS:
     QString activeTool() const;
     void setActiveTool(const QString &tool);
-    QVariantList getShortcuts();
-    void changeShortcut(const QString &actionId, const QString &shortcutString);
 
     void addShape(const QVariantMap &shape);
     void updateShape(int index, const QVariantMap &properties);
-    QVariantMap getSelectionState();
     void updateProperties(const QVariantMap &properties);
     void undo();
     void redo();
     void clear();
     void deleteSelected();
-    void toggleLock();
     void raiseSelected();
     void lowerSelected();
     void setTargetScreen(const QString &screenName);
@@ -222,11 +180,9 @@ Q_SIGNALS:
     void defaultFillOpacityChanged();
     void defaultFreehandSmoothingChanged();
     
-    // DBus signals (matched by AppletBackend slots)
     void selectionChanged();
     void modeChanged(const QString &mode);
-    void shortcutsChanged(const QVariantList &shortcuts);
-    void localShortcutsChanged();
+    void screensChanged();
     void targetScreenChanged();
     void trayPopupOpenChanged();
     void popupWantsKeyboardChanged();
@@ -247,16 +203,11 @@ private:
     // Move one shape by (dx, dy). Each shape type stores its geometry differently, and
     // paste, drag and nudge all need the same walk.
     static void translateShape(QVariantMap &shape, double dx, double dy);
-    QJsonObject convertToExcalidraw(const QVariantMap &shape);
-    QJsonObject convertAttachedTextToExcalidraw(const QVariantMap &shape, const QVariantMap &attachedText) const;
-    QVariantMap convertFromExcalidraw(const QJsonObject &elem);
-    void attachImportedBoundText(QList<QVariantMap> &shapes) const;
-    static bool supportsAttachedText(const QString &type);
-    static QVariantList withoutAttachedTextBinding(const QVariantMap &shape);
+    // An arrow moved away from a shape that stayed put lets go of that shape.
+    void detachFromUnmoved(int index, QVariantMap &shape, const QSet<int> &moved);
     QVariantMap makeAttachedTextBinding(const QVariantMap &shape) const;
 
-    QList<ShortcutAction> m_shortcutActions;
-    QList<LocalShortcutDef> m_localShortcuts;
+    QVariantMap m_localShortcutSequences;
 
     QQuickWindow *m_window = nullptr;
     ShapesModel m_shapesModel;

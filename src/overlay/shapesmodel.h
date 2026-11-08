@@ -52,9 +52,11 @@ public:
 
     // Helper methods for data modification
     void setShapes(const QList<QVariantMap> &shapes);
-    QList<QVariantMap> shapes() const;
+    const QList<QVariantMap> &shapes() const;
     QString shapeIdAt(int index) const;
     static QVariantMap firstAttachedTextBinding(const QVariantMap &shape);
+    static QVariantList withoutAttachedTextBinding(const QVariantMap &shape);
+    static bool supportsAttachedText(const QString &type);
 
     void addShape(const QVariantMap &shape);
     void updateShape(int index, const QVariantMap &properties);
@@ -68,10 +70,12 @@ public:
 
 private:
     void saveHistorySnapshot();
+    void recordHistory();
 
     QList<QVariantMap> m_shapes;
     QList<QList<QVariantMap>> m_history;
     QList<QList<QVariantMap>> m_redo;
     bool m_isApplyingUndo = false;
     int m_inEditTransaction = 0;
+    bool m_editSnapshotTaken = false;
 };

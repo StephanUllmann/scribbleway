@@ -1,11 +1,7 @@
 #include <QtTest>
 #include <QClipboard>
 #include <QGuiApplication>
-#include <QProcess>
 #include <QSignalSpy>
-#include <QAction>
-#include <QKeySequence>
-#include <KGlobalAccel>
 #include "shapesmodel.h"
 #include "overlaycontroller.h"
 #include "singleinstance.h"
@@ -20,6 +16,9 @@
 #include <QFile>
 #include <QRegularExpression>
 #include <QSet>
+#include <QStandardPaths>
+#include <QQuickItem>
+#include <QQuickWindow>
 
 class ShapesModelTest : public QObject
 {
@@ -77,6 +76,13 @@ private Q_SLOTS:
     void testAttachedTextExcalidrawImport();
     void testLineAttachedTextClipboardFallback();
     void testDecoupledAttachedTextFontProperties();
+    void testControllerUndoSteps();
+    void testMainQmlFollowsTheModel();
+    void testEllipseBindingKeepsItsPoint();
+    void testPastedBindingFocusIsRecomputed();
+    void testLockedShapesStayOutOfGroups();
+    void testDraggedArrowLetsGo();
+    void testCopyPasteKeepsFonts();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -409,18 +415,6 @@ void ShapesModelTest::testOverlayControllerRedo()
     QVERIFY(seqs.contains(QStringLiteral("action_redo")));
     QCOMPARE(seqs.value(QStringLiteral("action_redo")).toString(), QStringLiteral("Ctrl+Shift+Z"));
 
-    bool foundInGetShortcuts = false;
-    const QVariantList all = controller.getShortcuts();
-    for (const QVariant &entry : all) {
-        const QVariantMap map = entry.toMap();
-        if (map.value(QStringLiteral("id")).toString() == QStringLiteral("action_redo")) {
-            foundInGetShortcuts = true;
-            QCOMPARE(map.value(QStringLiteral("name")).toString(), QStringLiteral("Redo"));
-            QCOMPARE(map.value(QStringLiteral("shortcut")).toString(), QStringLiteral("Ctrl+Shift+Z"));
-            break;
-        }
-    }
-    QVERIFY(foundInGetShortcuts);
 }
 
 void ShapesModelTest::testOverlayControllerProperties()
@@ -494,8 +488,8 @@ void ShapesModelTest::testOverlayControllerSelectionProperties()
 
     // No selection: falls back to defaults, matching getSelectionState()
     QCOMPARE(controller.hasSelection(), false);
-    QCOMPARE(controller.selectedColor(), controller.defaultColor());
-    QCOMPARE(controller.selectedStrokeWidth(), controller.defaultStrokeWidth());
+    QCOMPARE(controller.getSelectionState().value(QStringLiteral("color")).toString(), controller.defaultColor());
+    QCOMPARE(controller.getSelectionState().value(QStringLiteral("strokeWidth")).toInt(), controller.defaultStrokeWidth());
 
     QVariantMap shape;
     shape[QStringLiteral("type")] = QStringLiteral("rectangle");
@@ -504,9 +498,9 @@ void ShapesModelTest::testOverlayControllerSelectionProperties()
     controller.addShape(shape);
 
     QCOMPARE(controller.hasSelection(), true);
-    QCOMPARE(controller.selectedType(), QStringLiteral("rectangle"));
-    QCOMPARE(controller.selectedColor(), QStringLiteral("#00ffff"));
-    QCOMPARE(controller.selectedStrokeWidth(), 7);
+    QCOMPARE(controller.getSelectionState().value(QStringLiteral("type")).toString(), QStringLiteral("rectangle"));
+    QCOMPARE(controller.getSelectionState().value(QStringLiteral("color")).toString(), QStringLiteral("#00ffff"));
+    QCOMPARE(controller.getSelectionState().value(QStringLiteral("strokeWidth")).toInt(), 7);
 
     QVERIFY(!controller.screenNames().isEmpty());
 }
@@ -518,6 +512,7 @@ void ShapesModelTest::testSingleInstanceGuard()
 
     SingleInstanceGuard second(QStringLiteral("scribbleway-test-lock"));
     QVERIFY(!second.tryAcquire());
+    QVERIFY(second.foundRunningInstance());
 }
 
 void ShapesModelTest::testMoveShape()
@@ -750,7 +745,7 @@ void ShapesModelTest::testBorderRadius()
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 20);
 
     // Test selectedType() when shape is selected
-    QCOMPARE(controller.selectedType(), QStringLiteral("rectangle"));
+    QCOMPARE(controller.getSelectionState().value(QStringLiteral("type")).toString(), QStringLiteral("rectangle"));
 
     // Test increaseBorderRadius()
     controller.increaseBorderRadius();
@@ -774,7 +769,7 @@ void ShapesModelTest::testBorderRadius()
 
     // Deselect and verify selectedType() is empty
     controller.setSelectedIndex(-1);
-    QCOMPARE(controller.selectedType(), QString());
+    QCOMPARE(controller.getSelectionState().value(QStringLiteral("type")).toString(), QString());
 
     // Test increaseBorderRadius() when no shape is selected (should do nothing)
     controller.increaseBorderRadius();
@@ -785,7 +780,7 @@ void ShapesModelTest::testBorderRadius()
     lineShape[QStringLiteral("type")] = QStringLiteral("line");
     controller.addShape(lineShape); // selects it automatically
 
-    QCOMPARE(controller.selectedType(), QStringLiteral("line"));
+    QCOMPARE(controller.getSelectionState().value(QStringLiteral("type")).toString(), QStringLiteral("line"));
 
     // increaseBorderRadius() on line should do nothing
     controller.increaseBorderRadius();
@@ -821,9 +816,10 @@ void ShapesModelTest::testRoughness()
     controller.setActiveTool(QStringLiteral("rectangle"));
     QCOMPARE(controller.activeTool(), QStringLiteral("rectangle"));
 
-    // Pressing S when drawing should change tool to select
+    // S cycles the default while a tool is active, and leaves the tool alone
     controller.cycleRoughness();
-    QCOMPARE(controller.activeTool(), QStringLiteral(""));
+    QCOMPARE(controller.activeTool(), QStringLiteral("rectangle"));
+    QCOMPARE(controller.defaultRoughness(), 0);
 
     // 5. Test cycleRoughness() when in select mode (cycles roughness from 2 -> 0 -> 1 -> 2)
     controller.setSelectedIndex(0);
@@ -1110,7 +1106,7 @@ void ShapesModelTest::testExcalidrawPasteCompatibility()
     QCOMPARE(pastedText[QStringLiteral("opacity")].toDouble(), 1.0);
     QCOMPARE(pastedText[QStringLiteral("text")].toString(), QStringLiteral("Hello World"));
     QCOMPARE(pastedText[QStringLiteral("fontSize")].toInt(), 24);
-    QCOMPARE(pastedText[QStringLiteral("fontFamily")].toString(), QStringLiteral("Cascadia Code"));
+    QCOMPARE(pastedText[QStringLiteral("fontFamily")].toString(), QStringLiteral("monospace"));
 
     // Verify Freehand properties and absolute coordinates
     QCOMPARE(pastedFree[QStringLiteral("type")].toString(), QStringLiteral("freehand"));
@@ -1152,9 +1148,8 @@ void ShapesModelTest::testExcalidrawPasteCompatibility()
 
 void ShapesModelTest::initTestCase()
 {
-    // Clean up any stray scribbleway-overlay instances
-    QProcess::execute(QStringLiteral("pkill"), {QStringLiteral("-f"), QStringLiteral("scribbleway-overlay")});
-    QTest::qWait(100);
+    // Keeps QSettings away from the developer's real shortcut config.
+    QStandardPaths::setTestModeEnabled(true);
 }
 
 void ShapesModelTest::cleanupTestCase()
@@ -1250,39 +1245,17 @@ void ShapesModelTest::testShapeLock()
     controller.selectShape(0, false);
     QCOMPARE(controller.selectedIndex(), 0);
     
-    // Toggle lock
-    controller.toggleLock();
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), true);
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), false);
-    QCOMPARE(controller.selectedIndex(), -1);
-    
-    // Unlock via toggleLock
-    controller.selectShape(0, false);
-    controller.toggleLock();
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), false);
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), true);
-    
-    // Multi-selection locking
+    // Locking a secondary member of a multi-selection drops it from the selection too.
     QVariantMap shape2;
     shape2[QStringLiteral("type")] = QStringLiteral("ellipse");
     controller.addShape(shape2);
-    
     controller.selectShape(0, false);
     controller.selectShape(1, true);
     QCOMPARE(controller.hasMultiSelection(), true);
-    
-    controller.toggleLock();
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), true);
-    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("locked")].toBool(), true);
+
+    controller.setShapeLocked(0, true);
     QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), false);
-    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("selected")].toBool(), false);
-    QCOMPARE(controller.selectedIndex(), -1);
-    
-    controller.selectShape(0, false);
-    controller.selectShape(1, true);
-    controller.toggleLock();
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), false);
-    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("locked")].toBool(), false);
+    QCOMPARE(controller.selectedIndex(), 1);
 }
 
 void ShapesModelTest::testToolModeTransitions()
@@ -1563,14 +1536,7 @@ void ShapesModelTest::testExcalidrawSchemaEdgeCases()
 
 void ShapesModelTest::testReworkedShortcutsSlots()
 {
-    // Clear settings to prevent state leakage from previous failed test runs
-    QSettings preClean(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
-    preClean.clear();
-
     OverlayController controller;
-    QAction dummyAction(&controller);
-    dummyAction.setObjectName(QStringLiteral("action_dummy"));
-    controller.registerAction(&dummyAction, QStringLiteral("action_dummy"), QStringLiteral("Dummy Action"));
 
     // Toggle tool to "arrow". Since current active tool is "freehand", it should activate "arrow".
     controller.toggleTool(QStringLiteral("arrow"));
@@ -1625,7 +1591,6 @@ void ShapesModelTest::testReworkedShortcutsSlots()
     QCOMPARE(controller.selectedIndex(), 1);
 
     state = controller.getSelectionState();
-    QCOMPARE(text.value(QStringLiteral("fontSize")).toInt(), 20); // wait, let's verify selected state properties
     QCOMPARE(state[QStringLiteral("fontSize")].toInt(), 20);
 
     controller.growSelected();
@@ -1635,24 +1600,6 @@ void ShapesModelTest::testReworkedShortcutsSlots()
     controller.shrinkSelected();
     state = controller.getSelectionState();
     QCOMPARE(state[QStringLiteral("fontSize")].toInt(), 20);
-
-    // 5. Test getShortcuts() has local and global shortcuts with correct types
-    QVariantList shortcuts = controller.getShortcuts();
-    QVERIFY(shortcuts.size() > 1); // should have 1 global + 18 local shortcuts
-    
-    // Check that we have a global shortcut
-    bool foundGlobal = false;
-    bool foundLocal = false;
-    for (const auto &val : shortcuts) {
-        QVariantMap map = val.toMap();
-        if (map[QStringLiteral("type")].toString() == QStringLiteral("global")) {
-            foundGlobal = true;
-        } else if (map[QStringLiteral("type")].toString() == QStringLiteral("local")) {
-            foundLocal = true;
-        }
-    }
-    QVERIFY(foundGlobal);
-    QVERIFY(foundLocal);
 
     // 6. Test selectPresetColor
     controller.selectPresetColor(0); // Red: #e63946
@@ -1667,52 +1614,6 @@ void ShapesModelTest::testReworkedShortcutsSlots()
     QCOMPARE(localSeqs[QStringLiteral("action_increase_border_radius")].toString(), QStringLiteral("ü"));
     QCOMPARE(localSeqs[QStringLiteral("action_decrease_border_radius")].toString(), QStringLiteral("ä"));
 
-    // 8. Test changeShortcut conflict resolution and persistence
-    // Check changing local shortcut
-    controller.changeShortcut(QStringLiteral("tool_rectangle"), QStringLiteral("X"));
-    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_rectangle")].toString(), QStringLiteral("X"));
-
-    // Check conflict resolution within local shortcuts (assigning 'X' to tool_arrow should clear tool_rectangle)
-    controller.changeShortcut(QStringLiteral("tool_arrow"), QStringLiteral("X"));
-    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_arrow")].toString(), QStringLiteral("X"));
-    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_rectangle")].toString(), QStringLiteral(""));
-
-    // 9. Test cross-domain conflict resolution
-    // Global -> Local:
-    // First, set global shortcut to Ctrl+Shift+Y.
-    controller.changeShortcut(QStringLiteral("action_dummy"), QStringLiteral("Ctrl+Shift+Y"));
-    QTest::qWait(50);
-    QList<QKeySequence> globShortcut = KGlobalAccel::self()->shortcut(&dummyAction);
-    QCOMPARE(globShortcut.first().toString(QKeySequence::PortableText), QStringLiteral("Ctrl+Shift+Y"));
-
-    // Now, assign the same Ctrl+Shift+Y to local tool_line
-    controller.changeShortcut(QStringLiteral("tool_line"), QStringLiteral("Ctrl+Shift+Y"));
-    QTest::qWait(50);
-    // The local should be Ctrl+Shift+Y
-    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_line")].toString(), QStringLiteral("Ctrl+Shift+Y"));
-    // The global action should be cleared (no shortcuts)
-    QVERIFY(KGlobalAccel::self()->shortcut(&dummyAction).isEmpty());
-
-    // Local -> Global:
-    // First, set local shortcut to Ctrl+Shift+H
-    controller.changeShortcut(QStringLiteral("tool_ellipse"), QStringLiteral("Ctrl+Shift+H"));
-    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_ellipse")].toString(), QStringLiteral("Ctrl+Shift+H"));
-
-    // Now, assign Ctrl+Shift+H to global action_dummy
-    controller.changeShortcut(QStringLiteral("action_dummy"), QStringLiteral("Ctrl+Shift+H"));
-    QTest::qWait(50);
-    // The global action should be Ctrl+Shift+H
-    QCOMPARE(KGlobalAccel::self()->shortcut(&dummyAction).first().toString(QKeySequence::PortableText), QStringLiteral("Ctrl+Shift+H"));
-    // The local tool_ellipse should be cleared
-    QCOMPARE(controller.localShortcutSequences()[QStringLiteral("tool_ellipse")].toString(), QStringLiteral(""));
-
-    // Reset to defaults using changeShortcut (or clean up QSettings for clean subsequent runs)
-    QSettings cleanSettings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
-    cleanSettings.clear();
-    
-    // Clear global KGlobalAccel state for clean subsequent runs
-    KGlobalAccel::self()->setShortcut(&dummyAction, QList<QKeySequence>(), KGlobalAccel::NoAutoloading);
-    QTest::qWait(50);
 }
 void ShapesModelTest::testRoughPathGenerator()
 {
@@ -2531,7 +2432,7 @@ void ShapesModelTest::testAttachedTextExcalidrawImport()
     QVariantMap attached = controller.attachedTextForShape(0);
     QCOMPARE(attached.value(QStringLiteral("id")).toString(), QStringLiteral("text-import"));
     QCOMPARE(attached.value(QStringLiteral("text")).toString(), QStringLiteral("Imported label"));
-    QCOMPARE(attached.value(QStringLiteral("fontFamily")).toString(), QStringLiteral("Cascadia Code"));
+    QCOMPARE(attached.value(QStringLiteral("fontFamily")).toString(), QStringLiteral("monospace"));
     QCOMPARE(attached.value(QStringLiteral("fontSize")).toInt(), 20);
 }
 
@@ -2756,4 +2657,269 @@ void ShapesModelTest::testEveryQmlControllerCallExists()
     QVERIFY2(missing.isEmpty(),
              qPrintable(QStringLiteral("QML calls methods QML cannot see (needs Q_INVOKABLE, "
                                        "a slot, or a property write): ") + missing.join(QStringLiteral(", "))));
+}
+
+using namespace Qt::StringLiterals;
+
+static QVariantMap box(double x, double y, double w = 100.0, double h = 100.0, const QString &type = u"rectangle"_s)
+{
+    return {{u"type"_s, type}, {u"color"_s, u"#e63946"_s}, {u"strokeWidth"_s, 2}, {u"opacity"_s, 1.0},
+            {u"x"_s, x}, {u"y"_s, y}, {u"width"_s, w}, {u"height"_s, h}};
+}
+
+static QVariantMap arrowTo(double toX, double toY)
+{
+    return {{u"type"_s, u"arrow"_s}, {u"fromX"_s, 900.0}, {u"fromY"_s, 900.0}, {u"toX"_s, toX}, {u"toY"_s, toY}};
+}
+
+static void copyElementsToClipboard(const QJsonArray &elements)
+{
+    const QJsonObject root{{u"type"_s, u"excalidraw/clipboard"_s}, {u"elements"_s, elements}};
+    QGuiApplication::clipboard()->setText(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact)));
+}
+
+// The ShapesModel tests above cannot see these: the grouping lives in the controller's calls.
+void ShapesModelTest::testControllerUndoSteps()
+{
+    OverlayController c;
+    for (int i = 0; i < 3; ++i) {
+        c.addShape(box(i * 200.0, 0.0));
+    }
+    c.setSelectedIndex(-1);
+    for (int i = 0; i < 3; ++i) {
+        c.selectShape(i, true);
+    }
+
+    c.deleteSelected();
+    QCOMPARE(c.shapesModel()->rowCount(), 0);
+    c.undo();
+    QCOMPARE(c.shapesModel()->rowCount(), 3);
+
+    // Restored shapes must not stay marked selected behind the controller's back.
+    QCOMPARE(c.selectedIndex(), -1);
+    for (int i = 0; i < 3; ++i) {
+        QVERIFY(!c.getShape(i).value(u"selected"_s).toBool());
+    }
+
+    // A press without movement and a long rubber band cost neither history nor redo.
+    c.undo();
+    QCOMPARE(c.shapesModel()->rowCount(), 2);
+    c.beginEdit();
+    c.endEdit();
+    c.beginDragSelection(false);
+    for (int i = 0; i < 60; ++i) {
+        c.selectShapesInRect(0.0, 0.0, i, i, false);
+    }
+    c.setSelectedIndex(-1);
+    c.redo();
+    QCOMPARE(c.shapesModel()->rowCount(), 3);
+
+    // A multi-shape paste is one step.
+    OverlayController pasted;
+    QJsonArray elements;
+    for (int i = 0; i < 3; ++i) {
+        elements.append(QJsonObject{{u"type"_s, u"rectangle"_s}, {u"x"_s, i * 200.0}, {u"y"_s, 0.0},
+                                    {u"width"_s, 50.0}, {u"height"_s, 50.0}});
+    }
+    copyElementsToClipboard(elements);
+    pasted.pasteFromClipboard(100.0, 100.0);
+    QCOMPARE(pasted.shapesModel()->rowCount(), 3);
+    pasted.undo();
+    QCOMPARE(pasted.shapesModel()->rowCount(), 0);
+
+    // Undoing the delete of an attached box brings the attachment back with it.
+    OverlayController bound;
+    bound.addShape(box(100.0, 100.0, 200.0, 100.0));
+    bound.addShape(arrowTo(200.0, 100.0));
+    bound.createBindingsForShape(1);
+    bound.selectShape(0, false);
+    bound.deleteSelected();
+    bound.undo();
+    QCOMPARE(bound.shapesModel()->rowCount(), 2);
+    QVERIFY(!bound.getShape(1).value(u"endBinding"_s).toMap().isEmpty());
+
+    // A lost release must not merge every later edit into one undo step.
+    OverlayController stuck;
+    stuck.addShape(box(0.0, 0.0));
+    stuck.beginEdit();
+    stuck.undo();
+    stuck.addShape(box(0.0, 0.0));
+    stuck.updateShape(0, {{u"x"_s, 10.0}});
+    stuck.updateShape(0, {{u"x"_s, 20.0}});
+    stuck.undo();
+    QCOMPARE(stuck.getShape(0).value(u"x"_s).toDouble(), 10.0);
+}
+
+static QList<QObject *> shapeItems(QQuickWindow *window)
+{
+    QList<QObject *> items;
+    const auto children = window->contentItem()->childItems();
+    for (QQuickItem *child : children) {
+        if (QByteArray(child->metaObject()->className()).contains("Loader")) {
+            items << child->property("item").value<QObject *>();
+        }
+    }
+    return items;
+}
+
+static QQuickItem *findText(QQuickItem *item, const QString &text)
+{
+    if (QByteArray(item->metaObject()->className()).contains("QQuickText") && item->property("text") == text) {
+        return item;
+    }
+    const auto children = item->childItems();
+    for (QQuickItem *child : children) {
+        if (QQuickItem *found = findText(child, text)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+// Everything here only goes wrong in the delegates, so it runs the real overlay QML.
+void ShapesModelTest::testMainQmlFollowsTheModel()
+{
+    OverlayController c;
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty(u"controller"_s, &c);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
+    QScopedPointer<QObject> root(component.create());
+    QVERIFY2(root, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(root.data());
+    QVERIFY(window);
+
+    c.addShape(box(0.0, 0.0));
+    c.addShape(box(200.0, 0.0));
+    c.addShape(box(400.0, 0.0));
+    c.deleteShape(0);
+    QCOMPARE(shapeItems(window).size(), 2);
+    for (QObject *item : shapeItems(window)) {
+        const int index = item->property("index").toInt();
+        QCOMPARE(c.getShape(index).value(u"x"_s).toDouble(), item->property("shapeX").toDouble());
+    }
+
+    // An arrow and its two attachments are one undo step.
+    c.clear();
+    c.addShape(box(100.0, 100.0, 200.0, 100.0));
+    c.addShape(box(500.0, 100.0, 200.0, 100.0));
+    c.setActiveTool(u"arrow"_s);
+    root->setProperty("drawStartPoint", QPointF(300.0, 150.0));
+    root->setProperty("previewW", 200.0);
+    root->setProperty("previewH", 0.0);
+    root->setProperty("isDrawing", true);
+    QVERIFY(QMetaObject::invokeMethod(root.data(), "finalizeShape"));
+    QCOMPARE(c.shapesModel()->rowCount(), 3);
+    QVERIFY(!c.getShape(2).value(u"endBinding"_s).toMap().isEmpty());
+    c.undo();
+    QCOMPARE(c.shapesModel()->rowCount(), 2);
+    QVERIFY(c.getShape(0).value(u"boundElementIds"_s).toList().isEmpty());
+
+    // Text is shown as typed, never interpreted as markup.
+    QVariantMap text = box(10.0, 10.0, 100.0, 40.0, u"text"_s);
+    text[u"text"_s] = u"<div>"_s;
+    c.addShape(text);
+    QQuickItem *label = findText(window->contentItem(), u"<div>"_s);
+    QVERIFY(label);
+    QVERIFY(label->property("implicitWidth").toDouble() > 0.0);
+
+    // The popup's Select button reaches the real select mode.
+    QQmlComponent menuComponent(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/FullRepresentation.qml")));
+    QScopedPointer<QObject> menu(menuComponent.create());
+    QVERIFY2(menu, qPrintable(menuComponent.errorString()));
+    c.setActiveTool(u"rectangle"_s);
+    QObject *select = menu->findChild<QObject *>(u"selectModeButton"_s);
+    QVERIFY(select);
+    QVERIFY(QMetaObject::invokeMethod(select, "clicked"));
+    QCOMPARE(c.currentMode(), u"select"_s);
+    QCOMPARE(c.activeTool(), QString());
+}
+
+void ShapesModelTest::testEllipseBindingKeepsItsPoint()
+{
+    OverlayController c;
+    c.addShape(box(0.0, 0.0, 200.0, 50.0, u"ellipse"_s));
+    c.addShape(arrowTo(170.71, 42.68));
+    c.createBindingsForShape(1);
+    const QVariantMap before = c.getShape(1);
+
+    c.updateShape(0, {{u"x"_s, 0.0001}});
+    const QVariantMap after = c.getShape(1);
+    QVERIFY(qAbs(after.value(u"toX"_s).toDouble() - before.value(u"toX"_s).toDouble()) < 0.01);
+    QVERIFY(qAbs(after.value(u"toY"_s).toDouble() - before.value(u"toY"_s).toDouble()) < 0.01);
+}
+
+void ShapesModelTest::testPastedBindingFocusIsRecomputed()
+{
+    OverlayController c;
+    QJsonArray elements;
+    elements.append(QJsonObject{{u"id"_s, u"r"_s}, {u"type"_s, u"rectangle"_s}, {u"x"_s, 100.0}, {u"y"_s, 100.0},
+                                {u"width"_s, 100.0}, {u"height"_s, 100.0}});
+    elements.append(QJsonObject{{u"id"_s, u"a"_s}, {u"type"_s, u"arrow"_s}, {u"x"_s, 0.0}, {u"y"_s, 150.0},
+                                {u"points"_s, QJsonArray{QJsonArray{0.0, 0.0}, QJsonArray{100.0, 0.0}}},
+                                {u"endBinding"_s, QJsonObject{{u"elementId"_s, u"r"_s}, {u"focus"_s, -0.5}, {u"gap"_s, 1.0}}}});
+    copyElementsToClipboard(elements);
+    c.pasteFromClipboard(100.0, 150.0);
+
+    const double focus = c.getShape(1).value(u"endBinding"_s).toMap().value(u"focus"_s).toDouble();
+    QVERIFY(focus >= 0.0 && focus <= 1.0);
+    const QPointF anchor = c.pointFromBinding(c.getShape(0), focus);
+    QCOMPARE(anchor.x(), c.getShape(1).value(u"toX"_s).toDouble());
+    QCOMPARE(anchor.y(), c.getShape(1).value(u"toY"_s).toDouble());
+}
+
+void ShapesModelTest::testLockedShapesStayOutOfGroups()
+{
+    OverlayController c;
+    c.addShape(box(0.0, 0.0));
+    c.addShape(box(300.0, 0.0));
+    c.setShapeLocked(0, true);
+
+    c.beginDragSelection(false);
+    c.selectShapesInRect(0.0, 0.0, 1000.0, 200.0, false);
+    QVERIFY(!c.getShape(0).value(u"selected"_s).toBool());
+    QVERIFY(c.getShape(1).value(u"selected"_s).toBool());
+
+    c.beginEdit();
+    c.dragSelected(50.0, 0.0);
+    c.endEdit();
+    QCOMPARE(c.getShape(0).value(u"x"_s).toDouble(), 0.0);
+
+    c.deleteSelected();
+    QCOMPARE(c.shapesModel()->rowCount(), 1);
+}
+
+void ShapesModelTest::testDraggedArrowLetsGo()
+{
+    OverlayController c;
+    c.addShape(box(100.0, 100.0, 200.0, 100.0));
+    c.addShape(arrowTo(200.0, 100.0));
+    c.createBindingsForShape(1);
+
+    c.selectShape(1, false);
+    c.beginEdit();
+    c.dragSelected(0.0, 300.0);
+    c.dragSelected(0.0, 310.0);
+    c.endEdit();
+    QVERIFY(c.getShape(1).value(u"endBinding"_s).toMap().isEmpty());
+    QVERIFY(c.getShape(0).value(u"boundElementIds"_s).toList().isEmpty());
+
+    c.selectShape(0, false);
+    c.beginEdit();
+    c.dragSelected(1.0, 0.0);
+    c.endEdit();
+    QCOMPARE(c.getShape(1).value(u"toY"_s).toDouble(), 410.0);
+}
+
+void ShapesModelTest::testCopyPasteKeepsFonts()
+{
+    QVariantMap label = box(0.0, 0.0);
+    label[u"fontFamily"_s] = u"monospace"_s;
+    label[u"fontSize"_s] = 20;
+    OverlayController source;
+    source.addShape(label);
+    source.setAttachedText(0, u"label"_s);
+    source.copySelected();
+    OverlayController target;
+    target.pasteFromClipboard(100.0, 100.0);
+    QCOMPARE(target.attachedTextForShape(0).value(u"fontFamily"_s).toString(), u"monospace"_s);
 }

@@ -56,6 +56,7 @@ Window {
                 if (visible) menu.applyCustomColor(selectedColor, trayPopup.pickerIsFill)
             }
             onCloseRequested: visible = false
+            onDraggingChanged: dragging ? controller.beginEdit() : controller.endEdit()
 
             // Hand the keyboard back and forth as the hex field takes and loses focus,
             // so the overlay keeps its hotkeys the rest of the time.

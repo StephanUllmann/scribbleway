@@ -22,6 +22,7 @@ public:
                 probe.waitForBytesWritten(100);
             }
             probe.disconnectFromServer();
+            m_foundRunningInstance = true;
             return false;
         }
 
@@ -30,8 +31,10 @@ public:
     }
 
     QLocalServer *server() { return &m_server; }
+    bool foundRunningInstance() const { return m_foundRunningInstance; }
 
 private:
     QString m_name;
     QLocalServer m_server;
+    bool m_foundRunningInstance = false;
 };

@@ -18,6 +18,7 @@ BaseShape {
             x: root.shapeX + 5
             y: root.shapeY + 5
             text: model.text || ""
+            textFormat: Text.PlainText
             color: root.modelColor
             opacity: root.modelOpacity
             font.family: typeof fontFamily !== "undefined" ? fontFamily : controller.defaultFontFamily
