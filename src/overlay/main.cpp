@@ -10,6 +10,7 @@
 #include <QElapsedTimer>
 #include <QMargins>
 #include <QRect>
+#include <QTimer>
 #include <QDebug>
 
 #include <LayerShellQt/Shell>
@@ -135,6 +136,16 @@ int main(int argc, char *argv[])
     }, Qt::QueuedConnection);
 
     engine.load(url);
+
+    // A display switch fires a burst of these, briefly with no screens at all, so wait
+    // for it to settle before giving the overlay a new surface.
+    QTimer remapTimer;
+    remapTimer.setSingleShot(true);
+    remapTimer.setInterval(500);
+    QObject::connect(&remapTimer, &QTimer::timeout, &controller, &OverlayController::remapWindow);
+    QObject::connect(&app, &QGuiApplication::screenAdded, &remapTimer, qOverload<>(&QTimer::start));
+    QObject::connect(&app, &QGuiApplication::screenRemoved, &remapTimer, qOverload<>(&QTimer::start));
+    QObject::connect(&app, &QGuiApplication::primaryScreenChanged, &remapTimer, qOverload<>(&QTimer::start));
 
     // The Tray Popup is a small anchored layer-shell surface (menu-sized, corner-placed),
     // not the fullscreen overlay above. Hidden until the tray icon is clicked.

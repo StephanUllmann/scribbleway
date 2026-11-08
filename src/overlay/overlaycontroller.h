@@ -198,6 +198,7 @@ public Q_SLOTS:
     void raiseSelected();
     void lowerSelected();
     void setTargetScreen(const QString &screenName);
+    void remapWindow();
 
     void enterSelectMode();
     void enterPassthroughMode();

@@ -82,6 +82,12 @@ void OverlayController::setWindow(QQuickWindow *window)
     if (m_window != window) {
         m_window = window;
         Q_EMIT windowChanged();
+        // Remembered so remapWindow() can return here: Qt's primary screen changes when
+        // screens come and go, so it can't be relied on to mean the same one afterwards.
+        if (m_window && m_targetScreen.isEmpty()) {
+            m_targetScreen = m_window->screen()->name();
+            Q_EMIT targetScreenChanged();
+        }
     }
 }
 
@@ -873,18 +879,36 @@ void OverlayController::applyKeyboardInteractivity()
     layerWindow->setKeyboardInteractivity(wanted);
 }
 
+static QScreen *screenNamed(const QString &name)
+{
+    for (QScreen *screen : QGuiApplication::screens()) {
+        if (screen->name() == name) return screen;
+    }
+    return nullptr;
+}
+
+// The compositor closes a layer surface when its output goes away, and nothing maps it
+// again by itself, so the hotkeys would keep driving a window nobody can see. A fresh
+// surface also puts the overlay back on its own screen once that screen returns.
+void OverlayController::remapWindow()
+{
+    if (!m_window) return;
+
+    QScreen *target = screenNamed(m_targetScreen);
+    m_window->hide();
+    // Without destroy() the native window survives and keeps its old output.
+    m_window->destroy();
+    m_window->setScreen(target ? target : QGuiApplication::primaryScreen());
+    m_window->show();
+    qInfo() << "overlay remapped to" << m_window->screen()->name();
+}
+
 void OverlayController::setTargetScreen(const QString &screenName)
 {
     if (!m_window || screenName.isEmpty()) return;
-    
-    QScreen *target = nullptr;
-    for (QScreen *screen : QGuiApplication::screens()) {
-        if (screen->name() == screenName) {
-            target = screen;
-            break;
-        }
-    }
-    
+
+    QScreen *target = screenNamed(screenName);
+
     if (target && m_window->screen() != target) {
         m_window->hide();
         m_window->setScreen(target);
