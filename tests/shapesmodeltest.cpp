@@ -2,21 +2,24 @@
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QProcess>
-#include <QDBusConnection>
-#include <QDBusInterface>
-#include <QDBusReply>
 #include <QSignalSpy>
 #include <QAction>
 #include <QKeySequence>
 #include <KGlobalAccel>
 #include "shapesmodel.h"
 #include "overlaycontroller.h"
-#include "appletbackend.h"
+#include "singleinstance.h"
 #include <QFontDatabase>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJSEngine>
+#include <QQmlEngine>
+#include <QQmlComponent>
+#include <QQmlContext>
+#include <QAbstractItemModel>
 #include <QFile>
+#include <QRegularExpression>
+#include <QSet>
 
 class ShapesModelTest : public QObject
 {
@@ -39,6 +42,11 @@ private Q_SLOTS:
     void testRedoStackCapped();
     void testOverlayControllerRedo();
     void testOverlayControllerProperties();
+    void testDefaultsReachableFromQml();
+    void testEveryQmlControllerCallExists();
+    void testShapeListDelegateReadsModelRoles();
+    void testOverlayControllerSelectionProperties();
+    void testSingleInstanceGuard();
     void testMoveShape();
     void testOverlayControllerCopyPaste();
     void testMultiSelection();
@@ -54,7 +62,6 @@ private Q_SLOTS:
     void testPropertiesDefaultsUpdates();
     void testMultiSelectionDragDelete();
     void testExcalidrawSchemaEdgeCases();
-    void testAppletBackendIntegration();
     void testReworkedShortcutsSlots();
     void testRoughPathGenerator();
     void testStableShapeIds();
@@ -481,6 +488,38 @@ void ShapesModelTest::testOverlayControllerProperties()
     QCOMPARE(updatedShape[QStringLiteral("strokeWidth")].toInt(), 8);
 }
 
+void ShapesModelTest::testOverlayControllerSelectionProperties()
+{
+    OverlayController controller;
+
+    // No selection: falls back to defaults, matching getSelectionState()
+    QCOMPARE(controller.hasSelection(), false);
+    QCOMPARE(controller.selectedColor(), controller.defaultColor());
+    QCOMPARE(controller.selectedStrokeWidth(), controller.defaultStrokeWidth());
+
+    QVariantMap shape;
+    shape[QStringLiteral("type")] = QStringLiteral("rectangle");
+    shape[QStringLiteral("color")] = QStringLiteral("#00ffff");
+    shape[QStringLiteral("strokeWidth")] = 7;
+    controller.addShape(shape);
+
+    QCOMPARE(controller.hasSelection(), true);
+    QCOMPARE(controller.selectedType(), QStringLiteral("rectangle"));
+    QCOMPARE(controller.selectedColor(), QStringLiteral("#00ffff"));
+    QCOMPARE(controller.selectedStrokeWidth(), 7);
+
+    QVERIFY(!controller.screenNames().isEmpty());
+}
+
+void ShapesModelTest::testSingleInstanceGuard()
+{
+    SingleInstanceGuard first(QStringLiteral("scribbleway-test-lock"));
+    QVERIFY(first.tryAcquire());
+
+    SingleInstanceGuard second(QStringLiteral("scribbleway-test-lock"));
+    QVERIFY(!second.tryAcquire());
+}
+
 void ShapesModelTest::testMoveShape()
 {
     ShapesModel model;
@@ -710,8 +749,8 @@ void ShapesModelTest::testBorderRadius()
     QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 20);
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 20);
 
-    // Test selectedShapeType() when shape is selected
-    QCOMPARE(controller.selectedShapeType(), QStringLiteral("rectangle"));
+    // Test selectedType() when shape is selected
+    QCOMPARE(controller.selectedType(), QStringLiteral("rectangle"));
 
     // Test increaseBorderRadius()
     controller.increaseBorderRadius();
@@ -733,9 +772,9 @@ void ShapesModelTest::testBorderRadius()
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 0);
     QCOMPARE(controller.defaultBorderRadius(), 0);
 
-    // Deselect and verify selectedShapeType() is empty
+    // Deselect and verify selectedType() is empty
     controller.setSelectedIndex(-1);
-    QCOMPARE(controller.selectedShapeType(), QString());
+    QCOMPARE(controller.selectedType(), QString());
 
     // Test increaseBorderRadius() when no shape is selected (should do nothing)
     controller.increaseBorderRadius();
@@ -746,7 +785,7 @@ void ShapesModelTest::testBorderRadius()
     lineShape[QStringLiteral("type")] = QStringLiteral("line");
     controller.addShape(lineShape); // selects it automatically
 
-    QCOMPARE(controller.selectedShapeType(), QStringLiteral("line"));
+    QCOMPARE(controller.selectedType(), QStringLiteral("line"));
 
     // increaseBorderRadius() on line should do nothing
     controller.increaseBorderRadius();
@@ -1522,175 +1561,6 @@ void ShapesModelTest::testExcalidrawSchemaEdgeCases()
     QVERIFY(rectObj4.value(QStringLiteral("roundness")).isNull());
 }
 
-void ShapesModelTest::testAppletBackendIntegration()
-{
-    OverlayController controller;
-    
-    QVERIFY(QDBusConnection::sessionBus().registerService(QStringLiteral("org.kde.scribbleway")));
-    QVERIFY(QDBusConnection::sessionBus().registerObject(
-        QStringLiteral("/Overlay"),
-        &controller,
-        QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals
-    ));
-    
-    AppletBackend backend;
-    QTest::qWait(150);
-    
-    QVERIFY(backend.overlayConnected());
-    
-    QCOMPARE(backend.hasSelection(), false);
-    QCOMPARE(backend.selectedColor(), QStringLiteral("#e63946"));
-    QCOMPARE(backend.selectedStrokeWidth(), 2);
-    QCOMPARE(backend.selectedOpacity(), 1.0);
-    QCOMPARE(backend.currentMode(), QStringLiteral("passthrough"));
-    QCOMPARE(backend.activeTool(), QStringLiteral("freehand"));
-    
-    QVariantMap update;
-    update[QStringLiteral("color")] = QStringLiteral("#00ffff");
-    update[QStringLiteral("strokeWidth")] = 5;
-    update[QStringLiteral("opacity")] = 0.5;
-    controller.updateProperties(update);
-    QTest::qWait(50);
-    
-    QCOMPARE(backend.selectedColor(), QStringLiteral("#00ffff"));
-    QCOMPARE(backend.selectedStrokeWidth(), 5);
-    QCOMPARE(backend.selectedOpacity(), 0.5);
-    
-    controller.setActiveTool(QStringLiteral("ellipse"));
-    QTest::qWait(50);
-    QCOMPARE(backend.activeTool(), QStringLiteral("ellipse"));
-    QCOMPARE(backend.currentMode(), QStringLiteral("draw"));
-    
-    backend.setTargetScreen(QStringLiteral("CustomScreen"));
-    QTest::qWait(50);
-    QCOMPARE(backend.targetScreen(), QStringLiteral("CustomScreen"));
-    
-    QVERIFY(!backend.screenNames().isEmpty());
-    
-    backend.setTool(QStringLiteral("rectangle"));
-    QTest::qWait(50);
-    QCOMPARE(controller.activeTool(), QStringLiteral("rectangle"));
-    QCOMPARE(controller.currentMode(), QStringLiteral("draw"));
-    
-    backend.setColor(QStringLiteral("#112233"));
-    backend.setStrokeWidth(8);
-    backend.setOpacity(0.25);
-    QTest::qWait(50);
-    QCOMPARE(controller.defaultColor(), QStringLiteral("#112233"));
-    QCOMPARE(controller.defaultStrokeWidth(), 8);
-    QCOMPARE(controller.defaultOpacity(), 0.25);
-
-    backend.setFillColor(QStringLiteral("#abcdef"));
-    backend.setFillOpacity(0.33);
-    QTest::qWait(50);
-    QCOMPARE(controller.defaultFillColor(), QStringLiteral("#abcdef"));
-    QCOMPARE(controller.defaultFillOpacity(), 0.33);
-
-    backend.setRoughness(2);
-    QTest::qWait(50);
-    QCOMPARE(controller.defaultRoughness(), 2);
-    QCOMPARE(backend.selectedRoughness(), 2);
-
-    backend.setRoughness(0);
-    QTest::qWait(50);
-    QCOMPARE(controller.defaultRoughness(), 0);
-    QCOMPARE(backend.selectedRoughness(), 0);
-    
-    QVariantMap shape1;
-    shape1[QStringLiteral("type")] = QStringLiteral("rectangle");
-    controller.addShape(shape1);
-    QTest::qWait(50);
-    
-    QVERIFY(backend.hasSelection());
-    QCOMPARE(backend.selectedShapeIndex(), 0);
-
-    backend.setRoughness(2);
-    QTest::qWait(50);
-    QCOMPARE(controller.getSelectionState().value(QStringLiteral("roughness")).toInt(), 2);
-    QCOMPARE(backend.selectedRoughness(), 2);
-    QCOMPARE(controller.shapesModel()->shapes().at(0).value(QStringLiteral("roughness")).toInt(), 2);
-    
-    QVariantMap shape2;
-    shape2[QStringLiteral("type")] = QStringLiteral("ellipse");
-    controller.addShape(shape2);
-    QTest::qWait(50);
-    
-    QCOMPARE(backend.selectedShapeIndex(), 1);
-    
-    backend.lowerSelected();
-    QTest::qWait(50);
-    QCOMPARE(controller.selectedIndex(), 0);
-    QCOMPARE(backend.selectedShapeIndex(), 0);
-    
-    backend.raiseSelected();
-    QTest::qWait(50);
-    QCOMPARE(controller.selectedIndex(), 1);
-    QCOMPARE(backend.selectedShapeIndex(), 1);
-    
-    backend.toggleLock();
-    QTest::qWait(50);
-    QVERIFY(controller.shapesModel()->shapes().at(1)[QStringLiteral("locked")].toBool());
-    QCOMPARE(backend.hasSelection(), false);
-    
-    backend.setShapeLocked(1, false);
-    QTest::qWait(50);
-    QVERIFY(!controller.shapesModel()->shapes().at(1)[QStringLiteral("locked")].toBool());
-    
-    backend.selectShape(1);
-    QTest::qWait(50);
-    QCOMPARE(controller.selectedIndex(), 1);
-    QVERIFY(backend.hasSelection());
-    
-    backend.deleteSelected();
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 1);
-    
-    backend.deleteShape(0);
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 0);
-    
-    controller.addShape(shape1);
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 1);
-    backend.clear();
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 0);
-    
-    controller.addShape(shape1);
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 1);
-    backend.undo();
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 0);
-
-    backend.redo();
-    QTest::qWait(50);
-    QCOMPARE(controller.shapesModel()->rowCount(), 1);
-    
-    backend.enterSelectMode();
-    QTest::qWait(50);
-    QCOMPARE(controller.currentMode(), QStringLiteral("select"));
-    
-    backend.enterPassthroughMode();
-    QTest::qWait(50);
-    QCOMPARE(controller.currentMode(), QStringLiteral("passthrough"));
-    
-    QAction action(&controller);
-    action.setObjectName(QStringLiteral("action_test"));
-    controller.registerAction(&action, QStringLiteral("action_test"), QStringLiteral("Test Action"));
-    backend.changeShortcut(QStringLiteral("action_test"), QStringLiteral("Ctrl+Shift+D"));
-    QTest::qWait(50);
-    QList<QKeySequence> seqs = KGlobalAccel::self()->shortcut(&action);
-    QVERIFY(!seqs.isEmpty());
-    QCOMPARE(seqs.first().toString(), QStringLiteral("Ctrl+Shift+D"));
-    
-    QString formatted = backend.formatKeySequence(Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier);
-    QCOMPARE(formatted, QStringLiteral("Ctrl+Shift+K"));
-    
-    QDBusConnection::sessionBus().unregisterObject(QStringLiteral("/Overlay"));
-    QDBusConnection::sessionBus().unregisterService(QStringLiteral("org.kde.scribbleway"));
-}
-
 void ShapesModelTest::testReworkedShortcutsSlots()
 {
     // Clear settings to prevent state leakage from previous failed test runs
@@ -1854,14 +1724,10 @@ void ShapesModelTest::testRoughPathGenerator()
     engine.globalObject().setProperty(QStringLiteral("Qt"), qtMock);
 
     // Read and evaluate RoughPathGenerator.js
-    QFile file(QStringLiteral("src/overlay/qml/shapes/RoughPathGenerator.js"));
-    if (!file.exists()) {
-        file.setFileName(QStringLiteral("../src/overlay/qml/shapes/RoughPathGenerator.js"));
-    }
-    if (!file.exists()) {
-        file.setFileName(QStringLiteral("../../src/overlay/qml/shapes/RoughPathGenerator.js"));
-    }
-    QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), "Failed to open RoughPathGenerator.js file");
+    // QML_SOURCE_DIR, not a walk up from the cwd: the old relative-path hunt only found
+    // the file when the build directory happened to sit inside the source tree.
+    QFile file(QStringLiteral(QML_SOURCE_DIR) + QStringLiteral("/shapes/RoughPathGenerator.js"));
+    QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(file.fileName()));
     QString jsCode = QString::fromUtf8(file.readAll());
     file.close();
 
@@ -2277,13 +2143,13 @@ void ShapesModelTest::testBindingGeometry()
     QPointF p50 = ctrl.pointFromBinding(rect, 0.5);
     QCOMPARE(p50, QPointF(200.0, 200.0));
 
-    // findSnapPoint: point at (201, 95) is 5px from top edge -> should snap to (201, 100)
-    QPointF hit = ctrl.findSnapPoint(201.0, 95.0);
-    QCOMPARE(hit.y(), 100.0);
+    // findSnapInfo: point at (201, 95) is 5px from top edge -> should snap to (201, 100)
+    const QVariantMap hit = ctrl.findSnapInfo(201.0, 95.0);
+    QVERIFY(hit[QStringLiteral("valid")].toBool());
+    QCOMPARE(hit[QStringLiteral("snapY")].toDouble(), 100.0);
 
-    // Point at (201, 50) is 50px from top edge -> should NOT snap (returns empty QPointF)
-    QPointF miss = ctrl.findSnapPoint(201.0, 50.0);
-    QVERIFY(miss.isNull());
+    // Point at (201, 50) is 50px from top edge -> should NOT snap
+    QVERIFY(!ctrl.findSnapInfo(201.0, 50.0)[QStringLiteral("valid")].toBool());
 
     // Create an ellipse
     QVariantMap ell;
@@ -2298,10 +2164,10 @@ void ShapesModelTest::testBindingGeometry()
     ctrl.addShape(ell);
 
     // Point near right side of ellipse -> should snap
-    QPointF hitEll = ctrl.findSnapPoint(505.0, 130.0);
-    QVERIFY(!hitEll.isNull());
+    const QVariantMap hitEll = ctrl.findSnapInfo(505.0, 130.0);
+    QVERIFY(hitEll[QStringLiteral("valid")].toBool());
     // snapPoint should be on the ellipse perimeter, close to (500, 130)
-    QVERIFY(qAbs(hitEll.x() - 500.0) < 5.0);
+    QVERIFY(qAbs(hitEll[QStringLiteral("snapX")].toDouble() - 500.0) < 5.0);
 }
 
 void ShapesModelTest::testBindingMovePropagate()
@@ -2772,4 +2638,122 @@ void ShapesModelTest::testDecoupledAttachedTextFontProperties()
     QVariantMap textShapeFinal = controller.getShape(1);
     QCOMPARE(textShapeFinal.value(QStringLiteral("fontSize")).toInt(), 36);
     QCOMPARE(textShapeFinal.value(QStringLiteral("fontFamily")).toString(), QStringLiteral("Cascadia Code"));
+}
+
+// QML only ever sees a QObject through its metaobject: property WRITEs, slots and
+// Q_INVOKABLEs. A plain public setter is invisible, so `controller.setDefaultColor(c)`
+// was a silent TypeError and every default silently failed to stick with nothing
+// selected. Pin the two ways QML actually reaches this object.
+void ShapesModelTest::testDefaultsReachableFromQml()
+{
+    OverlayController controller;
+
+    const QVariantMap defaults = {
+        {QStringLiteral("defaultColor"), QStringLiteral("#123456")},
+        {QStringLiteral("defaultStrokeWidth"), 7},
+        {QStringLiteral("defaultOpacity"), 0.42},
+        {QStringLiteral("defaultFontFamily"), QStringLiteral("Cascadia Code")},
+        {QStringLiteral("defaultFontSize"), 33},
+        {QStringLiteral("defaultBorderRadius"), 11},
+        {QStringLiteral("defaultRoughness"), 2},
+        {QStringLiteral("defaultGlow"), 21},
+        {QStringLiteral("defaultFillColor"), QStringLiteral("#654321")},
+        {QStringLiteral("defaultFillOpacity"), 0.33},
+        {QStringLiteral("defaultFreehandSmoothing"), 3},
+    };
+
+    for (auto it = defaults.cbegin(); it != defaults.cend(); ++it) {
+        QVERIFY2(controller.setProperty(it.key().toUtf8().constData(), it.value()),
+                 qPrintable(QStringLiteral("%1 is not writable through the metaobject")
+                            .arg(it.key())));
+        QCOMPARE(controller.property(it.key().toUtf8().constData()), it.value());
+    }
+
+    // The menu calls this by name when Escape or a canvas click should dismiss the popup.
+    QVERIFY2(QMetaObject::invokeMethod(&controller, "closeTrayPopup"),
+             "closeTrayPopup is not in the metaobject's method table");
+    QVERIFY(controller.setProperty("popupWantsKeyboard", true));
+    QVERIFY(controller.popupWantsKeyboard());
+
+    // Closing the popup must hand the keyboard back unconditionally. The overlay owns
+    // every tool hotkey, so a stuck claim here leaves the app with no shortcuts at all
+    // and no visible cause.
+    controller.setTrayPopupOpen(true);
+    controller.setPopupWantsKeyboard(true);
+    controller.setTrayPopupOpen(false);
+    QVERIFY(!controller.popupWantsKeyboard());
+}
+
+// The shape manager list binds straight to ShapesModel, so its delegate pulls `type`,
+// `selected` and `locked` out of the model by role name. A renamed or missing role is a
+// run-time-only failure in a hidden popup, so instantiate the real menu over a real model
+// and confirm the rows come out with the values the delegate claims to need.
+void ShapesModelTest::testShapeListDelegateReadsModelRoles()
+{
+    OverlayController controller;
+    controller.addShape({{QStringLiteral("type"), QStringLiteral("rectangle")}});
+    controller.addShape({{QStringLiteral("type"), QStringLiteral("ellipse")},
+                         {QStringLiteral("locked"), true}});
+
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QStringLiteral(QML_SOURCE_DIR) + QStringLiteral("/FullRepresentation.qml")));
+    QScopedPointer<QObject> menu(component.create());
+    QVERIFY2(menu, qPrintable(component.errorString()));
+
+    QObject *list = menu->findChild<QObject*>(QStringLiteral("shapesListView"));
+    QVERIFY2(list, "FullRepresentation no longer has a ListView named shapesListView");
+    QCOMPARE(list->property("count").toInt(), 2);
+
+    // The roles the delegate declares as required properties.
+    QAbstractItemModel *model = list->property("model").value<QAbstractItemModel*>();
+    QVERIFY(model);
+    const QHash<int, QByteArray> roles = model->roleNames();
+    for (const char *needed : {"type", "selected", "locked"}) {
+        QVERIFY2(roles.values().contains(QByteArray(needed)),
+                 qPrintable(QStringLiteral("ShapesModel no longer exposes the '%1' role the "
+                                           "shape list delegate requires").arg(QLatin1String(needed))));
+    }
+    QCOMPARE(model->data(model->index(1, 0), roles.key("type")).toString(), QStringLiteral("ellipse"));
+    QCOMPARE(model->data(model->index(1, 0), roles.key("locked")).toBool(), true);
+}
+
+// The real guard for the class of bug above: walk every `controller.foo(...)` /
+// `backend.foo(...)` call in the QML and confirm foo is actually in the metaobject's
+// method table. QML resolves these at run time, so a missing one is a silent TypeError
+// in a log nobody reads, not a build failure.
+void ShapesModelTest::testEveryQmlControllerCallExists()
+{
+    QSet<QString> callable;
+    const QMetaObject *mo = &OverlayController::staticMetaObject;
+    for (int i = 0; i < mo->methodCount(); ++i) {
+        callable.insert(QString::fromUtf8(mo->method(i).name()));
+    }
+
+    const QStringList files = {
+        QStringLiteral("main.qml"), QStringLiteral("FullRepresentation.qml"),
+        QStringLiteral("TrayPopup.qml"), QStringLiteral("ColorPickerPanel.qml"),
+    };
+    const QRegularExpression call(
+        QStringLiteral("\\b(?:controller|backend)\\.([A-Za-z_][A-Za-z0-9_]*)\\s*\\("));
+
+    QStringList missing;
+    for (const QString &name : files) {
+        QFile f(QStringLiteral(QML_SOURCE_DIR) + QLatin1Char('/') + name);
+        QVERIFY2(f.open(QIODevice::ReadOnly), qPrintable(f.fileName()));
+        const QString src = QString::fromUtf8(f.readAll());
+
+        auto it = call.globalMatch(src);
+        while (it.hasNext()) {
+            const QString method = it.next().captured(1);
+            if (!callable.contains(method)) {
+                missing << (name + QStringLiteral(": controller.") + method + QStringLiteral("()"));
+            }
+        }
+    }
+
+    QVERIFY2(missing.isEmpty(),
+             qPrintable(QStringLiteral("QML calls methods QML cannot see (needs Q_INVOKABLE, "
+                                       "a slot, or a property write): ") + missing.join(QStringLiteral(", "))));
 }

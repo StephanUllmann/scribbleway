@@ -1,0 +1,165 @@
+# Nested-Hyprland test harness.
+#
+# Runs the built Arch package inside a real Hyprland session that itself nests
+# inside the host's Wayland compositor (Hyprland's wayland backend). Waybar
+# supplies the StatusNotifierHost that Hyprland does not provide on its own —
+# the exact dependency Phase 2 exists to validate.
+#
+# Driven by run_hyprland_test.sh; not part of the release package build.
+FROM archlinux:latest
+
+RUN pacman -Sy --noconfirm archlinux-keyring && \
+    pacman -Syu --noconfirm && \
+    pacman -S --noconfirm \
+        hyprland waybar dbus grim wtype \
+        layer-shell-qt kglobalaccel qt6-declarative qt6-base qt6-wayland \
+        ttf-dejavu
+
+# Must match the host user: the mounted Wayland socket and the /out bind mount
+# are both owned by them.
+ARG UID=1000
+ARG GID=1000
+RUN groupadd -g "$GID" user && useradd -u "$UID" -g "$GID" -m user && \
+    mkdir -p /out && chown "$UID:$GID" /out
+
+# Lua, not hyprland.conf: Hyprland switched config languages in 0.55 and plans to
+# drop hyprlang a release or two later. hl.monitor sizes the nested output window.
+# QT_QPA_PLATFORM=wayland is required or LayerShellQt never attaches.
+RUN mkdir -p /home/user/.config/hypr && cat > /home/user/.config/hypr/hyprland.lua <<'EOF'
+hl.monitor({
+    output   = "",
+    mode     = "1600x900@60",
+    position = "0x0",
+    scale    = 1,
+})
+
+hl.env("QT_QPA_PLATFORM", "wayland")
+-- Arch's Qt6 is built with journald support, so it diverts all qWarning/qInfo to
+-- the journal whenever stderr is not a TTY. There is no journal in the container,
+-- which silently swallowed every diagnostic the daemon emitted.
+hl.env("QT_FORCE_STDERR_LOGGING", "1")
+
+hl.config({
+    misc = {
+        disable_hyprland_logo    = true,
+        disable_splash_rendering = true,
+        force_default_wallpaper  = 0,
+    },
+})
+
+-- Verbatim the line the README tells Hyprland users to add. Present so the config
+-- is known to parse and register, but NOT asserted below: wtype drives a
+-- zwp_virtual_keyboard, whose keys reach focused clients but never reach
+-- Hyprland's keybind dispatcher — a plain F9 bind does not fire either. Confirming
+-- the bind itself takes a human pressing a real key.
+hl.bind("SUPER + SHIFT + X", hl.dsp.exec_cmd("scribbleway-overlay --toggle"))
+
+hl.on("hyprland.start", function()
+    hl.exec_cmd("sh -c 'exec waybar > /out/waybar.log 2>&1'")
+    -- Delayed so Waybar's StatusNotifierHost has registered first. Starting it
+    -- immediately is the interesting race; a clean baseline comes first.
+    hl.exec_cmd("sh -c 'sleep 3; exec scribbleway-overlay > /out/scribbleway.log 2>&1'")
+    hl.exec_cmd("/usr/local/bin/check.sh")
+end)
+EOF
+
+# Collects everything in Task 4 that is checkable without a pointer device.
+RUN cat > /usr/local/bin/check.sh <<'EOF'
+#!/bin/bash
+set -u
+sleep 8
+
+exec > /out/report.txt 2>&1
+
+echo "=== processes ==="
+pgrep -a -f 'scribbleway-overlay|waybar' || echo "NONE RUNNING"
+
+echo
+echo "=== StatusNotifier on the session bus ==="
+busctl --user list --no-pager 2>&1 | grep -i statusnotifier || echo "NONE"
+
+echo
+echo "=== layer-shell surfaces (overlay + tray popup live here) ==="
+hyprctl layers
+
+echo
+echo "=== overlay covers the whole output? ==="
+# An annotation overlay must not be pushed out of a bar's exclusive zone.
+# Output size comes from hl.monitor() in hyprland.lua.
+GEOM=$(hyprctl layers | grep 'namespace: scribbleway-overlay' \
+       | grep -o 'xywh: [0-9]* [0-9]* [0-9]* [0-9]*' | cut -d' ' -f2-)
+if [ "$GEOM" = "0 0 1600 900" ]; then
+    echo "PASS full-output coverage ($GEOM)"
+else
+    echo "FAIL want '0 0 1600 900', got '$GEOM' — bar exclusive zone is shrinking the overlay"
+fi
+
+echo
+echo "=== keyboard: --toggle must enter a mode and take the keyboard ==="
+# Assert on the daemon's own focus log, not on pixels: entering select mode paints
+# nothing on an empty canvas, so screenshot diffing gave both false passes and false
+# failures here. "exclusive" is exactly the state that was broken.
+grabbed() { grep -c "keyboard interactivity: exclusive" /out/scribbleway.log; }
+
+echo "exclusive-grabs at rest: $(grabbed)"
+[ "$(grabbed)" = "0" ] \
+    && echo "PASS overlay holds no keyboard in passthrough" \
+    || echo "FAIL overlay grabbed the keyboard while idle — it would eat every keystroke"
+
+# Daemon side of the documented path: bind -> exec -> single-instance socket -> daemon.
+# The compositor half cannot be driven from here; see the hl.bind comment above.
+scribbleway-overlay --toggle
+sleep 3
+[ "$(grabbed)" -gt 0 ] \
+    && echo "PASS --toggle reached the daemon and took exclusive keyboard" \
+    || echo "FAIL no keyboard grab after --toggle — local hotkeys cannot work"
+
+# Repeated cycles: a report of hotkeys dying "after a few rounds" while the toggle
+# kept working. Only the focus half is checkable here — see the wtype note below.
+echo
+echo "=== 5 toggle cycles: is the keyboard grab re-taken every time? ==="
+for i in 1 2 3 4 5; do
+    scribbleway-overlay --toggle; sleep 1
+    scribbleway-overlay --toggle; sleep 1
+done
+GRABS=$(grep -c "keyboard interactivity: exclusive" /out/scribbleway.log)
+RELEASES=$(grep -c "keyboard interactivity: none" /out/scribbleway.log)
+echo "grabs=$GRABS releases=$RELEASES"
+[ "$GRABS" -ge 6 ] \
+    && echo "PASS focus re-taken on every cycle, no stuck state" \
+    || echo "FAIL focus grab stopped happening after $GRABS cycles"
+
+# NOT tested here: whether a local hotkey reaches QML. wtype drives a
+# zwp_virtual_keyboard whose keys reach neither Hyprland's bind dispatcher nor the
+# overlay's QML Shortcuts, even while the overlay holds exclusive keyboard —
+# "active tool:" never appears in the log for a wtype keypress. Verifying hotkey
+# delivery needs a human on a real keyboard.
+
+wtype -k Escape 2>&1 || true
+sleep 1
+if pgrep -f scribbleway-overlay >/dev/null; then
+    echo "SURVIVED the keyboard probe"
+else
+    echo "DIED during the keyboard probe"
+fi
+
+
+echo
+echo "=== scribbleway stderr ==="
+cat /out/scribbleway.log 2>/dev/null || echo "(no log)"
+
+grim /out/screen.png 2>&1 || echo "grim failed"
+
+# Lua config changed dispatcher syntax: plain `dispatch exit` errors out, which used
+# to leave the container running forever.
+[ -n "${KEEP_OPEN:-}" ] || hyprctl dispatch 'hl.dsp.exit()'
+EOF
+RUN chmod +x /usr/local/bin/check.sh && chown -R "$UID:$GID" /home/user
+
+ARG PKG
+COPY ${PKG} /tmp/scribbleway.pkg.tar.zst
+RUN pacman -U --noconfirm /tmp/scribbleway.pkg.tar.zst
+
+USER user
+ENV XDG_RUNTIME_DIR=/tmp/xdg
+CMD ["sh", "-c", "mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR && exec dbus-run-session -- Hyprland"]

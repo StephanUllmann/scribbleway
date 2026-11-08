@@ -2,6 +2,63 @@
 #include <QPointF>
 #include <QUuid>
 
+// One table behind data(), roleNames() and updateShape()'s key -> role lookup. Row order
+// must match the ShapeRoles enum: row 0 is TypeRole. A null `key` means the role is
+// computed rather than read straight out of the shape map.
+namespace {
+struct RoleEntry { const char *key; const char *qmlName; };
+
+constexpr RoleEntry kRoles[] = {
+    {"type", "type"},
+    {"color", "color"},
+    {"strokeWidth", "strokeWidth"},
+    {"opacity", "opacity"},
+    {"selected", "selected"},
+    {"locked", "locked"},
+    {"points", "points"},
+    {"x", "x"},
+    {"y", "y"},
+    {"width", "width"},
+    {"height", "height"},
+    {"fromX", "fromX"},
+    {"fromY", "fromY"},
+    {"toX", "toX"},
+    {"toY", "toY"},
+    {"text", "text"},
+    {"fontFamily", "fontFamily"},
+    {"fontSize", "fontSize"},
+    {"borderRadius", "borderRadius"},
+    {"roughness", "roughness"},
+    {"seed", "seed"},
+    {"glow", "glow"},
+    {"fillColor", "fillColor"},
+    {"fillOpacity", "fillOpacity"},
+    {"id", "shapeId"},
+    {"startBinding", "startBinding"},
+    {"endBinding", "endBinding"},
+    {"boundElementIds", "boundElementIds"},
+    {"bindings", "bindings"},
+    {nullptr, "attachedText"},
+};
+constexpr int kRoleCount = int(sizeof(kRoles) / sizeof(kRoles[0]));
+static_assert(kRoleCount == ShapesModel::AttachedTextRole - ShapesModel::TypeRole + 1,
+              "kRoles must have one row per ShapeRoles value, in enum order");
+
+int roleForKey(const QString &key)
+{
+    static const QHash<QString, int> byKey = [] {
+        QHash<QString, int> h;
+        for (int i = 0; i < kRoleCount; ++i) {
+            if (kRoles[i].key) {
+                h.insert(QLatin1String(kRoles[i].key), ShapesModel::TypeRole + i);
+            }
+        }
+        return h;
+    }();
+    return byKey.value(key, -1);
+}
+} // namespace
+
 static QVariantList normalizePoints(const QVariant &var)
 {
     QVariantList result;
@@ -49,79 +106,24 @@ int ShapesModel::rowCount(const QModelIndex &parent) const
 
 QVariant ShapesModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || index.row() < 0 || index.row() >= m_shapes.size())
+    const int slot = role - TypeRole;
+    if (!index.isValid() || index.row() < 0 || index.row() >= m_shapes.size()
+        || slot < 0 || slot >= kRoleCount) {
         return QVariant();
+    }
 
     const auto &shape = m_shapes[index.row()];
-    switch (role) {
-        case TypeRole: return shape.value(QStringLiteral("type"));
-        case ColorRole: return shape.value(QStringLiteral("color"));
-        case StrokeWidthRole: return shape.value(QStringLiteral("strokeWidth"));
-        case OpacityRole: return shape.value(QStringLiteral("opacity"));
-        case SelectedRole: return shape.value(QStringLiteral("selected"));
-        case LockedRole: return shape.value(QStringLiteral("locked"));
-        case PointsRole: return shape.value(QStringLiteral("points"));
-        case XRole: return shape.value(QStringLiteral("x"));
-        case YRole: return shape.value(QStringLiteral("y"));
-        case WidthRole: return shape.value(QStringLiteral("width"));
-        case HeightRole: return shape.value(QStringLiteral("height"));
-        case FromXRole: return shape.value(QStringLiteral("fromX"));
-        case FromYRole: return shape.value(QStringLiteral("fromY"));
-        case ToXRole: return shape.value(QStringLiteral("toX"));
-        case ToYRole: return shape.value(QStringLiteral("toY"));
-        case TextRole: return shape.value(QStringLiteral("text"));
-        case FontFamilyRole: return shape.value(QStringLiteral("fontFamily"));
-        case FontSizeRole: return shape.value(QStringLiteral("fontSize"));
-        case BorderRadiusRole: return shape.value(QStringLiteral("borderRadius"));
-        case RoughnessRole: return shape.value(QStringLiteral("roughness"));
-        case SeedRole: return shape.value(QStringLiteral("seed"));
-        case GlowRole: return shape.value(QStringLiteral("glow"));
-        case FillColorRole: return shape.value(QStringLiteral("fillColor"));
-        case FillOpacityRole: return shape.value(QStringLiteral("fillOpacity"));
-        case IdRole: return shape.value(QStringLiteral("id"));
-        case StartBindingRole: return shape.value(QStringLiteral("startBinding"));
-        case EndBindingRole: return shape.value(QStringLiteral("endBinding"));
-        case BoundElementIdsRole: return shape.value(QStringLiteral("boundElementIds"));
-        case BindingsRole: return shape.value(QStringLiteral("bindings"));
-        case AttachedTextRole: return firstAttachedTextBinding(shape);
-        default: return QVariant();
-    }
+    const char *key = kRoles[slot].key;
+    return key ? shape.value(QLatin1String(key)) : firstAttachedTextBinding(shape);
 }
 
 
 QHash<int, QByteArray> ShapesModel::roleNames() const
 {
     QHash<int, QByteArray> roles;
-    roles[TypeRole] = "type";
-    roles[ColorRole] = "color";
-    roles[StrokeWidthRole] = "strokeWidth";
-    roles[OpacityRole] = "opacity";
-    roles[SelectedRole] = "selected";
-    roles[LockedRole] = "locked";
-    roles[PointsRole] = "points";
-    roles[XRole] = "x";
-    roles[YRole] = "y";
-    roles[WidthRole] = "width";
-    roles[HeightRole] = "height";
-    roles[FromXRole] = "fromX";
-    roles[FromYRole] = "fromY";
-    roles[ToXRole] = "toX";
-    roles[ToYRole] = "toY";
-    roles[TextRole] = "text";
-    roles[FontFamilyRole] = "fontFamily";
-    roles[FontSizeRole] = "fontSize";
-    roles[BorderRadiusRole] = "borderRadius";
-    roles[RoughnessRole] = "roughness";
-    roles[SeedRole] = "seed";
-    roles[GlowRole] = "glow";
-    roles[FillColorRole] = "fillColor";
-    roles[FillOpacityRole] = "fillOpacity";
-    roles[IdRole] = "shapeId";
-    roles[StartBindingRole] = "startBinding";
-    roles[EndBindingRole] = "endBinding";
-    roles[BoundElementIdsRole] = "boundElementIds";
-    roles[BindingsRole] = "bindings";
-    roles[AttachedTextRole] = "attachedText";
+    for (int i = 0; i < kRoleCount; ++i) {
+        roles[TypeRole + i] = kRoles[i].qmlName;
+    }
     return roles;
 }
 
@@ -250,36 +252,14 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
             }
             if (shape.value(it.key()) != val) {
                 shape[it.key()] = val;
-                // Map key back to role for fine-grained change signal
-                if (it.key() == QStringLiteral("type")) changedRoles << TypeRole;
-                else if (it.key() == QStringLiteral("color")) changedRoles << ColorRole;
-                else if (it.key() == QStringLiteral("strokeWidth")) changedRoles << StrokeWidthRole;
-                else if (it.key() == QStringLiteral("opacity")) changedRoles << OpacityRole;
-                else if (it.key() == QStringLiteral("selected")) changedRoles << SelectedRole;
-                else if (it.key() == QStringLiteral("locked")) changedRoles << LockedRole;
-                else if (it.key() == QStringLiteral("points")) changedRoles << PointsRole;
-                else if (it.key() == QStringLiteral("x")) changedRoles << XRole;
-                else if (it.key() == QStringLiteral("y")) changedRoles << YRole;
-                else if (it.key() == QStringLiteral("width")) changedRoles << WidthRole;
-                else if (it.key() == QStringLiteral("height")) changedRoles << HeightRole;
-                else if (it.key() == QStringLiteral("fromX")) changedRoles << FromXRole;
-                else if (it.key() == QStringLiteral("fromY")) changedRoles << FromYRole;
-                else if (it.key() == QStringLiteral("toX")) changedRoles << ToXRole;
-                else if (it.key() == QStringLiteral("toY")) changedRoles << ToYRole;
-                else if (it.key() == QStringLiteral("text")) changedRoles << TextRole;
-                else if (it.key() == QStringLiteral("fontFamily")) changedRoles << FontFamilyRole;
-                else if (it.key() == QStringLiteral("fontSize")) changedRoles << FontSizeRole;
-                else if (it.key() == QStringLiteral("borderRadius")) changedRoles << BorderRadiusRole;
-                else if (it.key() == QStringLiteral("roughness")) changedRoles << RoughnessRole;
-                else if (it.key() == QStringLiteral("seed")) changedRoles << SeedRole;
-                else if (it.key() == QStringLiteral("glow")) changedRoles << GlowRole;
-                else if (it.key() == QStringLiteral("fillColor")) changedRoles << FillColorRole;
-                else if (it.key() == QStringLiteral("fillOpacity")) changedRoles << FillOpacityRole;
-                else if (it.key() == QStringLiteral("id")) changedRoles << IdRole;
-                else if (it.key() == QStringLiteral("startBinding")) changedRoles << StartBindingRole;
-                else if (it.key() == QStringLiteral("endBinding")) changedRoles << EndBindingRole;
-                else if (it.key() == QStringLiteral("boundElementIds")) changedRoles << BoundElementIdsRole;
-                else if (it.key() == QStringLiteral("bindings")) changedRoles << BindingsRole << AttachedTextRole;
+                const int role = roleForKey(it.key());
+                if (role >= 0) {
+                    changedRoles << role;
+                }
+                // attachedText is derived from bindings, so it changes with it.
+                if (role == BindingsRole) {
+                    changedRoles << AttachedTextRole;
+                }
             }
         }
         if (!changedRoles.isEmpty()) {

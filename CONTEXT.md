@@ -19,3 +19,7 @@ _Avoid_: External paste
 **Roughness**:
 The degree of hand-drawn aesthetic asymmetry applied to a shape's stroke, matching Excalidraw's sloppiness levels (0 for neat/Architect, 1 for medium/Artist, 2 for cartoonish/Cartoonist).
 _Avoid_: Sloppiness, hand-drawn level
+
+**Tray Popup**:
+The anchored, non-fullscreen popup window shown when the user clicks the system tray icon, containing the tool/shape/settings controls formerly hosted by the Plasma applet. Toggles open/closed on repeated clicks, dismisses like a native tray menu. Replaces the Plasma applet across all platforms (KDE included).
+_Avoid_: Applet, Plasma widget, popup menu

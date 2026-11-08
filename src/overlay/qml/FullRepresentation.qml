@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
-import QtQuick.Dialogs
 
 Item {
     id: fullRoot
@@ -28,13 +27,37 @@ Item {
         readonly property color warningColor: "#f39c12"
     }
 
-    // Dynamic backend provider for both Plasma applet (root.backend) and Standalone mode (controller)
-    readonly property var backend: (typeof root !== "undefined" && root && root.backend) ? root.backend : (typeof controller !== "undefined" ? controller : null)
+    readonly property var backend: controller
+
+    function cap(key) { return key.charAt(0).toUpperCase() + key.slice(1) }
+
+    // Read side of the routing below: the selected shape's value if there is one, else
+    // the matching default. Both are read eagerly on purpose — the selected* properties
+    // notify on selectionChanged only, so a binding that touched just one of them would
+    // go stale when a default is written with nothing selected.
+    function get(key) {
+        const selected = backend["selected" + cap(key)]
+        const fallback = backend["default" + cap(key)]
+        return backend.hasSelection ? selected : fallback
+    }
+
+    // Route a property change: to the selected shape if there is one, else to the
+    // matching default. Every shape key has a default<Key> property, so one function
+    // covers all of them.
+    function set(key, value) {
+        if (backend.hasSelection) {
+            let props = {}
+            props[key] = value
+            backend.updateProperties(props)
+        } else {
+            backend["default" + cap(key)] = value
+        }
+    }
 
     // Track the currently selected tool name for draw mode
     property string activeDrawTool: "freehand"
     property bool isFillableActive: {
-        if (backend && backend.hasSelection) {
+        if (backend.hasSelection) {
             let t = backend.selectedType.toLowerCase();
             return t === "rectangle" || t === "ellipse";
         }
@@ -42,26 +65,19 @@ Item {
     }
 
     property bool isTextActive: {
-        if (backend && backend.hasSelection) {
+        if (backend.hasSelection) {
             return backend.selectedType.toLowerCase() === "text";
         }
         return activeDrawTool === "text";
     }
 
-    ColorDialog {
-        id: colorDialog
-        title: "Choose Custom Color"
-        onAccepted: {
-            if (backend) backend.setColor(colorDialog.selectedColor.toString())
-        }
-    }
+    // Handled by whoever hosts this menu (TrayPopup), which owns the picker panel — a
+    // QtQuick.Dialogs ColorDialog is an xdg-desktop-portal dialog and opens fullscreen
+    // on the primary output, which is never where the popup is.
+    signal customColorRequested(string current, bool isFill)
 
-    ColorDialog {
-        id: fillColorDialog
-        title: "Choose Fill Color"
-        onAccepted: {
-            if (backend) backend.setFillColor(fillColorDialog.selectedColor.toString())
-        }
+    function applyCustomColor(c, isFill) {
+        set(isFill ? "fillColor" : "color", c.toString())
     }
 
     Controls.ScrollView {
@@ -84,37 +100,11 @@ Item {
                     color: palette.text
                     Layout.fillWidth: true
                 }
-
-                Controls.Label {
-                    text: (backend && backend.overlayConnected) ? "Running" : "Stopped"
-                    font.bold: true
-                }
-            }
-
-            // Not Running View
-            ColumnLayout {
-                Layout.fillWidth: true
-                visible: backend && !backend.overlayConnected
-                spacing: theme.largeSpacing
-
-                Controls.Label {
-                    text: "Scribbleway daemon is not running."
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                }
-
-                Controls.Button {
-                    text: "Start Scribbleway"
-                    icon.source: "qrc:/icons/run-build.svg"
-                    Layout.alignment: Qt.AlignHCenter
-                    onClicked: { if (backend) backend.startOverlay() }
-                }
             }
 
             // Running View
             ColumnLayout {
                 Layout.fillWidth: true
-                visible: !backend || backend.overlayConnected
                 spacing: theme.smallSpacing
 
                 // Mode Toggle Row
@@ -126,10 +116,10 @@ Item {
                         icon.source: "qrc:/icons/draw-freehand.svg"
                         text: "Draw"
                         checkable: true
-                        checked: backend ? backend.activeTool !== "select" : true
+                        checked: backend.activeTool !== "select"
                         Layout.fillWidth: true
                         onClicked: {
-                            if (backend && backend.activeTool === "select") {
+                            if (backend.activeTool === "select") {
                                 backend.setActiveTool(fullRoot.activeDrawTool)
                             }
                         }
@@ -139,10 +129,10 @@ Item {
                         icon.source: "qrc:/icons/edit-select.svg"
                         text: "Select"
                         checkable: true
-                        checked: backend ? backend.activeTool === "select" : false
+                        checked: backend.activeTool === "select"
                         Layout.fillWidth: true
                         onClicked: {
-                            if (backend) backend.setActiveTool("select")
+                            backend.setActiveTool("select")
                         }
                     }
 
@@ -150,27 +140,27 @@ Item {
                         icon.source: "qrc:/icons/edit-undo.svg"
                         text: "Undo"
                         Layout.fillWidth: true
-                        onClicked: { if (backend) backend.undo() }
+                        onClicked: { backend.undo() }
                     }
 
                     Controls.Button {
                         icon.source: "qrc:/icons/edit-redo.svg"
                         text: "Redo"
                         Layout.fillWidth: true
-                        onClicked: { if (backend) backend.redo() }
+                        onClicked: { backend.redo() }
                     }
 
                     Controls.Button {
                         icon.source: "qrc:/icons/edit-clear.svg"
                         text: "Clear All"
                         Layout.fillWidth: true
-                        onClicked: { if (backend) backend.clearAll() }
+                        onClicked: { backend.clear() }
                     }
                 }
 
                 // Section Header
                 Controls.Label {
-                    text: (backend && backend.hasSelection) ? "Edit Selection (" + backend.selectedType + ")" : "Default Properties & Tool"
+                    text: backend.hasSelection ? "Edit Selection (" + backend.selectedType + ")" : "Default Properties & Tool"
                     font.bold: true
                     font.pixelSize: 11
                     color: theme.highlightColor
@@ -179,26 +169,26 @@ Item {
                 // Selection Management Row
                 RowLayout {
                     Layout.fillWidth: true
-                    visible: backend && backend.hasSelection
+                    visible: backend.hasSelection
                     spacing: theme.smallSpacing
 
                     Controls.Button {
                         icon.source: "qrc:/icons/edit-delete.svg"
                         text: "Delete"
                         Layout.fillWidth: true
-                        onClicked: { if (backend) backend.deleteSelected() }
+                        onClicked: { backend.deleteSelected() }
                     }
 
                     Controls.Button {
                         icon.source: "qrc:/icons/go-up.svg"
                         text: "Raise"
-                        onClicked: { if (backend) backend.raiseSelected() }
+                        onClicked: { backend.raiseSelected() }
                     }
 
                     Controls.Button {
                         icon.source: "qrc:/icons/go-down.svg"
                         text: "Lower"
-                        onClicked: { if (backend) backend.lowerSelected() }
+                        onClicked: { backend.lowerSelected() }
                     }
                 }
 
@@ -212,10 +202,12 @@ Item {
                     }
 
                     Controls.ComboBox {
+                        // In-window dropdown: a Popup.Window one is a separate Wayland
+                        // surface, and the tray popup dismisses itself on focus loss.
+                        Component.onCompleted: popup.popupType = Controls.Popup.Item
                         Layout.fillWidth: true
                         model: ["Freehand", "Arrow", "Rectangle", "Ellipse", "Line", "Text"]
                         currentIndex: {
-                            if (!backend) return 0;
                             let tool = backend.activeTool.toLowerCase()
                             if (tool === "arrow") return 1
                             if (tool === "rectangle") return 2
@@ -228,7 +220,7 @@ Item {
                             let tools = ["freehand", "arrow", "rectangle", "ellipse", "line", "text"]
                             let selected = tools[index]
                             fullRoot.activeDrawTool = selected
-                            if (backend) backend.setActiveTool(selected)
+                            backend.setActiveTool(selected)
                         }
                     }
 
@@ -237,15 +229,17 @@ Item {
                     }
 
                     Controls.ComboBox {
+                        // In-window dropdown: a Popup.Window one is a separate Wayland
+                        // surface, and the tray popup dismisses itself on focus loss.
+                        Component.onCompleted: popup.popupType = Controls.Popup.Item
                         Layout.fillWidth: true
-                        model: (backend && backend.screenNames) ? backend.screenNames : []
+                        model: backend.screenNames
                         currentIndex: {
-                            if (!backend || !backend.screenNames) return 0;
                             let idx = backend.screenNames.indexOf(backend.targetScreen)
                             return idx >= 0 ? idx : 0
                         }
                         onActivated: {
-                            if (backend) backend.setTargetScreen(currentValue)
+                            backend.setTargetScreen(currentValue)
                         }
                     }
                 }
@@ -264,11 +258,10 @@ Item {
                         Layout.fillWidth: true
                         spacing: theme.smallSpacing
 
-                        property var colors: ["#e63946", "#f4a261", "#e9c46a", "#2a9d8f", "#457b9d", "#8338ec"]
-                        property string activeColor: (backend && backend.hasSelection) ? backend.selectedColor : (backend ? backend.defaultColor : "#e63946")
+                        property string activeColor: fullRoot.get("color")
 
                         Repeater {
-                            model: parent.colors
+                            model: backend.presetColors
 
                             Rectangle {
                                 width: theme.gridUnit * 1.5
@@ -280,7 +273,7 @@ Item {
 
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: { if (backend) backend.setColor(modelData) }
+                                    onClicked: { fullRoot.set("color", modelData) }
                                 }
                             }
                         }
@@ -288,10 +281,7 @@ Item {
                         Controls.Button {
                             icon.source: "qrc:/icons/color-picker.svg"
                             text: "Custom"
-                            onClicked: {
-                                colorDialog.selectedColor = parent.activeColor
-                                colorDialog.open()
-                            }
+                            onClicked: fullRoot.customColorRequested(parent.activeColor, false)
                         }
                     }
                 }
@@ -311,12 +301,12 @@ Item {
                         from: 1
                         to: 15
                         stepSize: 1
-                        value: (backend && backend.hasSelection) ? backend.selectedStrokeWidth : (backend ? backend.defaultStrokeWidth : 2)
-                        onMoved: { if (backend) backend.setStrokeWidth(value) }
+                        value: fullRoot.get("strokeWidth")
+                        onMoved: { fullRoot.set("strokeWidth", value) }
                     }
 
                     Controls.Label {
-                        text: Math.round((backend && backend.hasSelection) ? backend.selectedStrokeWidth : (backend ? backend.defaultStrokeWidth : 2)) + "px"
+                        text: Math.round(fullRoot.get("strokeWidth")) + "px"
                     }
                 }
 
@@ -335,12 +325,12 @@ Item {
                         from: 0.1
                         to: 1.0
                         stepSize: 0.05
-                        value: (backend && backend.hasSelection) ? backend.selectedOpacity : (backend ? backend.defaultOpacity : 1.0)
-                        onMoved: { if (backend) backend.setOpacity(value) }
+                        value: fullRoot.get("opacity")
+                        onMoved: { fullRoot.set("opacity", value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(((backend && backend.hasSelection) ? backend.selectedOpacity : (backend ? backend.defaultOpacity : 1.0)) * 100) + "%"
+                        text: Math.round(fullRoot.get("opacity") * 100) + "%"
                     }
                 }
 
@@ -364,8 +354,7 @@ Item {
                             Layout.fillWidth: true
                             spacing: theme.smallSpacing
 
-                            property var colors: ["#e63946", "#f4a261", "#e9c46a", "#2a9d8f", "#457b9d", "#8338ec"]
-                            property string activeFill: backend ? backend.selectedFillColor : "transparent"
+                                property string activeFill: fullRoot.get("fillColor")
 
                             Rectangle {
                                 width: theme.gridUnit * 1.5
@@ -385,12 +374,12 @@ Item {
 
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: { if (backend) backend.setFillColor("transparent") }
+                                    onClicked: { fullRoot.set("fillColor", "transparent") }
                                 }
                             }
 
                             Repeater {
-                                model: parent.colors
+                                model: backend.presetColors
 
                                 Rectangle {
                                     width: theme.gridUnit * 1.5
@@ -402,7 +391,7 @@ Item {
 
                                     MouseArea {
                                         anchors.fill: parent
-                                        onClicked: { if (backend) backend.setFillColor(modelData) }
+                                        onClicked: { fullRoot.set("fillColor", modelData) }
                                     }
                                 }
                             }
@@ -410,10 +399,8 @@ Item {
                             Controls.Button {
                                 icon.source: "qrc:/icons/color-picker.svg"
                                 text: "Custom"
-                                onClicked: {
-                                    fillColorDialog.selectedColor = parent.activeFill !== "transparent" ? parent.activeFill : "#e63946"
-                                    fillColorDialog.open()
-                                }
+                                onClicked: fullRoot.customColorRequested(
+                                    parent.activeFill !== "transparent" ? parent.activeFill : "#e63946", true)
                             }
                         }
                     }
@@ -432,12 +419,12 @@ Item {
                             from: 0.0
                             to: 1.0
                             stepSize: 0.05
-                            value: backend ? backend.selectedFillOpacity : 0.12
-                            onMoved: { if (backend) backend.setFillOpacity(value) }
+                            value: fullRoot.get("fillOpacity")
+                            onMoved: { fullRoot.set("fillOpacity", value) }
                         }
 
                         Controls.Label {
-                            text: Math.round((backend ? backend.selectedFillOpacity : 0.12) * 100) + "%"
+                            text: Math.round(fullRoot.get("fillOpacity") * 100) + "%"
                         }
                     }
                 }
@@ -457,12 +444,12 @@ Item {
                         from: 0
                         to: 30
                         stepSize: 1
-                        value: backend ? backend.selectedGlow : 10
-                        onMoved: { if (backend) backend.setGlow(value) }
+                        value: fullRoot.get("glow")
+                        onMoved: { fullRoot.set("glow", value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(backend ? backend.selectedGlow : 10) + "px"
+                        text: Math.round(fullRoot.get("glow")) + "px"
                     }
                 }
 
@@ -481,13 +468,13 @@ Item {
                         from: 0
                         to: 3
                         stepSize: 1
-                        value: backend ? backend.selectedFreehandSmoothing : 2
-                        onMoved: { if (backend) backend.setFreehandSmoothing(value) }
+                        value: fullRoot.get("freehandSmoothing")
+                        onMoved: { fullRoot.set("freehandSmoothing", value) }
                     }
 
                     Controls.Label {
                         text: {
-                            let v = Math.round(backend ? backend.selectedFreehandSmoothing : 2)
+                            let v = Math.round(fullRoot.get("freehandSmoothing"))
                             if (v <= 0) return "Off"
                             if (v === 1) return "Low"
                             if (v === 2) return "Med"
@@ -506,10 +493,13 @@ Item {
                     }
 
                     Controls.ComboBox {
+                        // In-window dropdown: a Popup.Window one is a separate Wayland
+                        // surface, and the tray popup dismisses itself on focus loss.
+                        Component.onCompleted: popup.popupType = Controls.Popup.Item
                         Layout.fillWidth: true
                         model: ["Neat (0)", "Artist (1)", "Cartoon (2)"]
-                        currentIndex: Math.min(2, Math.max(0, Math.round(backend ? backend.selectedRoughness : 1)))
-                        onActivated: { if (backend) backend.setRoughness(index) }
+                        currentIndex: Math.min(2, Math.max(0, Math.round(fullRoot.get("roughness"))))
+                        onActivated: { fullRoot.set("roughness", index) }
                     }
 
                     Controls.Label {
@@ -522,12 +512,12 @@ Item {
                         from: 0
                         to: 50
                         stepSize: 1
-                        value: backend ? backend.selectedBorderRadius : 8
-                        onMoved: { if (backend) backend.setBorderRadius(value) }
+                        value: fullRoot.get("borderRadius")
+                        onMoved: { fullRoot.set("borderRadius", value) }
                     }
 
                     Controls.Label {
-                        text: Math.round(backend ? backend.selectedBorderRadius : 8) + "px"
+                        text: Math.round(fullRoot.get("borderRadius")) + "px"
                     }
                 }
 
@@ -545,15 +535,15 @@ Item {
                         }
 
                         Controls.ComboBox {
+                            Component.onCompleted: popup.popupType = Controls.Popup.Item
                             Layout.fillWidth: true
                             model: ["sans-serif", "serif", "monospace", "Comic Sans MS"]
                             currentIndex: {
-                                if (!backend) return 0;
-                                let f = backend.selectedFontFamily
+                                let f = fullRoot.get("fontFamily")
                                 let idx = model.indexOf(f)
                                 return idx >= 0 ? idx : 0
                             }
-                            onActivated: { if (backend) backend.setFontFamily(currentValue) }
+                            onActivated: { fullRoot.set("fontFamily", currentValue) }
                         }
                     }
 
@@ -569,12 +559,12 @@ Item {
                             from: 10
                             to: 72
                             stepSize: 1
-                            value: backend ? backend.selectedFontSize : 20
-                            onMoved: { if (backend) backend.setFontSize(value) }
+                            value: fullRoot.get("fontSize")
+                            onMoved: { fullRoot.set("fontSize", value) }
                         }
 
                         Controls.Label {
-                            text: Math.round(backend ? backend.selectedFontSize : 20) + "px"
+                            text: Math.round(fullRoot.get("fontSize")) + "px"
                         }
                     }
                 }
@@ -594,17 +584,28 @@ Item {
 
                     ListView {
                         id: shapesListView
-                        model: backend ? backend.shapesMetadata : []
+                        objectName: "shapesListView"
+                        // The shapes model itself, not a parallel metadata copy of it:
+                        // it already carries type/selected/locked and signals its own
+                        // changes.
+                        model: backend.shapesModel
 
                         delegate: Controls.ItemDelegate {
+                            id: shapeRow
+                            required property int index
+                            required property string type
+                            // var, not bool: these keys are optional on a shape map, and
+                            // an absent one arrives as undefined.
+                            required property var selected
+                            required property var locked
+
                             width: shapesListView.width
                             height: theme.gridUnit * 2
 
                             background: Rectangle {
-                                color: (modelData && modelData.selected)
-                                       ? theme.highlightColor
-                                       : (hovered ? theme.hoverColor : "transparent")
-                                opacity: (modelData && modelData.selected) ? 0.3 : 1.0
+                                color: !!shapeRow.selected ? theme.highlightColor
+                                                         : (shapeRow.hovered ? theme.hoverColor : "transparent")
+                                opacity: shapeRow.selected ? 0.3 : 1.0
                                 radius: 4
                             }
 
@@ -613,13 +614,12 @@ Item {
 
                                 Image {
                                     source: {
-                                        let t = modelData && modelData.type ? modelData.type.toLowerCase() : "";
-                                        switch(t) {
-                                            case "rectangle": return "qrc:/icons/edit-select.svg";
-                                            case "ellipse": return "qrc:/icons/edit-select.svg";
-                                            case "arrow": return "qrc:/icons/arrow-right.svg";
-                                            case "line": return "qrc:/icons/arrow-right.svg";
-                                            case "text": return "qrc:/icons/draw-freehand.svg";
+                                        switch (shapeRow.type.toLowerCase()) {
+                                            case "rectangle": return "qrc:/icons/draw-rectangle.svg";
+                                            case "ellipse": return "qrc:/icons/draw-ellipse.svg";
+                                            case "arrow": return "qrc:/icons/draw-arrow.svg";
+                                            case "line": return "qrc:/icons/draw-line.svg";
+                                            case "text": return "qrc:/icons/draw-text.svg";
                                             default: return "qrc:/icons/draw-freehand.svg";
                                         }
                                     }
@@ -629,29 +629,25 @@ Item {
                                 }
 
                                 Controls.Label {
-                                    text: (modelData && modelData.name) ? modelData.name : ("Shape " + (index + 1))
-                                    font.bold: modelData ? !!modelData.selected : false
+                                    text: shapeRow.type.charAt(0).toUpperCase() + shapeRow.type.slice(1)
+                                          + " " + (shapeRow.index + 1)
+                                    font.bold: !!shapeRow.selected
                                     Layout.fillWidth: true
                                 }
 
                                 Controls.ToolButton {
-                                    icon.source: (modelData && modelData.locked) ? "qrc:/icons/object-locked.svg" : "qrc:/icons/object-unlocked.svg"
-                                    onClicked: {
-                                        if (backend) backend.setShapeLocked(index, !(modelData && modelData.locked))
-                                    }
+                                    icon.source: !!shapeRow.locked ? "qrc:/icons/object-locked.svg"
+                                                                 : "qrc:/icons/object-unlocked.svg"
+                                    onClicked: backend.setShapeLocked(shapeRow.index, !shapeRow.locked)
                                 }
 
                                 Controls.ToolButton {
                                     icon.source: "qrc:/icons/edit-delete.svg"
-                                    onClicked: {
-                                        if (backend) backend.deleteShape(index)
-                                    }
+                                    onClicked: backend.deleteShape(shapeRow.index)
                                 }
                             }
 
-                            onClicked: {
-                                if (backend) backend.selectShape(index)
-                            }
+                            onClicked: backend.selectShape(shapeRow.index)
                         }
 
                         Controls.Label {

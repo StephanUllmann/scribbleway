@@ -27,16 +27,47 @@ qt_add_qml_module(scribbleway-overlay
         qml/shapes/TextShape.qml
         qml/shapes/RoughPathGenerator.js
         qml/shapes/RoughStroke.qml
+        qml/FullRepresentation.qml
+        qml/TrayPopup.qml
+        qml/ColorPickerPanel.qml
+)
+
+qt_add_resources(scribbleway-overlay "icons"
+    PREFIX "/icons"
+    BASE icons
+    FILES
+        icons/color-picker.svg
+        icons/draw-freehand.svg
+        icons/draw-rectangle.svg
+        icons/draw-ellipse.svg
+        icons/draw-line.svg
+        icons/draw-arrow.svg
+        icons/draw-text.svg
+        icons/edit-clear.svg
+        icons/edit-delete.svg
+        icons/edit-redo.svg
+        icons/edit-select.svg
+        icons/edit-undo.svg
+        icons/go-down.svg
+        icons/go-up.svg
+        icons/object-locked.svg
+        icons/object-unlocked.svg
 )
 
 target_link_libraries(scribbleway-overlay PRIVATE
     Qt6::Quick
     Qt6::Qml
-    Qt6::DBus
+    Qt6::Widgets
     KF6::GlobalAccel
-    KF6::DBusAddons
     LayerShellQt::Interface
 )
+
+# setScreenConfiguration() is deprecated since LayerShellQt 6.6 in favour of
+# wantsToBeOnActiveScreen(), which older distros (Ubuntu 25.04 ships 6.5) do not
+# have yet. Build against whichever exists.
+if(LayerShellQt_VERSION VERSION_GREATER_EQUAL 6.6)
+    target_compile_definitions(scribbleway-overlay PRIVATE HAVE_LAYERSHELL_ACTIVE_SCREEN)
+endif()
 
 # Install executable to standard bin directory
 install(TARGETS scribbleway-overlay DESTINATION ${KDE_INSTALL_BINDIR})

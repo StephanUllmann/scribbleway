@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Test Quick DBus)
+find_package(Qt6 REQUIRED COMPONENTS Test Quick QuickTest)
 find_package(KF6 REQUIRED COMPONENTS GlobalAccel)
 find_package(LayerShellQt REQUIRED)
 
@@ -8,23 +8,29 @@ add_executable(shapesmodeltest
     ../src/overlay/shapesmodel.cpp
     ../src/overlay/overlaycontroller.h
     ../src/overlay/overlaycontroller.cpp
-    ../src/applet-plugin/appletbackend.h
-    ../src/applet-plugin/appletbackend.cpp
+    ../src/overlay/singleinstance.h
+)
+
+target_compile_definitions(shapesmodeltest PRIVATE
+    QML_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../src/overlay/qml"
 )
 
 target_include_directories(shapesmodeltest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/overlay
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/applet-plugin
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/common
 )
 
 target_link_libraries(shapesmodeltest PRIVATE
     Qt6::Core
     Qt6::Test
     Qt6::Quick
-    Qt6::DBus
     KF6::GlobalAccel
     LayerShellQt::Interface
 )
 
 add_test(NAME shapesmodeltest COMMAND shapesmodeltest)
+
+# The QML-only tests run through the stock qmltestrunner: the components under test
+# resolve by directory, so they need no qmldir and no separate QML module.
+add_test(NAME qmltests
+         COMMAND Qt6::qmltestrunner -input ${CMAKE_CURRENT_SOURCE_DIR}/qml)
+set_tests_properties(qmltests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

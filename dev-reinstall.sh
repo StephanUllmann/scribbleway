@@ -11,7 +11,6 @@ fi
 PREFIX="${PREFIX:-$HOME/.local}"
 BUILD_DIR="build"
 BUILD_TYPE="${BUILD_TYPE:-Debug}"
-RESTART_PLASMA=true
 RESTART_OVERLAY=true
 
 print_usage() {
@@ -20,7 +19,6 @@ print_usage() {
     echo "  --prefix <path>     Set install prefix (default: $HOME/.local)"
     echo "  --system            Install to /usr/local (requires sudo for install)"
     echo "  --release           Build in Release mode instead of Debug"
-    echo "  --no-plasma         Do not restart Plasma shell"
     echo "  --no-overlay        Do not start scribbleway-overlay after install"
     echo "  --help              Show this help message"
 }
@@ -37,10 +35,6 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --release)
             BUILD_TYPE="Release"
-            shift
-            ;;
-        --no-plasma)
-            RESTART_PLASMA=false
             shift
             ;;
         --no-overlay)
@@ -94,7 +88,8 @@ if [ -f "$BUILD_DIR/install_manifest.txt" ]; then
     done < "$BUILD_DIR/install_manifest.txt"
 fi
 
-# Explicit purge of standard binary and applet/plugin locations
+# Explicit purge of standard binary and desktop-file locations, which catches
+# installs made at a different prefix than the current build manifest covers.
 TARGET_FILES=(
     "$HOME/.local/bin/scribbleway-overlay"
     "/usr/local/bin/scribbleway-overlay"
@@ -117,33 +112,8 @@ for file in "${TARGET_FILES[@]}"; do
 done
 
 
-TARGET_DIRS=(
-    "$HOME/.local/share/plasma/plasmoids/org.kde.scribbleway"
-    "$HOME/.local/lib/qml/org/kde/scribbleway"
-    "$HOME/.local/lib/x86_64-linux-gnu/qml/org/kde/scribbleway"
-    "/usr/local/share/plasma/plasmoids/org.kde.scribbleway"
-    "/usr/share/plasma/plasmoids/org.kde.scribbleway"
-    "/usr/lib/qt6/qml/org/kde/scribbleway"
-    "/usr/lib64/qt6/qml/org/kde/scribbleway"
-    "/usr/local/lib/qt6/qml/org/kde/scribbleway"
-    "/usr/local/lib/x86_64-linux-gnu/qt6/qml/org/kde/scribbleway"
-)
-
-for dir in "${TARGET_DIRS[@]}"; do
-    if [ -d "$dir" ]; then
-        if [ -w "$dir" ] || [ -w "$(dirname "$dir")" ]; then
-            rm -rf "$dir" || true
-        elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-            sudo rm -rf "$dir" 2>/dev/null || true
-        fi
-    fi
-done
-
-
-echo "Clearing QML and Plasma disk caches..."
+echo "Clearing the QML disk cache..."
 rm -rf "$HOME/.cache/qmlcache"
-rm -rf "$HOME/.cache/plasmashell"
-rm -rf "$HOME/.cache/plasma"* 2>/dev/null || true
 
 echo "Wiping build directory and leftover packaging artifacts..."
 if [ -d "$BUILD_DIR" ]; then
@@ -154,15 +124,9 @@ rm -f ./*.deb 2>/dev/null || true
 echo "=== 3. Configuring clean build ==="
 NUM_CORES=$(nproc 2>/dev/null || echo 2)
 
-EXTRA_ARGS=()
-if [ "$PREFIX" = "$HOME/.local" ]; then
-    EXTRA_ARGS+=("-DKDE_INSTALL_QMLDIR=lib/qml")
-fi
-
 cmake -B "$BUILD_DIR" -S . \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    "${EXTRA_ARGS[@]}"
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 
 echo "=== 4. Building project ==="
 cmake --build "$BUILD_DIR" -j"$NUM_CORES"
@@ -188,16 +152,6 @@ if [ "$PREFIX" = "$HOME/.local" ]; then
 fi
 
 echo "=== 6. Process lifecycle management ==="
-if [ "$RESTART_PLASMA" = true ] && pgrep -f plasmashell >/dev/null 2>&1; then
-    echo "Restarting Plasma shell..."
-    if systemctl --user is-active plasma-plasmashell.service >/dev/null 2>&1; then
-        systemctl --user restart plasma-plasmashell.service
-    else
-        kquitapp6 plasmashell 2>/dev/null || killall plasmashell 2>/dev/null || true
-        kstart6 plasmashell >/dev/null 2>&1 &
-    fi
-fi
-
 if [ "$RESTART_OVERLAY" = true ]; then
     OVERLAY_BIN=""
     if [ -x "$PREFIX/bin/scribbleway-overlay" ]; then

@@ -37,18 +37,17 @@ Install the appropriate system package dependencies for your distribution below:
 
 #### Arch Linux
 ```bash
-sudo pacman -S extra-cmake-modules plasma-desktop layer-shell-qt kglobalaccel kdbusaddons qt6-declarative qt6-base
+sudo pacman -S extra-cmake-modules layer-shell-qt kglobalaccel qt6-declarative qt6-base
 ```
 
 #### Fedora
 ```bash
-sudo dnf install extra-cmake-modules kf6-kglobalaccel-devel kf6-kdbusaddons-devel plasma-devel layer-shell-qt-devel qt6-qtbase-devel qt6-qtdeclarative-devel
+sudo dnf install extra-cmake-modules kf6-kglobalaccel-devel layer-shell-qt-devel qt6-qtbase-devel qt6-qtdeclarative-devel
 ```
 
 #### Ubuntu / Debian / KDE Neon
 ```bash
-sudo apt install extra-cmake-modules libkf6globalaccel-dev libkf6dbusaddons-dev libplasma-dev liblayershellqtinterface-dev qt6-base-dev qt6-declarative-dev
-# Note: On some Debian/Ubuntu/Neon versions, libplasma-dev may be packaged as libplasma6-dev instead.
+sudo apt install extra-cmake-modules libkf6globalaccel-dev liblayershellqtinterface-dev qt6-base-dev qt6-declarative-dev
 ```
 
 ### Installation
@@ -142,6 +141,39 @@ To run unit tests:
 ```bash
 ctest --test-dir build --output-on-failure
 ```
+
+### Running on Hyprland (or other non-Plasma Wayland compositors)
+
+Scribbleway's controls live in a system tray popup, which requires a running
+`StatusNotifierHost`. Hyprland doesn't provide one itself — enable Waybar's
+`tray` module (or an equivalent) before launching Scribbleway, or the tray
+icon won't appear anywhere.
+
+The global `Meta+Shift+X` shortcut goes through KDE's `KGlobalAccel`, which does
+nothing without Plasma's `kglobalacceld`. Bind the compositor's own hotkey to
+`--toggle` instead — it hands the request to the running daemon over the
+single-instance socket, and starts it if it isn't running yet:
+
+```lua
+-- ~/.config/hypr/hyprland.lua
+hl.bind("SUPER + SHIFT + X", hl.dsp.exec_cmd("scribbleway-overlay --toggle"))
+```
+
+Hyprland switched its config language from hyprlang to Lua in 0.55. A legacy
+`hyprland.conf` is still read when no `hyprland.lua` exists, but upstream plans
+to drop it — on such a setup the equivalent line is:
+
+```
+bind = SUPER SHIFT, X, exec, scribbleway-overlay --toggle
+```
+
+Other compositors bind the same command: `sway`/`niri`/`river` all take an
+`exec`-style spawn.
+
+The overlay-local hotkeys in the table below (`E`, `R`, `X`, `+`/`-`, …) work
+once a mode is active — the overlay takes exclusive keyboard focus while a tool
+is in use and releases it in passthrough mode.
+
 ---
 
 ## Default Keyboard Shortcuts

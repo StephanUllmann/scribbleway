@@ -160,25 +160,12 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: 2
-        text: {
-            if (typeof controller !== "undefined") {
-                var seq = controller.localShortcutSequences["tool_" + root.tool];
-                if (!seq && root.tool === "select") {
-                    seq = controller.localShortcutSequences["action_select"];
-                }
-                if (seq) return seq;
-            }
-            switch (root.tool) {
-            case "arrow": return "A";
-            case "rectangle": return "R";
-            case "freehand": return "F";
-            case "ellipse": return "E";
-            case "line": return "L";
-            case "text": return "T";
-            case "select": return "X";
-            default: return "";
-            }
-        }
+        // Whatever the shortcut is bound to right now — no hardcoded fallback table.
+        // The old one re-listed the C++ defaults and so lied about a binding the user
+        // had deliberately cleared. Tools live under tool_*, select under action_*.
+        text: controller.localShortcutSequences["tool_" + root.tool]
+              || controller.localShortcutSequences["action_" + root.tool]
+              || ""
         color: Qt.rgba(1, 1, 1, 0.75)
         font.pixelSize: 7
         font.bold: true
