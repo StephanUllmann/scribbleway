@@ -624,10 +624,17 @@ Window {
         
         property real maxWidth: canvasWindow.width - x - 20
         property real containerWidth: 0
-        width: editingTextKind === "attached" ? containerWidth : Math.min(maxWidth, Math.max(150, textMeasurer.implicitWidth + leftPadding + rightPadding + 20))
-        height: Math.max(40, contentHeight + topPadding + bottomPadding + 10)
-        
+        property real containerHeight: 0
+        // Text in a shape is edited in place: the same box, centering and color as the
+        // finished label, with no background, so only the cursor shows.
+        readonly property bool inShape: editingTextKind === "attached"
+        width: inShape ? containerWidth : Math.min(maxWidth, Math.max(150, textMeasurer.implicitWidth + leftPadding + rightPadding + 20))
+        height: Math.max(inShape ? containerHeight : 40, contentHeight + topPadding + bottomPadding + (inShape ? 0 : 10))
+        horizontalAlignment: inShape ? TextEdit.AlignHCenter : TextEdit.AlignLeft
+        verticalAlignment: inShape ? TextEdit.AlignVCenter : TextEdit.AlignTop
+
         background: Rectangle {
+            visible: !textEditor.inShape
             color: Qt.rgba(1, 1, 1, 0.45)
             border.color: "#3b82f6"
             border.width: 1.5
@@ -650,7 +657,13 @@ Window {
             }
             return controller.defaultFontSize;
         }
-        color: "black"
+        color: {
+            if (inShape && editingShapeIndex !== -1 && editingShapeIndex < controller.shapesModel.rowCount()) {
+                let shape = controller.getShape(editingShapeIndex);
+                if (shape && shape.color) return shape.color;
+            }
+            return "black";
+        }
 
         onWidthChanged: canvasWindow.requestInputRegionUpdate()
         onHeightChanged: canvasWindow.requestInputRegionUpdate()
@@ -758,6 +771,7 @@ Window {
         textEditor.x = r.x;
         textEditor.y = r.y;
         textEditor.containerWidth = r.width;
+        textEditor.containerHeight = r.height;
         textEditor.text = attached.text || "";
         textEditor.visible = true;
 

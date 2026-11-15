@@ -41,17 +41,12 @@ Item {
         return backend.hasSelection ? selected : fallback
     }
 
-    // Route a property change: to the selected shape if there is one, else to the
-    // matching default. Every shape key has a default<Key> property, so one function
-    // covers all of them.
+    // updateProperties writes the matching default<Key> and, if there is a selection,
+    // the selected shapes too; it also keeps a filled shape's fill in its stroke color.
     function set(key, value) {
-        if (backend.hasSelection) {
-            let props = {}
-            props[key] = value
-            backend.updateProperties(props)
-        } else {
-            backend["default" + cap(key)] = value
-        }
+        let props = {}
+        props[key] = value
+        backend.updateProperties(props)
     }
 
     // A slider drag is one undo step, however many values it passes through.

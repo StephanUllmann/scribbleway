@@ -866,9 +866,8 @@ void ShapesModelTest::testFillColor()
 {
     OverlayController controller;
 
-    // Defaults preserve previous 12% stroke-colored fill look
     QCOMPARE(controller.defaultFillColor(), QStringLiteral("#e63946"));
-    QCOMPARE(controller.defaultFillOpacity(), 0.12);
+    QCOMPARE(controller.defaultFillOpacity(), 0.25);
 
     QVariantMap defaults;
     defaults[QStringLiteral("fillColor")] = QStringLiteral("#00ff00");
@@ -895,6 +894,12 @@ void ShapesModelTest::testFillColor()
     QCOMPARE(controller.defaultFillColor(), QStringLiteral("#112233"));
     QCOMPARE(controller.defaultFillOpacity(), 0.25);
 
+    // A new stroke color carries over to a switched-on fill, on the shape and the default
+    controller.updateProperties({{QStringLiteral("color"), QStringLiteral("#2a9d8f")}});
+    QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("fillColor")].toString(),
+             QStringLiteral("#2a9d8f"));
+    QCOMPARE(controller.defaultFillColor(), QStringLiteral("#2a9d8f"));
+
     // updateProperties mutates selected shape + defaults
     QVariantMap upd;
     upd[QStringLiteral("fillColor")] = QStringLiteral("transparent");
@@ -903,6 +908,11 @@ void ShapesModelTest::testFillColor()
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("fillColor")].toString(),
              QStringLiteral("transparent"));
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("fillOpacity")].toDouble(), 0.0);
+
+    // ...but never switches a fill back on
+    controller.updateProperties({{QStringLiteral("color"), QStringLiteral("#264653")}});
+    QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("fillColor")].toString(),
+             QStringLiteral("transparent"));
 
     // Role names surface to QML
     ShapesModel *model = controller.shapesModel();

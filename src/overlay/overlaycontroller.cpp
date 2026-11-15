@@ -637,12 +637,26 @@ void OverlayController::updateProperties(const QVariantMap &properties)
         setProperty(name.toUtf8().constData(), it.value());
     }
 
+    // The fill is the stroke color at fill opacity: a new stroke color carries over to
+    // any fill that is switched on, unless this same edit picks a fill color itself.
+    const QVariant newColor = demarshalled.value(QStringLiteral("color"));
+    const bool fillFollows = newColor.isValid() && !demarshalled.contains(QStringLiteral("fillColor"));
+    auto hasFill = [](const QString &fill) {
+        return !fill.isEmpty() && fill.compare(QStringLiteral("transparent"), Qt::CaseInsensitive) != 0;
+    };
+    if (fillFollows && hasFill(m_defaultFillColor)) {
+        setDefaultFillColor(newColor.toString());
+    }
+
     const bool hasFontUpdate = demarshalled.contains(QStringLiteral("fontFamily")) || demarshalled.contains(QStringLiteral("fontSize"));
     // A container's attached text carries its own font, so a font change has to reach
     // the binding as well as the shape.
-    auto applyTo = [this, &demarshalled, hasFontUpdate](int index) {
+    auto applyTo = [&](int index) {
         QVariantMap shapeProps = demarshalled;
         const QVariantMap shape = m_shapesModel.shapes()[index];
+        if (fillFollows && hasFill(shape.value(QStringLiteral("fillColor")).toString())) {
+            shapeProps.insert(QStringLiteral("fillColor"), newColor);
+        }
         const QVariantMap attached = ShapesModel::firstAttachedTextBinding(shape);
         if (!attached.isEmpty() && hasFontUpdate) {
             QVariantList bindings = ShapesModel::withoutAttachedTextBinding(shape);

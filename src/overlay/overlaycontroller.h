@@ -228,7 +228,7 @@ private:
     int m_defaultRoughness = 1;
     int m_defaultGlow = 10;
     QString m_defaultFillColor;
-    double m_defaultFillOpacity = 0.12;
+    double m_defaultFillOpacity = 0.25;
     int m_defaultFreehandSmoothing = 2;
 
     bool m_trayPopupOpen = false;

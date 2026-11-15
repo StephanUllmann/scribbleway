@@ -45,7 +45,8 @@ Item {
     }
     Text {
         id: attachedTextLabel
-        visible: baseShapeRoot.hasAttachedText
+        // Hidden while the editor sits on top of it, or the text would show twice.
+        visible: baseShapeRoot.hasAttachedText && !(typeof canvasWindow !== "undefined" && canvasWindow.editingShapeIndex === baseShapeRoot.shapeIndex)
         enabled: false
         z: 1
         text: baseShapeRoot.modelAttachedText.text || ""
