@@ -159,11 +159,13 @@ Item {
     // A press opens an edit group. Its release can be lost when the gesture is cancelled
     // or this shape is destroyed mid-drag, and an unclosed group merges all later edits.
     property bool gestureOpen: false
+    property bool resizing: false // a handle or endpoint drag is in progress
     function beginGesture() {
         gestureOpen = true;
         controller.beginEdit();
     }
     function endGesture() {
+        resizing = false;
         if (gestureOpen) {
             gestureOpen = false;
             controller.endEdit();
@@ -346,6 +348,7 @@ Item {
 
                     onPressed: (mouse) => {
                         baseShapeRoot.beginGesture();
+                        baseShapeRoot.resizing = true;
                         let pos = mapToItem(baseShapeRoot, mouse.x, mouse.y);
                         dragStartX = pos.x;
                         dragStartY = pos.y;
@@ -443,6 +446,7 @@ Item {
 
                     onPressed: (mouse) => {
                         baseShapeRoot.beginGesture();
+                        baseShapeRoot.resizing = true;
                         let pos = mapToItem(baseShapeRoot, mouse.x, mouse.y);
                         dragStartX = pos.x;
                         dragStartY = pos.y;
@@ -491,6 +495,19 @@ Item {
                 }
             }
         }
+    }
+
+    // Live size while resizing, placed like the label shown while drawing (see main.qml).
+    SizeLabel {
+        readonly property real dx: shapeToX - shapeFromX
+        readonly property real dy: shapeToY - shapeFromY
+        visible: resizing && (mode === "rect" || attachedLineLength > 0)
+        x: mode === "line" ? shapeFromX + dx / 2 - dy / attachedLineLength * 18 - width / 2
+                           : shapeX + shapeWidth / 2 - width / 2
+        y: mode === "line" ? shapeFromY + dy / 2 + dx / attachedLineLength * 18 - height / 2
+                           : shapeY + shapeHeight + 8
+        text: mode === "line" ? Math.round(attachedLineLength) + " px"
+                              : Math.round(shapeWidth) + " × " + Math.round(shapeHeight) + " px"
     }
 
     // Snap target highlight

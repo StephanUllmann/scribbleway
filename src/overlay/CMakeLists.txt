@@ -29,6 +29,7 @@ qt_add_qml_module(scribbleway-overlay
         qml/shapes/TextShape.qml
         qml/shapes/RoughPathGenerator.js
         qml/shapes/RoughStroke.qml
+        qml/shapes/SizeLabel.qml
         qml/FullRepresentation.qml
         qml/TrayPopup.qml
         qml/ColorPickerPanel.qml

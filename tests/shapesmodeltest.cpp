@@ -84,6 +84,7 @@ private Q_SLOTS:
     void testDraggedArrowLetsGo();
     void testCopyPasteKeepsFonts();
     void testResizeHandleCursors();
+    void testResizeShowsSizeLabel();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -2955,3 +2956,41 @@ void ShapesModelTest::testResizeHandleCursors()
     QCOMPARE(window->cursor().shape(), Qt::CrossCursor);
 }
 
+// Dragging a resize handle or a line endpoint shows the live size, like drawing does.
+void ShapesModelTest::testResizeShowsSizeLabel()
+{
+    OverlayController c;
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty(u"controller"_s, &c);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
+    QScopedPointer<QObject> root(component.create());
+    QVERIFY2(root, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(root.data());
+    QVERIFY(window);
+    window->resize(800, 600);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    c.enterSelectMode();
+
+    c.addShape(box(100.0, 100.0, 200.0, 100.0));
+    c.selectShape(0, false);
+    QTest::mousePress(window, Qt::LeftButton, {}, QPoint(300, 200));
+    QTest::mouseMove(window, QPoint(350, 250));
+    QQuickItem *label = findText(window->contentItem(), u"250 × 150 px"_s);
+    QVERIFY(label);
+    QVERIFY(label->isVisible());
+    QTest::mouseRelease(window, Qt::LeftButton, {}, QPoint(350, 250));
+    QVERIFY(!label->isVisible());
+
+    QVariantMap line = box(0.0, 0.0, 0.0, 0.0, u"line"_s);
+    line.insert({{u"fromX"_s, 100.0}, {u"fromY"_s, 400.0}, {u"toX"_s, 200.0}, {u"toY"_s, 400.0}});
+    c.addShape(line);
+    c.selectShape(1, false);
+    QTest::mousePress(window, Qt::LeftButton, {}, QPoint(200, 400));
+    QTest::mouseMove(window, QPoint(300, 400));
+    label = findText(window->contentItem(), u"200 px"_s);
+    QVERIFY(label);
+    QVERIFY(label->isVisible());
+    QTest::mouseRelease(window, Qt::LeftButton, {}, QPoint(300, 400));
+    QVERIFY(!label->isVisible());
+}

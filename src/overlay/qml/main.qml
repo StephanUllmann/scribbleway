@@ -3,6 +3,7 @@ import QtQml
 import QtQuick.Window
 import QtQuick.Controls as Controls
 import QtQuick.Shapes
+import "shapes"
 import "shapes/RoughPathGenerator.js" as RoughPathGenerator
 
 Window {
@@ -539,7 +540,7 @@ Window {
 
     // Live size label: line/arrow length sits just off the midpoint on the line's normal;
     // rectangle/ellipse "W × H" sits centred under the bottom edge.
-    Rectangle {
+    SizeLabel {
         id: lengthLabel
         property bool isLine: activeDrawTool === "line" || activeDrawTool === "arrow"
         property bool isBox: activeDrawTool === "rectangle" || activeDrawTool === "ellipse"
@@ -549,20 +550,8 @@ Window {
                   : previewX + previewW / 2 - width / 2
         y: isLine ? drawStartPoint.y + previewH / 2 + previewW / len * 18 - height / 2
                   : previewY + previewH + 8
-        width: lengthText.implicitWidth + 10
-        height: lengthText.implicitHeight + 4
-        radius: 4
-        color: "#cc000000"
-        z: 999
-
-        Text {
-            id: lengthText
-            anchors.centerIn: parent
-            text: lengthLabel.isLine ? Math.round(lengthLabel.len) + " px"
-                                     : Math.round(previewW) + " × " + Math.round(previewH) + " px"
-            color: "white"
-            font.pixelSize: 12
-        }
+        text: isLine ? Math.round(len) + " px"
+                     : Math.round(previewW) + " × " + Math.round(previewH) + " px"
     }
 
     // --- TOOL CURSOR BADGE (follows pointer while a draw tool is active) ---
