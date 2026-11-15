@@ -22,6 +22,8 @@ Window {
         }
     }
     property bool isDrawing: false
+    property bool shapesHidden: false
+    property string previousMode: controller.currentMode
     property point drawStartPoint: Qt.point(0, 0)
     property var activePoints: []
     
@@ -129,6 +131,11 @@ Window {
         }
 
         function onModeChanged(mode) {
+            // Reopening the overlay always starts with the shapes visible.
+            if (canvasWindow.previousMode === "passthrough" && mode !== "passthrough") {
+                canvasWindow.shapesHidden = false;
+            }
+            canvasWindow.previousMode = mode;
             canvasWindow.requestInputRegionUpdate();
         }
 
@@ -268,9 +275,12 @@ Window {
     Repeater {
         id: shapeRepeater
         model: controller.shapesModel
+        // A new shape would otherwise vanish the moment it's drawn.
+        onItemAdded: canvasWindow.shapesHidden = false
         delegate: Loader {
             id: loader
             anchors.fill: parent
+            visible: !canvasWindow.shapesHidden
             source: {
                 switch(model.type.toLowerCase()) {
                     case "rectangle": return "shapes/RectangleShape.qml";
@@ -841,6 +851,11 @@ Window {
             { key: "action_undo",            run: () => controller.undo() },
             { key: "action_redo",            run: () => controller.redo() },
             { key: "action_clear",           run: () => controller.clear() },
+            { key: "action_toggle_shapes",   run: () => {
+                canvasWindow.shapesHidden = !canvasWindow.shapesHidden;
+                // Keep Delete, nudge and resize from acting on shapes nobody can see.
+                if (canvasWindow.shapesHidden) controller.setSelectedIndex(-1);
+            } },
             { key: "action_increase_border_radius", needs: "rectangle", run: () => controller.increaseBorderRadius() },
             { key: "action_decrease_border_radius", needs: "rectangle", run: () => controller.decreaseBorderRadius() }
         ]

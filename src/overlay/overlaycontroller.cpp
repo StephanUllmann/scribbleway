@@ -49,6 +49,7 @@ OverlayController::OverlayController(QObject *parent)
         {"action_grow", "+"}, {"action_shrink", "-"}, {"action_select", "X"},
         {"action_cycle_roughness", "S"}, {"action_undo", "Ctrl+Z"},
         {"action_redo", "Ctrl+Shift+Z"}, {"action_clear", "Ctrl+Delete"},
+        {"action_toggle_shapes", "Y"},
         {"action_increase_border_radius", "ü"}, {"action_decrease_border_radius", "ä"},
     };
     QSettings settings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));

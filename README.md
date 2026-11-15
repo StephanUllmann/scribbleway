@@ -166,6 +166,7 @@ Scribbleway uses a two-tier modal shortcut model. A single global shortcut opens
 | **Shrink Selected (Size/Stroke)**| `-` |
 | **Undo Last Shape** | `Ctrl` + `Z` |
 | **Clear All Shapes** | `Ctrl` + `Delete` |
+| **Hide / Show All Shapes** | `Y` |
 | **Exit Overlay (Passthrough)** | `Escape` |
 
 There is no screen for changing hotkeys. To override a local one, add it to `~/.config/scribbleway/shortcuts.conf`, for example `tool_arrow=W` under a `[local]` section, and restart the overlay.
