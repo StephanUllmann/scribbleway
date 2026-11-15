@@ -532,6 +532,34 @@ Window {
         z: 999
     }
 
+    // Live size label: line/arrow length sits just off the midpoint on the line's normal;
+    // rectangle/ellipse "W × H" sits centred under the bottom edge.
+    Rectangle {
+        id: lengthLabel
+        property bool isLine: activeDrawTool === "line" || activeDrawTool === "arrow"
+        property bool isBox: activeDrawTool === "rectangle" || activeDrawTool === "ellipse"
+        property real len: Math.sqrt(previewW * previewW + previewH * previewH)
+        visible: isDrawing && len > 0 && (isLine || isBox)
+        x: isLine ? drawStartPoint.x + previewW / 2 - previewH / len * 18 - width / 2
+                  : previewX + previewW / 2 - width / 2
+        y: isLine ? drawStartPoint.y + previewH / 2 + previewW / len * 18 - height / 2
+                  : previewY + previewH + 8
+        width: lengthText.implicitWidth + 10
+        height: lengthText.implicitHeight + 4
+        radius: 4
+        color: "#cc000000"
+        z: 999
+
+        Text {
+            id: lengthText
+            anchors.centerIn: parent
+            text: lengthLabel.isLine ? Math.round(lengthLabel.len) + " px"
+                                     : Math.round(previewW) + " × " + Math.round(previewH) + " px"
+            color: "white"
+            font.pixelSize: 12
+        }
+    }
+
     // --- TOOL CURSOR BADGE (follows pointer while a draw tool is active) ---
     ToolCursorBadge {
         id: toolCursorBadge
