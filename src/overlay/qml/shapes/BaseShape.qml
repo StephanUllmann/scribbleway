@@ -70,6 +70,10 @@ Item {
         wrapMode: Text.Wrap
         clip: false
 
+        // A crisp 1px drop shadow lifts the text off its tinted fill; a blurred one read as glow.
+        style: Text.Raised
+        styleColor: Qt.rgba(0, 0, 0, 0.6)
+
         x: {
             if (baseShapeRoot.mode === "line") {
                 return (baseShapeRoot.shapeFromX + baseShapeRoot.shapeToX) / 2 - width / 2;
