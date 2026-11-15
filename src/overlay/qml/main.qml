@@ -369,6 +369,7 @@ Window {
     
     // Freehand Live Preview
     Shape {
+        preferredRendererType: Shape.CurveRenderer
         anchors.fill: parent
         visible: isDrawing && activeDrawTool === "freehand"
         opacity: controller.defaultOpacity
@@ -410,6 +411,7 @@ Window {
 
     // Ellipse Live Preview
     Shape {
+        preferredRendererType: Shape.CurveRenderer
         anchors.fill: parent
         visible: isDrawing && activeDrawTool === "ellipse"
         opacity: controller.defaultOpacity
@@ -451,6 +453,7 @@ Window {
 
     // Line Live Preview
     Shape {
+        preferredRendererType: Shape.CurveRenderer
         anchors.fill: parent
         visible: isDrawing && activeDrawTool === "line"
         opacity: controller.defaultOpacity

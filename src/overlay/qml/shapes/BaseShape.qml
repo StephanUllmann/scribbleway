@@ -19,6 +19,7 @@ Item {
         shadowEnabled: true
         shadowColor: baseShapeRoot.modelColor
         shadowBlur: baseShapeRoot.modelGlow / 30.0
+        shadowOpacity: 0.45 // a soft halo; full opacity read as a neon outline
         shadowHorizontalOffset: 0
         shadowVerticalOffset: 0
         autoPaddingEnabled: true

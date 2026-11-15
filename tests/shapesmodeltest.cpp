@@ -1663,9 +1663,9 @@ void ShapesModelTest::testRoughPathGenerator()
     QVERIFY(!lineResult.isError());
     QVERIFY(lineResult.isArray());
 
-    // The result should contain 2 strokes (since loop goes up to 2)
+    // One stroke per edge (rough.js draws two, which looked scribbled)
     int lineLen = lineResult.property(QStringLiteral("length")).toInt();
-    QCOMPARE(lineLen, 2);
+    QCOMPARE(lineLen, 1);
 
     for (int i = 0; i < lineLen; ++i) {
         QJSValue stroke = lineResult.property(i);
@@ -1689,9 +1689,9 @@ void ShapesModelTest::testRoughPathGenerator()
     QVERIFY(!arrowResult.isError());
     QVERIFY(arrowResult.isArray());
 
-    // Arrow should return 6 strokes (2 for line, 2 for left arrowhead, 2 for right arrowhead)
+    // Arrow returns 3 strokes: the stem and the two arrowhead sides
     int arrowLen = arrowResult.property(QStringLiteral("length")).toInt();
-    QCOMPARE(arrowLen, 6);
+    QCOMPARE(arrowLen, 3);
 
     for (int i = 0; i < arrowLen; ++i) {
         QJSValue stroke = arrowResult.property(i);
@@ -1709,7 +1709,7 @@ void ShapesModelTest::testRoughPathGenerator()
     QVERIFY(!ellipseResult.isError());
     QVERIFY(ellipseResult.isArray());
     int ellipseLen = ellipseResult.property(QStringLiteral("length")).toInt();
-    QCOMPARE(ellipseLen, 2);
+    QCOMPARE(ellipseLen, 1);
     for (int i = 0; i < ellipseLen; ++i) {
         QJSValue stroke = ellipseResult.property(i);
         QVERIFY(stroke.isArray());
@@ -1732,7 +1732,7 @@ void ShapesModelTest::testRoughPathGenerator()
     QVERIFY(!rectResult.isError());
     QVERIFY(rectResult.isArray());
     int rectLen = rectResult.property(QStringLiteral("length")).toInt();
-    QCOMPARE(rectLen, 16); // 4 sides * 2 + 4 corners * 2 = 16 strokes
+    QCOMPARE(rectLen, 8); // edge, corner, edge, corner, ... (4 of each)
     for (int i = 0; i < rectLen; ++i) {
         QJSValue stroke = rectResult.property(i);
         QVERIFY(stroke.isArray());
@@ -1765,7 +1765,7 @@ void ShapesModelTest::testRoughPathGenerator()
     QVERIFY(!freehandResult.isError());
     QVERIFY(freehandResult.isArray());
     int freehandLen = freehandResult.property(QStringLiteral("length")).toInt();
-    QCOMPARE(freehandLen, 2);
+    QCOMPARE(freehandLen, 1);
     for (int i = 0; i < freehandLen; ++i) {
         QJSValue stroke = freehandResult.property(i);
         QVERIFY(stroke.isArray());
@@ -1780,48 +1780,19 @@ void ShapesModelTest::testRoughPathGenerator()
         }
     }
 
-    // Test getSketchyArc with various angles
-    QJSValue createPRNG = engine.globalObject().property(QStringLiteral("createPRNG"));
-    QVERIFY(createPRNG.isCallable());
-    QJSValueList prngArgs;
-    prngArgs << 42;
-    QJSValue rand = createPRNG.call(prngArgs);
-    QVERIFY(rand.isCallable());
-
-    QJSValue getSketchyArc = engine.globalObject().property(QStringLiteral("getSketchyArc"));
-    QVERIFY(getSketchyArc.isCallable());
-
-    // 1. Normal arc angles
-    QJSValueList arcArgsNormal;
-    arcArgsNormal << 100 << 100 << 50 << 0.0 << 1.57 << 1.5 << rand;
-    QJSValue arcResultNormal = getSketchyArc.call(arcArgsNormal);
-    QVERIFY(!arcResultNormal.isError());
-    QVERIFY(arcResultNormal.isArray());
-    QCOMPARE(arcResultNormal.property(QStringLiteral("length")).toInt(), 2);
-
-    // 2. Swapped arc angles (endAngle < startAngle)
-    QJSValueList arcArgsSwapped;
-    arcArgsSwapped << 100 << 100 << 50 << 1.57 << 0.0 << 1.5 << rand;
-    QJSValue arcResultSwapped = getSketchyArc.call(arcArgsSwapped);
-    QVERIFY(!arcResultSwapped.isError());
-    QVERIFY(arcResultSwapped.isArray());
-    QCOMPARE(arcResultSwapped.property(QStringLiteral("length")).toInt(), 2);
-
-    // 3. Tiny arc angles (difference extremely small)
-    QJSValueList arcArgsTiny;
-    arcArgsTiny << 100 << 100 << 50 << 0.0 << 0.00001 << 1.5 << rand;
-    QJSValue arcResultTiny = getSketchyArc.call(arcArgsTiny);
-    QVERIFY(!arcResultTiny.isError());
-    QVERIFY(arcResultTiny.isArray());
-    QCOMPARE(arcResultTiny.property(QStringLiteral("length")).toInt(), 2);
-
-    // 4. Zero-length arc angle
-    QJSValueList arcArgsZero;
-    arcArgsZero << 100 << 100 << 50 << 0.0 << 0.0 << 1.5 << rand;
-    QJSValue arcResultZero = getSketchyArc.call(arcArgsZero);
-    QVERIFY(!arcResultZero.isError());
-    QVERIFY(arcResultZero.isArray());
-    QCOMPARE(arcResultZero.property(QStringLiteral("length")).toInt(), 2);
+    // Rounded corners must join their edges exactly, or the outline shows gaps.
+    auto pointAt = [](const QJSValue &stroke, int index) {
+        int len = stroke.property(QStringLiteral("length")).toInt();
+        QJSValue pt = stroke.property(index < 0 ? len + index : index);
+        return QPointF(pt.property(QStringLiteral("x")).toNumber(), pt.property(QStringLiteral("y")).toNumber());
+    };
+    for (int i = 0; i < 4; ++i) {
+        QJSValue edge = rectResult.property(2 * i);
+        QJSValue corner = rectResult.property(2 * i + 1);
+        QJSValue nextCorner = rectResult.property((2 * i + 3) % 8);
+        QVERIFY(QLineF(pointAt(corner, -1), pointAt(edge, 0)).length() < 1e-9);
+        QVERIFY(QLineF(pointAt(edge, -1), pointAt(nextCorner, 0)).length() < 1e-9);
+    }
 
     // --- Freehand smoothing helpers ---
     QJSValue smoothFreehandPoints = engine.globalObject().property(QStringLiteral("smoothFreehandPoints"));

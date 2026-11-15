@@ -54,6 +54,8 @@ BaseShape {
     }
 
         Shape {
+
+            preferredRendererType: Shape.CurveRenderer
             anchors.fill: parent
             opacity: root.modelOpacity
             visible: root.modelRoughness === 0

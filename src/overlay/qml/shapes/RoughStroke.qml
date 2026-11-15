@@ -15,6 +15,7 @@ Item {
         Shape {
             anchors.fill: parent
             opacity: root.strokeOpacity
+            preferredRendererType: Shape.CurveRenderer
 
             ShapePath {
                 strokeColor: root.strokeColor
