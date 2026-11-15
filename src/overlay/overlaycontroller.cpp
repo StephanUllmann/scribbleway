@@ -811,16 +811,14 @@ void OverlayController::setTargetScreen(const QString &screenName)
 
     QScreen *target = screenNamed(screenName);
 
-    if (target && m_window->screen() != target) {
-        m_window->hide();
-        m_window->setScreen(target);
-        m_window->show();
-    }
-
     if (m_targetScreen != screenName) {
         m_targetScreen = screenName;
         Q_EMIT targetScreenChanged();
     }
+
+    // remapWindow() destroys the native window first; a plain setScreen() leaves it on
+    // its old output under Wayland.
+    if (target && m_window->screen() != target) remapWindow();
 }
 
 void OverlayController::enterSelectMode()
@@ -897,8 +895,11 @@ void OverlayController::setShapeLocked(int index, bool locked)
 void OverlayController::deleteShape(int index)
 {
     if (index >= 0 && index < m_shapesModel.rowCount()) {
+        // One undo step for the detach and the removal, or undo brings the shape back unattached.
+        m_shapesModel.beginEdit();
         cleanupBindingsForDelete(index);
         m_shapesModel.removeShape(index);
+        m_shapesModel.endEdit();
         if (m_selectedIndex == index) {
             m_selectedIndex = -1;
             notifySelectionChanged();
@@ -1196,37 +1197,18 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
     double minY = std::numeric_limits<double>::max();
     double maxY = std::numeric_limits<double>::lowest();
 
+    // Corners rather than QRectF::united, which drops a zero-size shape such as a lone point.
+    // A freehand stroke without points has no position, so it does not pull the centre to 0,0.
     for (const QVariantMap &shape : list) {
-        QString type = shape[QStringLiteral("type")].toString();
-        if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
-            double x = shape[QStringLiteral("x")].toDouble();
-            double y = shape[QStringLiteral("y")].toDouble();
-            double w = shape[QStringLiteral("width")].toDouble();
-            double h = shape[QStringLiteral("height")].toDouble();
-            minX = qMin(minX, x);
-            maxX = qMax(maxX, x + w);
-            minY = qMin(minY, y);
-            maxY = qMax(maxY, y + h);
-        } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
-            double fx = shape[QStringLiteral("fromX")].toDouble();
-            double tx = shape[QStringLiteral("toX")].toDouble();
-            double fy = shape[QStringLiteral("fromY")].toDouble();
-            double ty = shape[QStringLiteral("toY")].toDouble();
-            minX = qMin(minX, qMin(fx, tx));
-            maxX = qMax(maxX, qMax(fx, tx));
-            minY = qMin(minY, qMin(fy, ty));
-            maxY = qMax(maxY, qMax(fy, ty));
-        } else if (type == QStringLiteral("freehand")) {
-            const QVariantList points = shape[QStringLiteral("points")].toList();
-            for (const QVariant &pv : points) {
-                const double px = pv.toPointF().x();
-                const double py = pv.toPointF().y();
-                minX = qMin(minX, px);
-                maxX = qMax(maxX, px);
-                minY = qMin(minY, py);
-                maxY = qMax(maxY, py);
-            }
+        const QRectF r = ShapesModel::shapeBounds(shape);
+        if (shape.value(QStringLiteral("type")).toString() == QStringLiteral("freehand")
+            && shape.value(QStringLiteral("points")).toList().isEmpty()) {
+            continue;
         }
+        minX = qMin(minX, r.left());
+        maxX = qMax(maxX, r.right());
+        minY = qMin(minY, r.top());
+        maxY = qMax(maxY, r.bottom());
     }
 
     if (minX > maxX || minY > maxY) return;
@@ -1299,11 +1281,7 @@ void OverlayController::selectShapesInRect(double rx, double ry, double rw, doub
         bool intersects = false;
 
         if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
-            double sx = shape[QStringLiteral("x")].toDouble();
-            double sy = shape[QStringLiteral("y")].toDouble();
-            double sw = shape[QStringLiteral("width")].toDouble();
-            double sh = shape[QStringLiteral("height")].toDouble();
-            QRectF shapeRect(sx, sy, sw, sh);
+            const QRectF shapeRect = ShapesModel::shapeBounds(shape);
             intersects = selectRect.intersects(shapeRect) || selectRect.contains(shapeRect);
         } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
             double fx = shape[QStringLiteral("fromX")].toDouble();
@@ -1391,57 +1369,44 @@ void OverlayController::detachFromUnmoved(int index, QVariantMap &shape, const Q
 
 void OverlayController::dragSelected(double dx, double dy)
 {
-    if (m_dragStartShapes.isEmpty()) {
-        return;
+    if (!m_dragStartShapes.isEmpty()) {
+        moveShapes(m_dragStartShapes, dx, dy);
     }
-
-    m_shapesModel.beginEdit();
-    const QSet<int> draggedIndices(m_dragStartShapes.keyBegin(), m_dragStartShapes.keyEnd());
-    for (auto it = m_dragStartShapes.begin(); it != m_dragStartShapes.end(); ++it) {
-        detachFromUnmoved(it.key(), it.value(), draggedIndices);
-        QVariantMap shape = it.value();
-        translateShape(shape, dx, dy);
-        m_shapesModel.updateShape(it.key(), shape);
-    }
-
-    for (auto it = m_dragStartShapes.begin(); it != m_dragStartShapes.end(); ++it) {
-        QString type = m_shapesModel.shapes()[it.key()][QStringLiteral("type")].toString();
-        if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse")) {
-            updateBoundEndpoints(it.key(), &draggedIndices);
-        }
-    }
-
-    m_shapesModel.endEdit();
 }
 
 void OverlayController::nudgeSelected(double dx, double dy)
 {
-    QSet<int> nudgedIndices;
+    QHash<int, QVariantMap> starts;
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
         const QVariantMap &shape = m_shapesModel.shapes()[i];
         if (shape.value(QStringLiteral("selected"), false).toBool()
             && !shape.value(QStringLiteral("locked"), false).toBool()) {
-            nudgedIndices.insert(i);
+            starts.insert(i, shape);
         }
     }
+    moveShapes(starts, dx, dy);
+}
 
+// Puts each shape at its start state moved by (dx, dy), lets go of shapes left behind,
+// and drags along the arrow ends attached to moved boxes.
+void OverlayController::moveShapes(const QHash<int, QVariantMap> &starts, double dx, double dy)
+{
     m_shapesModel.beginEdit();
-    for (int idx : nudgedIndices) {
-        QVariantMap shape = m_shapesModel.shapes()[idx];
-        detachFromUnmoved(idx, shape, nudgedIndices);
+    const QSet<int> moved(starts.keyBegin(), starts.keyEnd());
+    for (auto it = starts.begin(); it != starts.end(); ++it) {
+        QVariantMap shape = it.value();
+        detachFromUnmoved(it.key(), shape, moved);
         translateShape(shape, dx, dy);
-        m_shapesModel.updateShape(idx, shape);
+        m_shapesModel.updateShape(it.key(), shape);
     }
-    for (int idx : nudgedIndices) {
-        QString type = m_shapesModel.shapes()[idx][QStringLiteral("type")].toString();
+    for (int idx : moved) {
+        const QString type = m_shapesModel.shapes()[idx][QStringLiteral("type")].toString();
         if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse")) {
-            updateBoundEndpoints(idx, &nudgedIndices);
+            updateBoundEndpoints(idx, &moved);
         }
     }
     m_shapesModel.endEdit();
 }
-
-
 
 QPointF OverlayController::nearestPointOnRect(double rx, double ry, double rw, double rh, double px, double py) const
 {

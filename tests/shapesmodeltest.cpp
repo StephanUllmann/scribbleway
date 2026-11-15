@@ -1532,6 +1532,20 @@ void ShapesModelTest::testExcalidrawSchemaEdgeCases()
     QString cbText4 = QGuiApplication::clipboard()->text();
     QJsonObject rectObj4 = QJsonDocument::fromJson(cbText4.toUtf8()).object().value(QStringLiteral("elements")).toArray().at(0).toObject();
     QVERIFY(rectObj4.value(QStringLiteral("roundness")).isNull());
+
+    // 3. The clipboard comes from any app, so wild values are bounded on the way in.
+    controller.clear();
+    QJsonObject wildRect{{QStringLiteral("type"), QStringLiteral("rectangle")}, {QStringLiteral("width"), 100.0},
+                         {QStringLiteral("height"), 100.0}, {QStringLiteral("roughness"), 50}, {QStringLiteral("strokeWidth"), 1e9}};
+    QJsonObject wildText{{QStringLiteral("type"), QStringLiteral("text")}, {QStringLiteral("text"), QStringLiteral("hi")},
+                         {QStringLiteral("fontSize"), 1e12}, {QStringLiteral("fontFamily"), 1e12}};
+    QJsonObject wild{{QStringLiteral("type"), QStringLiteral("excalidraw/clipboard")},
+                     {QStringLiteral("elements"), QJsonArray{wildRect, wildText}}};
+    QGuiApplication::clipboard()->setText(QString::fromUtf8(QJsonDocument(wild).toJson(QJsonDocument::Compact)));
+    controller.pasteFromClipboard(0.0, 0.0);
+    QCOMPARE(controller.getShape(0).value(QStringLiteral("roughness")).toInt(), 2);
+    QCOMPARE(controller.getShape(0).value(QStringLiteral("strokeWidth")).toDouble(), 50.0);
+    QCOMPARE(controller.getShape(1).value(QStringLiteral("fontSize")).toInt(), 500);
 }
 
 void ShapesModelTest::testReworkedShortcutsSlots()
@@ -2734,6 +2748,12 @@ void ShapesModelTest::testControllerUndoSteps()
     bound.createBindingsForShape(1);
     bound.selectShape(0, false);
     bound.deleteSelected();
+    bound.undo();
+    QCOMPARE(bound.shapesModel()->rowCount(), 2);
+    QVERIFY(!bound.getShape(1).value(u"endBinding"_s).toMap().isEmpty());
+
+    // The same holds for the delete button in the popup's shape list.
+    bound.deleteShape(0);
     bound.undo();
     QCOMPARE(bound.shapesModel()->rowCount(), 2);
     QVERIFY(!bound.getShape(1).value(u"endBinding"_s).toMap().isEmpty());

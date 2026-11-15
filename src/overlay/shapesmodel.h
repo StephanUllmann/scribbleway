@@ -3,6 +3,7 @@
 #include <QAbstractListModel>
 #include <QVariantMap>
 #include <QList>
+#include <QRectF>
 
 class ShapesModel : public QAbstractListModel
 {
@@ -57,6 +58,8 @@ public:
     static QVariantMap firstAttachedTextBinding(const QVariantMap &shape);
     static QVariantList withoutAttachedTextBinding(const QVariantMap &shape);
     static bool supportsAttachedText(const QString &type);
+    // The box around a shape, whatever way its type stores geometry.
+    static QRectF shapeBounds(const QVariantMap &shape);
 
     void addShape(const QVariantMap &shape);
     void updateShape(int index, const QVariantMap &properties);

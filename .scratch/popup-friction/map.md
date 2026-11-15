@@ -11,7 +11,7 @@ handed off — it decides, it does not build.
 ## Notes
 
 **Domain**: desktop UI / interaction design for a Wayland screen-annotation overlay
-(Qt6 + QML). See `CONTEXT.md` for the ubiquitous language ("Tray Popup", "Shape",
+(Qt6 + QML). See `GLOSSARY.md` for the ubiquitous language ("Tray Popup", "Shape",
 "Roughness") and `docs/adr/0001-retire-plasma-applet-unify-single-process-ui.md` for
 why the popup is plain Qt Quick Controls.
 

@@ -205,6 +205,7 @@ private:
     static void translateShape(QVariantMap &shape, double dx, double dy);
     // An arrow moved away from a shape that stayed put lets go of that shape.
     void detachFromUnmoved(int index, QVariantMap &shape, const QSet<int> &moved);
+    void moveShapes(const QHash<int, QVariantMap> &starts, double dx, double dy);
     QVariantMap makeAttachedTextBinding(const QVariantMap &shape) const;
 
     QVariantMap m_localShortcutSequences;

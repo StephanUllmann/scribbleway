@@ -1,5 +1,6 @@
 #include "shapesmodel.h"
 #include <QPointF>
+#include <QPolygonF>
 #include <QUuid>
 
 // One table behind data(), roleNames() and updateShape()'s key -> role lookup. Row order
@@ -156,12 +157,18 @@ QString ShapesModel::shapeIdAt(int index) const
     return QString();
 }
 
+// Undo and redo each keep at most this many states.
+static void pushCapped(QList<QList<QVariantMap>> &stack, const QList<QVariantMap> &state)
+{
+    stack.append(state);
+    if (stack.size() > 50) {
+        stack.removeFirst();
+    }
+}
+
 void ShapesModel::saveHistorySnapshot()
 {
-    m_history.append(m_shapes);
-    if (m_history.size() > 50) {
-        m_history.removeFirst();
-    }
+    pushCapped(m_history, m_shapes);
     // New user mutation invalidates the redo branch.
     m_redo.clear();
 }
@@ -191,10 +198,7 @@ void ShapesModel::undo()
     m_inEditTransaction = 0;
     m_isApplyingUndo = true;
     // Preserve the state we are leaving so redo can restore it.
-    m_redo.append(m_shapes);
-    if (m_redo.size() > 50) {
-        m_redo.removeFirst();
-    }
+    pushCapped(m_redo, m_shapes);
     QList<QVariantMap> previousState = m_history.takeLast();
     setShapes(previousState);
     m_isApplyingUndo = false;
@@ -208,10 +212,7 @@ void ShapesModel::redo()
     m_inEditTransaction = 0;
     m_isApplyingUndo = true;
     // Current state becomes undoable again.
-    m_history.append(m_shapes);
-    if (m_history.size() > 50) {
-        m_history.removeFirst();
-    }
+    pushCapped(m_history, m_shapes);
     QList<QVariantMap> nextState = m_redo.takeLast();
     setShapes(nextState);
     m_isApplyingUndo = false;
@@ -345,4 +346,22 @@ void ShapesModel::clear()
         m_shapes.clear();
         endResetModel();
     }
+}
+
+QRectF ShapesModel::shapeBounds(const QVariantMap &shape)
+{
+    const QString type = shape.value(QStringLiteral("type")).toString();
+    if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+        return QRectF(QPointF(shape.value(QStringLiteral("fromX")).toDouble(), shape.value(QStringLiteral("fromY")).toDouble()),
+                      QPointF(shape.value(QStringLiteral("toX")).toDouble(), shape.value(QStringLiteral("toY")).toDouble())).normalized();
+    }
+    if (type == QStringLiteral("freehand")) {
+        QPolygonF points;
+        for (const QVariant &pv : shape.value(QStringLiteral("points")).toList()) {
+            points.append(pv.toPointF());
+        }
+        return points.boundingRect();
+    }
+    return QRectF(shape.value(QStringLiteral("x")).toDouble(), shape.value(QStringLiteral("y")).toDouble(),
+                  shape.value(QStringLiteral("width")).toDouble(), shape.value(QStringLiteral("height")).toDouble());
 }

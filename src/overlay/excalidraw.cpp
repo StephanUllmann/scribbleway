@@ -4,7 +4,6 @@
 #include <QJsonArray>
 #include <QPointF>
 #include <QUuid>
-#include <limits>
 
 namespace {
 // Excalidraw numbers its fonts: 1 hand-drawn, 2 normal, 3 code.
@@ -27,9 +26,26 @@ QJsonValue bindingToJson(const QVariantMap &binding)
     }
     return QJsonObject{
         {QStringLiteral("elementId"), binding.value(QStringLiteral("elementId")).toString()},
-        {QStringLiteral("focus"), binding.value(QStringLiteral("focus")).toDouble()},
+        // shortcut: our focus is a 0..1 spot on the outline and Excalidraw's is a -1..1
+        // offset from the centre, so 0 aims the arrow at the centre; port Excalidraw's
+        // determineFocusDistance() if arrows must keep their exact aim after a move there.
+        {QStringLiteral("focus"), 0.0},
         {QStringLiteral("gap"), binding.value(QStringLiteral("gap")).toDouble()},
     };
+}
+
+// The {id, type: "text"} entry that points a container at its attached text, or none.
+QJsonArray boundTextEntry(const QVariantMap &shape)
+{
+    const QVariantMap attached = ShapesModel::firstAttachedTextBinding(shape);
+    if (attached.isEmpty() || attached.value(QStringLiteral("text")).toString().trimmed().isEmpty()) {
+        return {};
+    }
+    QString attId = attached.value(QStringLiteral("id")).toString();
+    if (attId.isEmpty()) {
+        attId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    }
+    return {QJsonObject{{QStringLiteral("id"), attId}, {QStringLiteral("type"), QStringLiteral("text")}}};
 }
 } // namespace
 
@@ -130,16 +146,8 @@ QJsonObject elementFromShape(const QVariantMap &shape)
                 beObj.insert(QStringLiteral("type"), QStringLiteral("arrow"));
                 boundArr.append(beObj);
             }
-            const QVariantMap attached = ShapesModel::firstAttachedTextBinding(shape);
-            if (!attached.isEmpty() && !attached.value(QStringLiteral("text")).toString().trimmed().isEmpty()) {
-                QString attId = attached.value(QStringLiteral("id")).toString();
-                if (attId.isEmpty()) {
-                    attId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-                }
-                QJsonObject beObj;
-                beObj.insert(QStringLiteral("id"), attId);
-                beObj.insert(QStringLiteral("type"), QStringLiteral("text"));
-                boundArr.append(beObj);
+            for (const QJsonValue &entry : boundTextEntry(shape)) {
+                boundArr.append(entry);
             }
             if (!boundArr.isEmpty()) {
                 elem.insert(QStringLiteral("boundElements"), boundArr);
@@ -163,20 +171,9 @@ QJsonObject elementFromShape(const QVariantMap &shape)
 
         elem.insert(QStringLiteral("startBinding"), bindingToJson(shape.value(QStringLiteral("startBinding")).toMap()));
         elem.insert(QStringLiteral("endBinding"), bindingToJson(shape.value(QStringLiteral("endBinding")).toMap()));
-        if (type == QStringLiteral("arrow")) {
-            const QVariantMap attached = ShapesModel::firstAttachedTextBinding(shape);
-            if (!attached.isEmpty() && !attached.value(QStringLiteral("text")).toString().trimmed().isEmpty()) {
-                QString attId = attached.value(QStringLiteral("id")).toString();
-                if (attId.isEmpty()) {
-                    attId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-                }
-                QJsonArray boundArr;
-                QJsonObject beObj;
-                beObj.insert(QStringLiteral("id"), attId);
-                beObj.insert(QStringLiteral("type"), QStringLiteral("text"));
-                boundArr.append(beObj);
-                elem.insert(QStringLiteral("boundElements"), boundArr);
-            }
+        const QJsonArray boundText = boundTextEntry(shape);
+        if (type == QStringLiteral("arrow") && !boundText.isEmpty()) {
+            elem.insert(QStringLiteral("boundElements"), boundText);
         }
     } else if (type == QStringLiteral("freehand")) {
         QVariantList pointsList = shape.value(QStringLiteral("points")).toList();
@@ -184,36 +181,16 @@ QJsonObject elementFromShape(const QVariantMap &shape)
             return elem;
         }
         
-        double minX = std::numeric_limits<double>::max();
-        double maxX = std::numeric_limits<double>::lowest();
-        double minY = std::numeric_limits<double>::max();
-        double maxY = std::numeric_limits<double>::lowest();
-        
-        QList<QPointF> qpts;
-        for (const QVariant &v : pointsList) {
-            const QPointF p = v.toPointF();
-            qpts.append(p);
-            minX = qMin(minX, p.x());
-            maxX = qMax(maxX, p.x());
-            minY = qMin(minY, p.y());
-            maxY = qMax(maxY, p.y());
-        }
-        
-        if (qpts.isEmpty()) {
-            return elem;
-        }
-        
-        elem.insert(QStringLiteral("x"), minX);
-        elem.insert(QStringLiteral("y"), minY);
-        elem.insert(QStringLiteral("width"), maxX - minX);
-        elem.insert(QStringLiteral("height"), maxY - minY);
-        
+        const QRectF bounds = ShapesModel::shapeBounds(shape);
+        elem.insert(QStringLiteral("x"), bounds.x());
+        elem.insert(QStringLiteral("y"), bounds.y());
+        elem.insert(QStringLiteral("width"), bounds.width());
+        elem.insert(QStringLiteral("height"), bounds.height());
+
         QJsonArray pts;
-        for (const QPointF &p : qpts) {
-            QJsonArray ptVal;
-            ptVal.append(p.x() - minX);
-            ptVal.append(p.y() - minY);
-            pts.append(ptVal);
+        for (const QVariant &v : pointsList) {
+            const QPointF p = v.toPointF() - bounds.topLeft();
+            pts.append(QJsonArray{p.x(), p.y()});
         }
         elem.insert(QStringLiteral("points"), pts);
     }
@@ -269,7 +246,7 @@ QJsonObject attachedTextElement(const QVariantMap &shape, const QVariantMap &att
         width = shape.value(QStringLiteral("width")).toDouble();
         height = shape.value(QStringLiteral("height")).toDouble();
         elem.insert(QStringLiteral("containerId"), shape.value(QStringLiteral("id")).toString());
-    } else if (containerType == QStringLiteral("arrow")) {
+    } else if (containerType == QStringLiteral("arrow") || containerType == QStringLiteral("line")) {
         const double fromX = shape.value(QStringLiteral("fromX")).toDouble();
         const double fromY = shape.value(QStringLiteral("fromY")).toDouble();
         const double toX = shape.value(QStringLiteral("toX")).toDouble();
@@ -277,19 +254,15 @@ QJsonObject attachedTextElement(const QVariantMap &shape, const QVariantMap &att
         width = qMax(80.0, qAbs(toX - fromX) * 0.7);
         x = (fromX + toX) / 2.0 - width / 2.0;
         y = (fromY + toY) / 2.0 - height / 2.0;
-        elem.insert(QStringLiteral("containerId"), shape.value(QStringLiteral("id")).toString());
-    } else if (containerType == QStringLiteral("line")) {
-        const double fromX = shape.value(QStringLiteral("fromX")).toDouble();
-        const double fromY = shape.value(QStringLiteral("fromY")).toDouble();
-        const double toX = shape.value(QStringLiteral("toX")).toDouble();
-        const double toY = shape.value(QStringLiteral("toY")).toDouble();
-        width = qMax(80.0, qAbs(toX - fromX) * 0.7);
-        x = (fromX + toX) / 2.0 - width / 2.0;
-        y = (fromY + toY) / 2.0 - height / 2.0;
-        elem.insert(QStringLiteral("containerId"), QString());
-        elem.insert(QStringLiteral("customData"), QJsonObject{
-            {QStringLiteral("scribbleway"), QJsonObject{{QStringLiteral("attachedTextFor"), shape.value(QStringLiteral("id")).toString()}}}
-        });
+        if (containerType == QStringLiteral("arrow")) {
+            elem.insert(QStringLiteral("containerId"), shape.value(QStringLiteral("id")).toString());
+        } else {
+            // Excalidraw lines cannot contain text, so the link travels in customData.
+            elem.insert(QStringLiteral("containerId"), QString());
+            elem.insert(QStringLiteral("customData"), QJsonObject{
+                {QStringLiteral("scribbleway"), QJsonObject{{QStringLiteral("attachedTextFor"), shape.value(QStringLiteral("id")).toString()}}}
+            });
+        }
     }
 
     elem.insert(QStringLiteral("x"), x);
@@ -317,14 +290,15 @@ QVariantMap shapeFromElement(const QJsonObject &elem)
         strokeColor = QStringLiteral("#e63946");
     }
     shape.insert(QStringLiteral("color"), strokeColor);
-    shape.insert(QStringLiteral("strokeWidth"), elem.value(QStringLiteral("strokeWidth")).toDouble(1.0));
+    // The clipboard can hold anything from any app, so these are bounded like the UI bounds them.
+    shape.insert(QStringLiteral("strokeWidth"), qBound(1.0, elem.value(QStringLiteral("strokeWidth")).toDouble(1.0), 50.0));
     
     double opacityInt = elem.value(QStringLiteral("opacity")).toDouble(100.0);
     shape.insert(QStringLiteral("opacity"), opacityInt / 100.0);
     
     shape.insert(QStringLiteral("selected"), true);
     shape.insert(QStringLiteral("locked"), false);
-    shape.insert(QStringLiteral("roughness"), elem.value(QStringLiteral("roughness")).toInt(1));
+    shape.insert(QStringLiteral("roughness"), qBound(0, elem.value(QStringLiteral("roughness")).toInt(1), 2));
     shape.insert(QStringLiteral("glow"), elem.value(QStringLiteral("glow")).toInt(0)); // Default to 0px
     shape.insert(QStringLiteral("seed"), elem.value(QStringLiteral("seed")).toInt(123456));
     {
@@ -363,13 +337,14 @@ QVariantMap shapeFromElement(const QJsonObject &elem)
         
         if (type == QStringLiteral("rectangle")) {
             QJsonValue rv = elem.value(QStringLiteral("roundness"));
-            int radius = rv.isObject() ? static_cast<int>(rv.toObject().value(QStringLiteral("value")).toDouble(8.0)) : (rv.isNull() ? 0 : 8);
+            int radius = rv.isObject() ? static_cast<int>(qBound(0.0, rv.toObject().value(QStringLiteral("value")).toDouble(8.0), 500.0)) : (rv.isNull() ? 0 : 8);
             shape.insert(QStringLiteral("borderRadius"), radius);
         } else if (type == QStringLiteral("text")) {
             shape.insert(QStringLiteral("text"), elem.value(QStringLiteral("text")).toString());
-            shape.insert(QStringLiteral("fontSize"), static_cast<int>(elem.value(QStringLiteral("fontSize")).toDouble(20.0)));
+            // Bounded before the cast: casting an out-of-range double to int is undefined.
+            shape.insert(QStringLiteral("fontSize"), static_cast<int>(qBound(1.0, elem.value(QStringLiteral("fontSize")).toDouble(20.0), 500.0)));
             
-            int excalFont = static_cast<int>(elem.value(QStringLiteral("fontFamily")).toDouble(2.0));
+            const double excalFont = elem.value(QStringLiteral("fontFamily")).toDouble(2.0);
             QString family;
             if (excalFont == 3) {
                 family = QStringLiteral("monospace");

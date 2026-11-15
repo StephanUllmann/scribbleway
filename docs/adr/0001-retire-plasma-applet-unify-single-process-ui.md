@@ -2,7 +2,7 @@
 
 Scribbleway is expanding from KDE Plasma-only to also run for colleagues on Arch/Hyprland and macOS. The current two-process architecture (Plasma applet process ↔ overlay daemon, bridged by `AppletBackend` over D-Bus) exists only because Plasma hosts applets in a process separate from the app itself — a constraint that doesn't exist, and can't be replicated, on Hyprland or macOS.
 
-**Decision**: retire the Plasma applet entirely, including on KDE/Plasma builds. Replace it with one `QSystemTrayIcon` + anchored `Controls.Popup` UI ("Tray Popup" — see `CONTEXT.md`), living in the same process as the overlay, shared across every platform. Single-instance enforcement moves from `KDBusService` (KDE Frameworks/D-Bus) to Qt's own `QLocalServer`/`QLocalSocket`.
+**Decision**: retire the Plasma applet entirely, including on KDE/Plasma builds. Replace it with one `QSystemTrayIcon` + anchored `Controls.Popup` UI ("Tray Popup" — see `GLOSSARY.md`), living in the same process as the overlay, shared across every platform. Single-instance enforcement moves from `KDBusService` (KDE Frameworks/D-Bus) to Qt's own `QLocalServer`/`QLocalSocket`.
 
 **Why**: maintaining a native Plasma widget *and* a second UI for every other platform means building, testing, and evolving two UIs forever, with a real risk of them drifting apart. One UI built once is simpler to maintain, at the cost of losing the "looks like a native Plasma panel widget" feel on the KDE/Plasma build.
 
