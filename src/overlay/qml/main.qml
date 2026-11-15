@@ -295,7 +295,9 @@ Window {
     MouseArea {
         id: drawMouseArea
         anchors.fill: parent
-        enabled: activeDrawTool !== "" && !textEditor.visible
+        // visible, not enabled: a disabled MouseArea still wins the cursor lookup, so this
+        // full-window layer would hide every shape's handle and move cursor beneath it.
+        visible: activeDrawTool !== "" && !textEditor.visible
         hoverEnabled: true
         cursorShape: canvasWindow.cursorForDrawTool(activeDrawTool)
 

@@ -83,6 +83,7 @@ private Q_SLOTS:
     void testLockedShapesStayOutOfGroups();
     void testDraggedArrowLetsGo();
     void testCopyPasteKeepsFonts();
+    void testResizeHandleCursors();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -2914,3 +2915,43 @@ void ShapesModelTest::testCopyPasteKeepsFonts()
     target.pasteFromClipboard(100.0, 100.0);
     QCOMPARE(target.attachedTextForShape(0).value(u"fontFamily"_s).toString(), u"monospace"_s);
 }
+
+// Hovering a resize handle shows the resize cursor for that direction, not the move hand.
+void ShapesModelTest::testResizeHandleCursors()
+{
+    OverlayController c;
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty(u"controller"_s, &c);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
+    QScopedPointer<QObject> root(component.create());
+    QVERIFY2(root, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(root.data());
+    QVERIFY(window);
+    window->resize(800, 600);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+
+    c.enterSelectMode();
+    c.addShape(box(100.0, 100.0, 200.0, 100.0));
+    c.selectShape(0, false);
+
+    const struct { QPoint pos; Qt::CursorShape shape; } cases[] = {
+        {{100, 100}, Qt::SizeFDiagCursor}, {{200, 100}, Qt::SizeVerCursor},
+        {{300, 100}, Qt::SizeBDiagCursor}, {{300, 150}, Qt::SizeHorCursor},
+        {{300, 200}, Qt::SizeFDiagCursor}, {{200, 200}, Qt::SizeVerCursor},
+        {{100, 200}, Qt::SizeBDiagCursor}, {{100, 150}, Qt::SizeHorCursor},
+        // Just outside and just inside the corner, both still on the handle.
+        {{97, 97}, Qt::SizeFDiagCursor}, {{103, 103}, Qt::SizeFDiagCursor},
+        {{200, 150}, Qt::OpenHandCursor},
+    };
+    for (const auto &tc : cases) {
+        QTest::mouseMove(window, tc.pos);
+        QCOMPARE(window->cursor().shape(), tc.shape);
+    }
+
+    // With a draw tool picked, the drawing layer covers the shapes again.
+    c.setActiveTool(u"rectangle"_s);
+    QTest::mouseMove(window, QPoint(100, 100));
+    QCOMPARE(window->cursor().shape(), Qt::CrossCursor);
+}
+
