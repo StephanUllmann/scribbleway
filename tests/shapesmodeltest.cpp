@@ -5,6 +5,8 @@
 #include "shapesmodel.h"
 #include "overlaycontroller.h"
 #include "singleinstance.h"
+#include "devlog.h"
+#include <QTemporaryDir>
 #include <QFontDatabase>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -28,6 +30,7 @@ private Q_SLOTS:
     void initTestCase();
     void cleanupTestCase();
     void testAddShapeUndo();
+    void testDevLogPruneKeepsAWeek();
     void testRemoveShapeUndo();
     void testClearUndo();
     void testSelectionNoHistory();
@@ -1944,6 +1947,26 @@ void ShapesModelTest::testStableShapeIds()
     // After move: index 0 = rect2 (id2), index 1 = rect (id1), index 2 = rect3
     QCOMPARE(model.shapeIdAt(0), id2);
     QCOMPARE(model.shapeIdAt(1), id1);
+}
+
+void ShapesModelTest::testDevLogPruneKeepsAWeek()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QDir dir(tmp.path());
+    const QDate today(2026, 11, 16);
+    for (int age : {0, 7, 8, 30}) {
+        QFile f(dir.filePath(today.addDays(-age).toString(Qt::ISODate) + QStringLiteral(".log")));
+        QVERIFY(f.open(QIODevice::WriteOnly));
+    }
+    QFile other(dir.filePath(QStringLiteral("notes.log")));
+    QVERIFY(other.open(QIODevice::WriteOnly));
+
+    DevLog::prune(dir, today);
+
+    QStringList left = dir.entryList({QStringLiteral("*.log")}, QDir::Files, QDir::Name);
+    QCOMPARE(left, QStringList({QStringLiteral("2026-11-09.log"), QStringLiteral("2026-11-16.log"),
+                                QStringLiteral("notes.log")}));
 }
 
 QTEST_MAIN(ShapesModelTest)

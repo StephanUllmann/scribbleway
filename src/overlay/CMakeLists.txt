@@ -8,6 +8,8 @@ qt_add_executable(scribbleway-overlay
     excalidraw.cpp
     shapesmodel.h
     shapesmodel.cpp
+    devlog.h
+    devlog.cpp
 )
 
 qt_policy(SET QTP0004 NEW)
@@ -71,6 +73,16 @@ target_link_libraries(scribbleway-overlay PRIVATE
 if(LayerShellQt_VERSION VERSION_GREATER_EQUAL 6.6)
     target_compile_definitions(scribbleway-overlay PRIVATE HAVE_LAYERSHELL_ACTIVE_SCREEN)
 endif()
+
+# For the --dev log header. Read at configure time, so it can lag behind an incremental
+# build; dev-reinstall.sh reconfigures from scratch. Tarball builds fall back to the version.
+execute_process(COMMAND git describe --always --dirty
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                OUTPUT_VARIABLE SCRIBBLEWAY_GIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT SCRIBBLEWAY_GIT)
+    set(SCRIBBLEWAY_GIT ${PROJECT_VERSION})
+endif()
+target_compile_definitions(scribbleway-overlay PRIVATE SCRIBBLEWAY_BUILD="${SCRIBBLEWAY_GIT}")
 
 # Install executable to standard bin directory
 install(TARGETS scribbleway-overlay DESTINATION ${KDE_INSTALL_BINDIR})

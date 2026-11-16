@@ -10,6 +10,8 @@ add_executable(shapesmodeltest
     ../src/overlay/excalidraw.h
     ../src/overlay/excalidraw.cpp
     ../src/overlay/singleinstance.h
+    ../src/overlay/devlog.h
+    ../src/overlay/devlog.cpp
 )
 
 target_compile_definitions(shapesmodeltest PRIVATE

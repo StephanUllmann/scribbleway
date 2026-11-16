@@ -13,6 +13,7 @@
 #include <QRect>
 #include <QTimer>
 #include <QDebug>
+#include <QDir>
 
 #include <LayerShellQt/Shell>
 #include <LayerShellQt/Window>
@@ -20,6 +21,7 @@
 
 #include <signal.h>
 
+#include "devlog.h"
 #include "overlaycontroller.h"
 #include "singleinstance.h"
 
@@ -38,20 +40,46 @@ int main(int argc, char *argv[])
     app.setDesktopFileName(QStringLiteral("org.kde.scribbleway"));
 
     const bool toggleRequest = app.arguments().contains(QStringLiteral("--toggle"));
+    const bool markRequest = app.arguments().contains(QStringLiteral("--mark"));
+    const bool devMode = app.arguments().contains(QStringLiteral("--dev"));
 
     // In the per-user runtime directory: a bare name lands in /tmp, shared by every user.
     SingleInstanceGuard instanceGuard(QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation)
                                       + QStringLiteral("/scribbleway.sock"));
-    if (!instanceGuard.tryAcquire(toggleRequest ? QByteArray("toggle") : QByteArray())) {
+    const QByteArray handoff = markRequest ? QByteArray("mark") : toggleRequest ? QByteArray("toggle") : QByteArray();
+    if (!instanceGuard.tryAcquire(handoff)) {
         if (!instanceGuard.foundRunningInstance()) {
             qCritical() << "Cannot open the single-instance socket:" << instanceGuard.server()->errorString();
             return 1;
         }
-        if (!toggleRequest) {
+        if (devMode) {
+            qWarning() << "Scribbleway is already running; quit it first to restart it with --dev.";
+        } else if (handoff.isEmpty()) {
             qWarning() << "Scribbleway is already running.";
         }
         return 0;
     }
+    if (markRequest) {
+        qWarning() << "Scribbleway isn't running, so there is no log to mark.";
+        return 0;
+    }
+
+    // Installed only after winning the instance check, so a second launch that just
+    // hands off --toggle or --mark doesn't write into the running instance's log.
+    if (devMode) {
+        QString stateDir = qEnvironmentVariable("XDG_STATE_HOME");
+        if (stateDir.isEmpty()) stateDir = QDir::homePath() + QStringLiteral("/.local/state");
+        DevLog::install(stateDir + QStringLiteral("/scribbleway/logs"));
+        qCInfo(lcDev).noquote() << "=== session start: scribbleway" << SCRIBBLEWAY_BUILD
+                                << "pid" << QCoreApplication::applicationPid();
+        qCInfo(lcDev).noquote() << "Qt" << qVersion() << "platform" << QGuiApplication::platformName()
+                                << "desktop" << qEnvironmentVariable("XDG_CURRENT_DESKTOP")
+                                << "session" << qEnvironmentVariable("XDG_SESSION_TYPE");
+        DevLog::logScreens("startup");
+    }
+    // Numbered so a bug report can say "after mark 3".
+    int markCount = 0;
+    auto mark = [&markCount]() { qCInfo(lcDev).noquote() << "--- MARK" << ++markCount << "---"; };
 
     OverlayController controller;
 
@@ -81,15 +109,25 @@ int main(int argc, char *argv[])
     };
     QObject::connect(actionActivateSelect, &QAction::triggered, &controller, toggleMode);
 
+    // Only registered in dev mode, so a normal install doesn't claim another global key.
+    if (devMode) {
+        QAction *actionMark = setupGlobalAction(QStringLiteral("action_dev_mark"), QStringLiteral("Mark the Dev Log"),
+                                                {QKeySequence(QStringLiteral("Meta+Shift+M"))});
+        QObject::connect(actionMark, &QAction::triggered, &app, mark);
+    }
+
     // KGlobalAccel is inert outside Plasma, so `scribbleway-overlay --toggle` re-uses the
     // single-instance socket as the entry point other compositors can bind:
     //   bind = SUPER SHIFT, X, exec, scribbleway-overlay --toggle
-    QObject::connect(instanceGuard.server(), &QLocalServer::newConnection, &app, [&instanceGuard, toggleMode]() {
+    QObject::connect(instanceGuard.server(), &QLocalServer::newConnection, &app, [&instanceGuard, toggleMode, mark]() {
         QLocalSocket *client = instanceGuard.server()->nextPendingConnection();
         if (!client) return;
-        QObject::connect(client, &QLocalSocket::readyRead, client, [client, toggleMode]() {
-            if (client->readAll().startsWith("toggle")) {
+        QObject::connect(client, &QLocalSocket::readyRead, client, [client, toggleMode, mark]() {
+            const QByteArray request = client->readAll();
+            if (request.startsWith("toggle")) {
                 toggleMode();
+            } else if (request.startsWith("mark")) {
+                mark();
             }
         });
         QObject::connect(client, &QLocalSocket::disconnected, client, &QLocalSocket::deleteLater);
@@ -116,6 +154,7 @@ int main(int argc, char *argv[])
             // Geometry, not setScreen(): see OverlayController::remapWindow().
             window->setGeometry(QGuiApplication::primaryScreen()->geometry());
             controller.setWindow(window);
+            qCInfo(lcDev) << "overlay placed on" << window->screen()->name() << window->geometry();
             
             // Apply LayerShell configuration
             if (auto *layerWindow = LayerShellQt::Window::get(window)) {
@@ -150,6 +189,12 @@ int main(int argc, char *argv[])
     remapTimer.setSingleShot(true);
     remapTimer.setInterval(500);
     QObject::connect(&remapTimer, &QTimer::timeout, &controller, &OverlayController::remapWindow);
+    QObject::connect(&app, &QGuiApplication::screenAdded, &app,
+                     [](QScreen *s) { qCInfo(lcDev) << "screen added:" << s->name(); });
+    QObject::connect(&app, &QGuiApplication::screenRemoved, &app,
+                     [](QScreen *s) { qCInfo(lcDev) << "screen removed:" << s->name(); });
+    QObject::connect(&app, &QGuiApplication::primaryScreenChanged, &app,
+                     [](QScreen *s) { qCInfo(lcDev) << "primary screen now:" << (s ? s->name() : QString()); });
     QObject::connect(&app, &QGuiApplication::screenAdded, &remapTimer, qOverload<>(&QTimer::start));
     QObject::connect(&app, &QGuiApplication::screenRemoved, &remapTimer, qOverload<>(&QTimer::start));
     QObject::connect(&app, &QGuiApplication::primaryScreenChanged, &remapTimer, qOverload<>(&QTimer::start));

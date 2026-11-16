@@ -12,6 +12,7 @@ PREFIX="${PREFIX:-$HOME/.local}"
 BUILD_DIR="build"
 BUILD_TYPE="${BUILD_TYPE:-Debug}"
 RESTART_OVERLAY=true
+DEV_FLAG=""
 
 print_usage() {
     echo "Usage: ./dev-reinstall.sh [options]"
@@ -20,6 +21,7 @@ print_usage() {
     echo "  --system            Install to /usr/local (requires sudo for install)"
     echo "  --release           Build in Release mode instead of Debug"
     echo "  --no-overlay        Do not start scribbleway-overlay after install"
+    echo "  --dev               Run (and autostart) with --dev: keeps a week of logs"
     echo "  --help              Show this help message"
 }
 
@@ -39,6 +41,10 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --no-overlay)
             RESTART_OVERLAY=false
+            shift
+            ;;
+        --dev)
+            DEV_FLAG=" --dev"
             shift
             ;;
         --help)
@@ -146,7 +152,7 @@ if [ "$PREFIX" = "$HOME/.local" ]; then
         chmod +x "$HOME/.local/share/applications/org.kde.scribbleway.desktop"
     fi
     if [ -f org.kde.scribbleway-autostart.desktop ]; then
-        sed "s#Exec=scribbleway-overlay#Exec=\"$HOME/.local/bin/scribbleway-overlay\"#g" org.kde.scribbleway-autostart.desktop > "$HOME/.config/autostart/org.kde.scribbleway-autostart.desktop"
+        sed "s#Exec=scribbleway-overlay#Exec=\"$HOME/.local/bin/scribbleway-overlay\"$DEV_FLAG#g" org.kde.scribbleway-autostart.desktop > "$HOME/.config/autostart/org.kde.scribbleway-autostart.desktop"
         chmod +x "$HOME/.config/autostart/org.kde.scribbleway-autostart.desktop"
     fi
 fi
@@ -162,7 +168,7 @@ if [ "$RESTART_OVERLAY" = true ]; then
 
     if [ -n "$OVERLAY_BIN" ]; then
         echo "Starting $OVERLAY_BIN..."
-        nohup "$OVERLAY_BIN" >/dev/null 2>&1 &
+        nohup "$OVERLAY_BIN"$DEV_FLAG >/dev/null 2>&1 &
         echo "Scribbleway overlay daemon started (PID $!)."
     else
         echo "Notice: scribbleway-overlay binary not found in PATH or $PREFIX/bin."

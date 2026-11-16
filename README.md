@@ -109,6 +109,19 @@ To run unit tests:
 ctest --test-dir build --output-on-failure
 ```
 
+### Dev Mode Logs
+
+Start the daemon with `--dev` (or install with `./dev-reinstall.sh --dev`, which
+also adds the flag to the autostart entry) to keep a log of what Scribbleway
+does: screen changes, overlay placement, mode and keyboard-focus changes, shapes
+added, moved, deleted and bound, and every Qt and QML warning. It writes one
+file per day to `~/.local/state/scribbleway/logs/` and deletes files older than
+seven days. Text you type and clipboard contents are never logged.
+
+When something goes wrong, drop a numbered `--- MARK n ---` line into the log
+with `Meta+Shift+M` (Plasma) or `scribbleway-overlay --mark` (bind it like
+`--toggle` on other compositors), then describe the bug as "right after mark n".
+
 ### Running on Hyprland (or other non-Plasma Wayland compositors)
 
 Scribbleway's controls live in a system tray popup, which requires a running

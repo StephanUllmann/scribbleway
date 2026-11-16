@@ -17,6 +17,7 @@ static const QStringList kPresetColors = {
 #include <QScreen>
 #include <QGuiApplication>
 #include <QUuid>
+#include "devlog.h"
 #include "excalidraw.h"
 #include <QClipboard>
 #include <QJsonDocument>
@@ -29,6 +30,17 @@ static const QStringList kPresetColors = {
 #include <limits>
 #include <numbers>
 #include <utility>
+
+// What the dev log says about a shape: type, short id and bounds. Never its text or its
+// points, which can hold whatever was on screen.
+static QString describeShape(const QVariantMap &shape)
+{
+    const QRectF b = ShapesModel::shapeBounds(shape);
+    return QStringLiteral("%1 %2 (%3,%4 %5x%6)")
+        .arg(shape.value(QStringLiteral("type")).toString(),
+             shape.value(QStringLiteral("id")).toString().left(8))
+        .arg(qRound(b.x())).arg(qRound(b.y())).arg(qRound(b.width())).arg(qRound(b.height()));
+}
 
 OverlayController::OverlayController(QObject *parent)
     : QObject(parent)
@@ -57,6 +69,10 @@ OverlayController::OverlayController(QObject *parent)
         m_localShortcutSequences.insert(QLatin1String(id),
             settings.value(QStringLiteral("local/") + QLatin1String(id), QString::fromUtf8(sequence)).toString());
     }
+
+    // The mode changes in several places; one listener logs them all.
+    connect(this, &OverlayController::modeChanged, this,
+            [](const QString &mode) { qCInfo(lcDev).noquote() << "mode:" << mode; });
 }
 
 QQuickWindow* OverlayController::window() const
@@ -276,6 +292,7 @@ void OverlayController::addShape(const QVariantMap &shape)
 {
     m_shapesModel.beginEdit();
     m_shapesModel.addShape(shape);
+    qCInfo(lcDev).noquote() << "add" << describeShape(m_shapesModel.shapes().last());
     setSelectedIndex(m_shapesModel.rowCount() - 1);
     m_shapesModel.endEdit();
 }
@@ -519,6 +536,7 @@ void OverlayController::updateInputMask(const QVariantList &rects)
 void OverlayController::setPopupExclusion(const QRect &rect)
 {
     if (m_popupExclusion == rect) return;
+    qCInfo(lcDev) << "popup exclusion:" << rect;
     m_popupExclusion = rect;
     applyInputMask();
 }
@@ -543,6 +561,7 @@ void OverlayController::applyInputMask()
         return;
     }
     m_lastInputMask = region;
+    qCInfo(lcDev) << "input mask:" << region.rectCount() << "rect(s), bounds" << region.boundingRect();
     m_window->setMask(region);
 }
 
@@ -711,6 +730,7 @@ void OverlayController::updateProperties(const QVariantMap &properties)
 void OverlayController::undo()
 {
     m_shapesModel.undo();
+    qCInfo(lcDev) << "undo, shapes now" << m_shapesModel.rowCount();
     setSelectedIndex(-1);
     notifySelectionChanged();
 }
@@ -718,12 +738,14 @@ void OverlayController::undo()
 void OverlayController::redo()
 {
     m_shapesModel.redo();
+    qCInfo(lcDev) << "redo, shapes now" << m_shapesModel.rowCount();
     setSelectedIndex(-1);
     notifySelectionChanged();
 }
 
 void OverlayController::clear()
 {
+    qCInfo(lcDev) << "clear" << m_shapesModel.rowCount() << "shape(s)";
     m_shapesModel.clear();
     m_selectedIndex = -1;
     notifySelectionChanged();
@@ -742,6 +764,15 @@ void OverlayController::beginEdit()
 
 void OverlayController::endEdit()
 {
+    // One line per drag or resize, at its end, rather than one per mouse move.
+    for (auto it = m_dragStartShapes.cbegin(); it != m_dragStartShapes.cend(); ++it) {
+        if (it.key() >= m_shapesModel.rowCount()) continue;
+        const QVariantMap &now = m_shapesModel.shapes().at(it.key());
+        if (now.value(QStringLiteral("id")) == it.value().value(QStringLiteral("id"))
+            && ShapesModel::shapeBounds(now) != ShapesModel::shapeBounds(it.value())) {
+            qCInfo(lcDev).noquote() << "edit" << describeShape(it.value()) << "->" << describeShape(now);
+        }
+    }
     m_shapesModel.endEdit();
 }
 
@@ -760,6 +791,7 @@ void OverlayController::setTrayPopupOpen(bool open)
 {
     if (m_trayPopupOpen == open) return;
     m_trayPopupOpen = open;
+    qCInfo(lcDev) << "tray popup" << (open ? "open" : "closed");
     if (!open) setPopupWantsKeyboard(false);
     Q_EMIT trayPopupOpenChanged();
 }
@@ -777,6 +809,7 @@ void OverlayController::setPopupWantsKeyboard(bool wants)
 {
     if (m_popupWantsKeyboard == wants) return;
     m_popupWantsKeyboard = wants;
+    qCInfo(lcDev) << "popup wants keyboard:" << wants;
     applyKeyboardInteractivity();
     Q_EMIT popupWantsKeyboardChanged();
 }
@@ -839,7 +872,9 @@ void OverlayController::remapWindow()
     // position, and a stale (0,0) lands on whichever screen sits at the top left.
     m_window->setGeometry((target ? target : QGuiApplication::primaryScreen())->geometry());
     m_window->show();
-    qInfo() << "overlay remapped to" << m_window->screen()->name();
+    qInfo() << "overlay remapped to" << m_window->screen()->name() << "wanted" << m_targetScreen
+            << m_window->geometry();
+    DevLog::logScreens("after remap");
 }
 
 void OverlayController::setTargetScreen(const QString &screenName)
@@ -847,6 +882,7 @@ void OverlayController::setTargetScreen(const QString &screenName)
     if (!m_window || screenName.isEmpty()) return;
 
     QScreen *target = screenNamed(screenName);
+    qCInfo(lcDev) << "target screen chosen:" << screenName << (target ? "" : "(not found)");
 
     if (m_targetScreen != screenName) {
         m_targetScreen = screenName;
@@ -933,6 +969,7 @@ void OverlayController::deleteShape(int index)
 {
     if (index >= 0 && index < m_shapesModel.rowCount()) {
         // One undo step for the detach and the removal, or undo brings the shape back unattached.
+        qCInfo(lcDev).noquote() << "delete" << describeShape(m_shapesModel.shapes().at(index));
         m_shapesModel.beginEdit();
         cleanupBindingsForDelete(index);
         m_shapesModel.removeShape(index);
@@ -1135,6 +1172,7 @@ void OverlayController::copySelected()
         rootObj.insert(QStringLiteral("type"), QStringLiteral("excalidraw/clipboard"));
         rootObj.insert(QStringLiteral("elements"), elements);
         QJsonDocument doc(rootObj);
+        qCInfo(lcDev) << "copy" << elements.size() << "element(s)";
         QGuiApplication::clipboard()->setText(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
     }
 }
@@ -1268,6 +1306,7 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
         pastedIndices.append(m_shapesModel.rowCount() - 1);
     }
 
+    qCInfo(lcDev) << "paste" << pastedIndices.size() << "shape(s)";
     if (!pastedIndices.isEmpty()) {
         m_selectedIndex = pastedIndices.last();
     }
@@ -1711,6 +1750,8 @@ void OverlayController::createBindingsForShape(int lineIndex)
         addBackReference(endHit.targetId, lineId);
     }
 
+    qCInfo(lcDev).noquote() << "bind" << lineId.left(8) << "start ->" << startHit.targetId.left(8)
+                            << "end ->" << endHit.targetId.left(8);
     if (!updates.isEmpty()) {
         m_shapesModel.updateShape(lineIndex, updates);
     }
@@ -1763,6 +1804,8 @@ void OverlayController::breakEndpointBinding(int lineIndex, bool isStart)
     if (binding.isEmpty()) return;
 
     QString targetId = binding.value(QStringLiteral("elementId")).toString();
+    qCInfo(lcDev).noquote() << "unbind" << lineId.left(8) << (isStart ? "start" : "end")
+                            << "from" << targetId.left(8);
     removeBackReference(targetId, lineId);
 
     m_shapesModel.updateShape(lineIndex, {{bindingKey, QVariantMap()}});
@@ -1821,6 +1864,8 @@ void OverlayController::resnapEndpoint(int lineIndex, bool isStart)
 
     BindingHit hit = findSnapTarget(px, py, lineIndex);
     if (!hit.valid) return;
+    qCInfo(lcDev).noquote() << "resnap" << lineShape.value(QStringLiteral("id")).toString().left(8)
+                            << (isStart ? "start" : "end") << "to" << hit.targetId.left(8);
 
     QString lineId = lineShape.value(QStringLiteral("id")).toString();
     QString bindingKey = isStart ? QStringLiteral("startBinding") : QStringLiteral("endBinding");
