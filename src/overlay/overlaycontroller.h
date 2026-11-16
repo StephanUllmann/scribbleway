@@ -217,6 +217,7 @@ private:
     ShapesModel m_shapesModel;
     int m_selectedIndex = -1;
     QHash<int, QVariantMap> m_dragStartShapes;
+    QList<QVariantMap> m_editStartShapes; // the whole model at beginEdit(), for the dev log
     QSet<int> m_preDragSelection;
 
     QString m_activeTool;

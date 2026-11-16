@@ -23,6 +23,13 @@ Window {
     }
     property bool isDrawing: false
     property bool shapesHidden: false
+    onShapesHiddenChanged: console.info(devLog, "shapes", shapesHidden ? "hidden" : "shown")
+    // Same category as the C++ dev lines, so it is silent unless the app runs with --dev.
+    LoggingCategory {
+        id: devLog
+        name: "scribbleway.dev"
+        defaultLogLevel: LoggingCategory.Warning
+    }
     property string previousMode: controller.currentMode
     property point drawStartPoint: Qt.point(0, 0)
     property var activePoints: []

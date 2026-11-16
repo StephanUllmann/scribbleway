@@ -31,15 +31,19 @@ static const QStringList kPresetColors = {
 #include <numbers>
 #include <utility>
 
-// What the dev log says about a shape: type, short id and bounds. Never its text or its
-// points, which can hold whatever was on screen.
+// What the dev log says about a shape: type, short id and bounds, or both endpoints for
+// a line or arrow. Never its text or its points, which can hold whatever was on screen.
 static QString describeShape(const QVariantMap &shape)
 {
+    const QString type = shape.value(QStringLiteral("type")).toString();
+    const QString head = type + QLatin1Char(' ') + shape.value(QStringLiteral("id")).toString().left(8);
+    auto n = [&shape](const char *key) { return QString::number(qRound(shape.value(QLatin1String(key)).toDouble())); };
+    if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
+        return QStringLiteral("%1 (%2,%3)->(%4,%5)").arg(head, n("fromX"), n("fromY"), n("toX"), n("toY"));
+    }
     const QRectF b = ShapesModel::shapeBounds(shape);
-    return QStringLiteral("%1 %2 (%3,%4 %5x%6)")
-        .arg(shape.value(QStringLiteral("type")).toString(),
-             shape.value(QStringLiteral("id")).toString().left(8))
-        .arg(qRound(b.x())).arg(qRound(b.y())).arg(qRound(b.width())).arg(qRound(b.height()));
+    return QStringLiteral("%1 (%2,%3 %4x%5)")
+        .arg(head).arg(qRound(b.x())).arg(qRound(b.y())).arg(qRound(b.width())).arg(qRound(b.height()));
 }
 
 OverlayController::OverlayController(QObject *parent)
@@ -72,7 +76,10 @@ OverlayController::OverlayController(QObject *parent)
 
     // The mode changes in several places; one listener logs them all.
     connect(this, &OverlayController::modeChanged, this,
-            [](const QString &mode) { qCInfo(lcDev).noquote() << "mode:" << mode; });
+            [](const QString &mode) {
+                qCInfo(lcDev).noquote() << "mode:" << mode
+                                        << (mode == QStringLiteral("passthrough") ? "(click-through)" : "");
+            });
 }
 
 QQuickWindow* OverlayController::window() const
@@ -754,6 +761,7 @@ void OverlayController::clear()
 void OverlayController::beginEdit()
 {
     m_shapesModel.beginEdit();
+    m_editStartShapes = m_shapesModel.shapes();
     m_dragStartShapes.clear();
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
         if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
@@ -764,15 +772,20 @@ void OverlayController::beginEdit()
 
 void OverlayController::endEdit()
 {
-    // One line per drag or resize, at its end, rather than one per mouse move.
-    for (auto it = m_dragStartShapes.cbegin(); it != m_dragStartShapes.cend(); ++it) {
-        if (it.key() >= m_shapesModel.rowCount()) continue;
-        const QVariantMap &now = m_shapesModel.shapes().at(it.key());
-        if (now.value(QStringLiteral("id")) == it.value().value(QStringLiteral("id"))
-            && ShapesModel::shapeBounds(now) != ShapesModel::shapeBounds(it.value())) {
-            qCInfo(lcDev).noquote() << "edit" << describeShape(it.value()) << "->" << describeShape(now);
+    // One line per changed shape at the end of a gesture, rather than one per mouse move.
+    // Every shape is compared by id, so arrows pulled along by a bound shape show up too.
+    if (lcDev().isInfoEnabled()) {
+        QHash<QString, QString> before;
+        for (const QVariantMap &shape : std::as_const(m_editStartShapes)) {
+            before.insert(shape.value(QStringLiteral("id")).toString(), describeShape(shape));
+        }
+        for (const QVariantMap &shape : m_shapesModel.shapes()) {
+            const QString was = before.value(shape.value(QStringLiteral("id")).toString());
+            const QString now = describeShape(shape);
+            if (!was.isEmpty() && was != now) qCInfo(lcDev).noquote() << "edit" << was << "=>" << now;
         }
     }
+    m_editStartShapes.clear();
     m_shapesModel.endEdit();
 }
 
