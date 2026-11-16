@@ -90,7 +90,15 @@ QQuickWindow* OverlayController::window() const
 void OverlayController::setWindow(QQuickWindow *window)
 {
     if (m_window != window) {
+        if (m_window) disconnect(m_window, nullptr, this, nullptr);
         m_window = window;
+        // A remap to another screen keeps this QWindow but changes its screen and size,
+        // and the popup's hole has to follow, or it leaves a dead zone where it used to be.
+        if (m_window) {
+            connect(m_window, &QWindow::screenChanged, this, &OverlayController::updatePopupExclusion);
+            connect(m_window, &QWindow::widthChanged, this, &OverlayController::updatePopupExclusion);
+            connect(m_window, &QWindow::heightChanged, this, &OverlayController::updatePopupExclusion);
+        }
         Q_EMIT windowChanged();
         // Remembered so remapWindow() can return here: Qt's primary screen changes when
         // screens come and go, so it can't be relied on to mean the same one afterwards.
@@ -546,6 +554,30 @@ void OverlayController::setPopupExclusion(const QRect &rect)
     qCInfo(lcDev) << "popup exclusion:" << rect;
     m_popupExclusion = rect;
     applyInputMask();
+}
+
+void OverlayController::setPopupWindow(QQuickWindow *popup)
+{
+    m_popupWindow = popup;
+    // Width too, not just show: opening the colour picker widens the popup, and a hole
+    // left at the old width leaves the new strip unclickable while a tool is active.
+    connect(popup, &QWindow::screenChanged, this, &OverlayController::updatePopupExclusion);
+    connect(popup, &QWindow::widthChanged, this, &OverlayController::updatePopupExclusion);
+    connect(popup, &QWindow::heightChanged, this, &OverlayController::updatePopupExclusion);
+}
+
+// The hole sits in the overlay's bottom-right corner, matching the popup's layer-shell
+// anchor and its 8px margin. A popup on another screen needs no hole at all.
+void OverlayController::updatePopupExclusion()
+{
+    QRect exclusion;
+    if (m_window && m_popupWindow && m_popupWindow->isVisible()
+        && m_window->screen() == m_popupWindow->screen()) {
+        const int pw = m_popupWindow->width();
+        const int ph = m_popupWindow->height();
+        exclusion = QRect(m_window->width() - pw - 8, m_window->height() - ph - 8, pw, ph);
+    }
+    setPopupExclusion(exclusion);
 }
 
 void OverlayController::applyInputMask()

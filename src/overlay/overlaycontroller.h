@@ -115,6 +115,10 @@ public:
     // Carve a rect (overlay-local coords) out of the input region so an on-top
     // window (the Tray Popup) stays clickable while a tool is active. Empty = none.
     void setPopupExclusion(const QRect &rect);
+    // The Tray Popup's window. While it is open on the overlay's screen, the overlay
+    // keeps a hole in its input region where the popup sits.
+    void setPopupWindow(QQuickWindow *popup);
+    void updatePopupExclusion();
     Q_INVOKABLE void setKeyboardInteractivity(bool interactive);
     bool trayPopupOpen() const;
     void setTrayPopupOpen(bool open);
@@ -214,6 +218,7 @@ private:
     QVariantMap m_localShortcutSequences;
 
     QQuickWindow *m_window = nullptr;
+    QQuickWindow *m_popupWindow = nullptr;
     ShapesModel m_shapesModel;
     int m_selectedIndex = -1;
     QHash<int, QVariantMap> m_dragStartShapes;

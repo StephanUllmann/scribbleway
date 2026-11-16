@@ -212,7 +212,7 @@ Item {
                             if (tool === "text") return 5
                             return 0
                         }
-                        onActivated: {
+                        onActivated: (index) => {
                             let tools = ["freehand", "arrow", "rectangle", "ellipse", "line", "text"]
                             backend.setActiveTool(tools[index])
                         }
@@ -232,9 +232,7 @@ Item {
                             let idx = backend.screenNames.indexOf(backend.targetScreen)
                             return idx >= 0 ? idx : 0
                         }
-                        onActivated: {
-                            backend.setTargetScreen(backend.screenNames[index])
-                        }
+                        onActivated: (index) => backend.setTargetScreen(backend.screenNames[index])
                     }
                 }
 
@@ -493,7 +491,7 @@ Item {
                         Layout.fillWidth: true
                         model: ["Neat (0)", "Artist (1)", "Cartoon (2)"]
                         currentIndex: Math.min(2, Math.max(0, Math.round(fullRoot.get("roughness"))))
-                        onActivated: { fullRoot.set("roughness", index) }
+                        onActivated: (index) => fullRoot.set("roughness", index)
                     }
 
                     Controls.Label {

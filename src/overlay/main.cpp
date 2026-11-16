@@ -248,25 +248,8 @@ int main(int argc, char *argv[])
     // which makes KWin map the popup on whichever output is currently active. That is the
     // behaviour we want: the popup follows the screen you're working on.
     // Keep the popup clickable even when a drawing tool has the overlay grabbing input:
-    // carve the popup's rect out of the overlay's input region when they share a screen
-    // (bottom-right corner, matching the popup's layer-shell anchor). Re-run on every
-    // width change, not just on show — opening the colour picker widens the popup, and a
-    // rect left at the old width leaves the new strip unclickable, but only while a tool
-    // is active, which is exactly where nobody looks for it.
-    auto updatePopupExclusion = [&popupWindow, &controller]() {
-        if (!popupWindow || !popupWindow->isVisible()) return;
-
-        QRect exclusion;
-        if (QQuickWindow *ov = controller.window()) {
-            if (ov->screen() == popupWindow->screen()) {
-                const int pw = popupWindow->width();
-                const int ph = popupWindow->height();
-                exclusion = QRect(ov->width() - pw - 8, ov->height() - ph - 8, pw, ph);
-            }
-        }
-        controller.setPopupExclusion(exclusion);
-    };
-    auto showPopup = [&popupWindow, &controller, &configurePopupLayer, &updatePopupExclusion]() {
+    // the controller carves the popup's rect out of the overlay's input region.
+    auto showPopup = [&popupWindow, &controller, &configurePopupLayer]() {
         if (!popupWindow) return;
 
         configurePopupLayer();
@@ -277,18 +260,18 @@ int main(int argc, char *argv[])
         popupWindow->raise();
         popupWindow->requestActivate();
 
-        updatePopupExclusion();
+        controller.updatePopupExclusion();
     };
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [trayPopupUrl, &popupWindow, &hidePopup, &configurePopupLayer,
-                            &updatePopupExclusion, &controller](QObject *obj, const QUrl &objUrl) {
+                            &controller](QObject *obj, const QUrl &objUrl) {
         if (objUrl != trayPopupUrl) return;
         popupWindow = qobject_cast<QQuickWindow*>(obj);
         if (!popupWindow) return;
 
         configurePopupLayer();
 
-        QObject::connect(popupWindow, &QWindow::widthChanged, popupWindow, updatePopupExclusion);
+        controller.setPopupWindow(popupWindow);
 
         // Dismiss on focus loss (click outside) — but the overlay is our own window and
         // holds an exclusive keyboard grab whenever a tool is active, so it takes focus

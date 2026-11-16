@@ -31,6 +31,7 @@ private Q_SLOTS:
     void cleanupTestCase();
     void testAddShapeUndo();
     void testDevLogPruneKeepsAWeek();
+    void testPopupHoleFollowsOverlayResize();
     void testRemoveShapeUndo();
     void testClearUndo();
     void testSelectionNoHistory();
@@ -1967,6 +1968,32 @@ void ShapesModelTest::testDevLogPruneKeepsAWeek()
     QStringList left = dir.entryList({QStringLiteral("*.log")}, QDir::Files, QDir::Name);
     QCOMPARE(left, QStringList({QStringLiteral("2026-11-09.log"), QStringLiteral("2026-11-16.log"),
                                 QStringLiteral("notes.log")}));
+}
+
+// The overlay moving to a bigger screen used to leave the popup's hole at its old
+// position: a dead zone where clicks fell through the overlay.
+void ShapesModelTest::testPopupHoleFollowsOverlayResize()
+{
+    OverlayController c;
+    QQuickWindow overlay;
+    QQuickWindow popup;
+    overlay.resize(800, 600);
+    popup.resize(200, 100);
+    c.setWindow(&overlay);
+    c.setPopupWindow(&popup);
+    c.updateInputMask({QRectF(0, 0, 800, 600)});
+    popup.show();
+    c.updatePopupExclusion();
+    QVERIFY(!overlay.mask().contains(QPoint(600, 500))); // hole at (592,492 200x100)
+
+    overlay.resize(1000, 700);
+    c.updateInputMask({QRectF(0, 0, 1000, 700)}); // main.qml does this on every resize
+    QVERIFY(overlay.mask().contains(QPoint(600, 500)));
+    QVERIFY(!overlay.mask().contains(QPoint(800, 600))); // hole now at (792,592 200x100)
+
+    popup.hide();
+    c.updatePopupExclusion();
+    QVERIFY(overlay.mask().contains(QPoint(800, 600)));
 }
 
 QTEST_MAIN(ShapesModelTest)
