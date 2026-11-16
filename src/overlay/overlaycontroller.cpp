@@ -564,6 +564,7 @@ void OverlayController::setPopupWindow(QQuickWindow *popup)
     connect(popup, &QWindow::screenChanged, this, &OverlayController::updatePopupExclusion);
     connect(popup, &QWindow::widthChanged, this, &OverlayController::updatePopupExclusion);
     connect(popup, &QWindow::heightChanged, this, &OverlayController::updatePopupExclusion);
+    connect(popup, &QWindow::visibleChanged, this, &OverlayController::updatePopupExclusion);
 }
 
 // The hole sits in the overlay's bottom-right corner, matching the popup's layer-shell

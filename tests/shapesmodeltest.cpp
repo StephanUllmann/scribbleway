@@ -1991,8 +1991,7 @@ void ShapesModelTest::testPopupHoleFollowsOverlayResize()
     QVERIFY(overlay.mask().contains(QPoint(600, 500)));
     QVERIFY(!overlay.mask().contains(QPoint(800, 600))); // hole now at (792,592 200x100)
 
-    popup.hide();
-    c.updatePopupExclusion();
+    popup.hide(); // however it gets hidden, the hole goes with it
     QVERIFY(overlay.mask().contains(QPoint(800, 600)));
 }
 

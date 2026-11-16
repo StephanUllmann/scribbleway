@@ -205,18 +205,19 @@ int main(int argc, char *argv[])
     const QUrl trayPopupUrl(QStringLiteral("qrc:/scribbleway/qml/TrayPopup.qml"));
     QQuickWindow *popupWindow = nullptr;
     QElapsedTimer hiddenTimer;
-    auto hidePopup = [&hiddenTimer, &controller](QQuickWindow *w) {
+    // Only hides; the bookkeeping runs on visibleChanged (see below), which also catches
+    // the popup vanishing without passing through here. The reason is logged so a
+    // "closed" line with no "close requested" before it shows such an outside close.
+    auto hidePopup = [](QQuickWindow *w, const char *reason) {
         if (w && w->isVisible()) {
+            qCInfo(lcDev) << "popup close requested:" << reason;
             w->hide();
-            hiddenTimer.restart();
-            controller.setPopupExclusion(QRect());
-            controller.setTrayPopupOpen(false);
         }
     };
     // Escape inside the popup, and Escape or a click on the overlay canvas, all close it
     // from QML — which has no handle on this window.
     QObject::connect(&controller, &OverlayController::trayPopupCloseRequested, &app,
-                     [&popupWindow, &hidePopup]() { hidePopup(popupWindow); });
+                     [&popupWindow, &hidePopup]() { hidePopup(popupWindow, "escape or canvas click"); });
     // Anchor to the bottom-right corner: adjacent edges keep the window's natural size
     // (menu-sized), unlike the overlay's opposite-edge fullscreen anchoring. Re-applied
     // before every show so it survives the destroy()/recreate used to move screens.
@@ -264,7 +265,7 @@ int main(int argc, char *argv[])
     };
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [trayPopupUrl, &popupWindow, &hidePopup, &configurePopupLayer,
-                            &controller](QObject *obj, const QUrl &objUrl) {
+                            &hiddenTimer, &controller](QObject *obj, const QUrl &objUrl) {
         if (objUrl != trayPopupUrl) return;
         popupWindow = qobject_cast<QQuickWindow*>(obj);
         if (!popupWindow) return;
@@ -272,6 +273,16 @@ int main(int argc, char *argv[])
         configurePopupLayer();
 
         controller.setPopupWindow(popupWindow);
+
+        // Every way the popup disappears ends here, including the compositor closing the
+        // surface or Qt closing it as a Qt.Popup window, so the controller never goes on
+        // believing it is open (which kept its input hole and withheld keyboard focus).
+        QObject::connect(popupWindow, &QWindow::visibleChanged, popupWindow,
+                         [&hiddenTimer, &controller](bool visible) {
+            if (visible) return;
+            hiddenTimer.restart();
+            controller.setTrayPopupOpen(false);
+        });
 
         // Dismiss on focus loss (click outside) — but the overlay is our own window and
         // holds an exclusive keyboard grab whenever a tool is active, so it takes focus
@@ -282,7 +293,7 @@ int main(int argc, char *argv[])
                          [&popupWindow, &hidePopup, &controller]() {
             if (!popupWindow || popupWindow->isActive()) return;
             if (QGuiApplication::focusWindow() == controller.window()) return;
-            hidePopup(popupWindow);
+            hidePopup(popupWindow, "focus moved elsewhere");
         });
     }, Qt::QueuedConnection);
     engine.load(trayPopupUrl);
@@ -298,7 +309,7 @@ int main(int argc, char *argv[])
         // If focus-out just hid it as part of this same click, don't reopen.
         const bool recentlyHidden = hiddenTimer.isValid() && hiddenTimer.elapsed() < 250;
         if (popupWindow->isVisible() || recentlyHidden) {
-            hidePopup(popupWindow);
+            hidePopup(popupWindow, "tray icon");
             return;
         }
         showPopup();
