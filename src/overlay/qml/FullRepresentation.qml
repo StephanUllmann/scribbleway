@@ -215,13 +215,13 @@ Item {
                         // surface, and the tray popup dismisses itself on focus loss.
                         Component.onCompleted: popup.popupType = Controls.Popup.Item
                         Layout.fillWidth: true
-                        model: backend.screenNames
+                        model: backend.screenLabels
                         currentIndex: {
                             let idx = backend.screenNames.indexOf(backend.targetScreen)
                             return idx >= 0 ? idx : 0
                         }
                         onActivated: {
-                            backend.setTargetScreen(currentValue)
+                            backend.setTargetScreen(backend.screenNames[index])
                         }
                     }
                 }

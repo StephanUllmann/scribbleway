@@ -607,6 +607,26 @@ QStringList OverlayController::screenNames() const
     return names;
 }
 
+QStringList OverlayController::screenLabels() const
+{
+    QStringList labels;
+    for (QScreen *screen : QGuiApplication::screens()) {
+        const QString name = screen->name();
+        // Built-in panels are wired as eDP (or LVDS/DSI on older or ARM machines).
+        const bool builtIn = name.startsWith(QLatin1String("eDP")) || name.startsWith(QLatin1String("LVDS"))
+            || name.startsWith(QLatin1String("DSI"));
+        const QString model = screen->model().trimmed();
+        if (builtIn) {
+            labels << QStringLiteral("Laptop screen (%1)").arg(name);
+        } else if (!model.isEmpty()) {
+            labels << QStringLiteral("External screen: %1 (%2)").arg(model, name);
+        } else {
+            labels << QStringLiteral("External screen (%1)").arg(name);
+        }
+    }
+    return labels;
+}
+
 QString OverlayController::targetScreen() const
 {
     return m_targetScreen;
@@ -815,7 +835,9 @@ void OverlayController::remapWindow()
     m_window->hide();
     // Without destroy() the native window survives and keeps its old output.
     m_window->destroy();
-    m_window->setScreen(target ? target : QGuiApplication::primaryScreen());
+    // setGeometry(), not setScreen(): show() re-picks the screen from the window's
+    // position, and a stale (0,0) lands on whichever screen sits at the top left.
+    m_window->setGeometry((target ? target : QGuiApplication::primaryScreen())->geometry());
     m_window->show();
     qInfo() << "overlay remapped to" << m_window->screen()->name();
 }

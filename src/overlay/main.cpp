@@ -113,7 +113,8 @@ int main(int argc, char *argv[])
 
         auto *window = qobject_cast<QQuickWindow*>(obj);
         if (window) {
-            window->setScreen(QGuiApplication::primaryScreen());
+            // Geometry, not setScreen(): see OverlayController::remapWindow().
+            window->setGeometry(QGuiApplication::primaryScreen()->geometry());
             controller.setWindow(window);
             
             // Apply LayerShell configuration

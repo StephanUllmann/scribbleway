@@ -505,6 +505,7 @@ void ShapesModelTest::testOverlayControllerSelectionProperties()
     QCOMPARE(controller.getSelectionState().value(QStringLiteral("strokeWidth")).toInt(), 7);
 
     QVERIFY(!controller.screenNames().isEmpty());
+    QCOMPARE(controller.screenLabels().size(), controller.screenNames().size());
 }
 
 void ShapesModelTest::testSingleInstanceGuard()

@@ -43,6 +43,7 @@ class OverlayController : public QObject
     Q_PROPERTY(QVariantMap selection READ getSelectionState NOTIFY selectionChanged)
     Q_PROPERTY(QStringList presetColors READ presetColors CONSTANT)
     Q_PROPERTY(QStringList screenNames READ screenNames NOTIFY screensChanged)
+    Q_PROPERTY(QStringList screenLabels READ screenLabels NOTIFY screensChanged)
     Q_PROPERTY(QString targetScreen READ targetScreen NOTIFY targetScreenChanged)
     Q_PROPERTY(bool trayPopupOpen READ trayPopupOpen NOTIFY trayPopupOpenChanged)
     Q_PROPERTY(bool popupWantsKeyboard READ popupWantsKeyboard WRITE setPopupWantsKeyboard NOTIFY popupWantsKeyboardChanged)
@@ -63,6 +64,8 @@ public:
     // in the menu cannot drift out of step with them.
     static QStringList presetColors();
     QStringList screenNames() const;
+    // Human-readable names in the same order as screenNames(), e.g. "Laptop screen (eDP-1)".
+    QStringList screenLabels() const;
     QString targetScreen() const;
 
     QString currentMode() const;
