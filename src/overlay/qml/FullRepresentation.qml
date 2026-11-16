@@ -87,6 +87,18 @@ Item {
                     color: palette.text
                     Layout.fillWidth: true
                 }
+
+                // Shown when the app runs with --dev. `devMode` is a context property
+                // set by main.cpp; tests that load this file alone leave it undefined.
+                Image {
+                    objectName: "devModeIcon"
+                    visible: typeof devMode !== "undefined" && devMode
+                    source: "qrc:/icons/dev-mode.svg"
+                    sourceSize: Qt.size(theme.iconSmall, theme.iconSmall)
+                    HoverHandler { id: devModeHover }
+                    Controls.ToolTip.visible: devModeHover.hovered
+                    Controls.ToolTip.text: "Dev mode: logging to ~/.local/state/scribbleway/logs"
+                }
             }
 
             // Running View

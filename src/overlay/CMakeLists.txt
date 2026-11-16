@@ -42,6 +42,7 @@ qt_add_resources(scribbleway-overlay "icons"
     BASE icons
     FILES
         icons/color-picker.svg
+        icons/dev-mode.svg
         icons/draw-freehand.svg
         icons/draw-rectangle.svg
         icons/draw-ellipse.svg

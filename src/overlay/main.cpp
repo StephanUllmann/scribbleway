@@ -135,6 +135,7 @@ int main(int argc, char *argv[])
     // Load QML Engine
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
+    engine.rootContext()->setContextProperty(QStringLiteral("devMode"), devMode);
     
     const QUrl url(QStringLiteral("qrc:/scribbleway/qml/main.qml"));
     
