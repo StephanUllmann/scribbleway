@@ -2492,8 +2492,8 @@ void ShapesModelTest::testLineAttachedTextClipboardFallback()
     line[QStringLiteral("id")] = QStringLiteral("line-export");
     line[QStringLiteral("fromX")] = 10.0;
     line[QStringLiteral("fromY")] = 20.0;
-    line[QStringLiteral("toX")] = 110.0;
-    line[QStringLiteral("toY")] = 20.0;
+    line[QStringLiteral("toX")] = 10.0;
+    line[QStringLiteral("toY")] = 220.0;
     line[QStringLiteral("color")] = QStringLiteral("#333333");
     line[QStringLiteral("opacity")] = 1.0;
     line[QStringLiteral("fontFamily")] = QStringLiteral("sans-serif");
@@ -2514,6 +2514,11 @@ void ShapesModelTest::testLineAttachedTextClipboardFallback()
     QCOMPARE(text.value(QStringLiteral("customData")).toObject()
                  .value(QStringLiteral("scribbleway")).toObject()
                  .value(QStringLiteral("attachedTextFor")).toString(), QStringLiteral("line-export"));
+    // A vertical line's label is 0.7 x its length wide, as on screen (attachedTextRect in main.qml).
+    QCOMPARE(text.value(QStringLiteral("width")).toDouble(), 140.0);
+    QCOMPARE(text.value(QStringLiteral("height")).toDouble(), 32.0);
+    QCOMPARE(text.value(QStringLiteral("x")).toDouble(), -60.0);
+    QCOMPARE(text.value(QStringLiteral("y")).toDouble(), 104.0);
 
     OverlayController pasted;
     QGuiApplication::clipboard()->setText(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact)));
