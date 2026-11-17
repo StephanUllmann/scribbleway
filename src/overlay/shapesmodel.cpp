@@ -1,6 +1,6 @@
 #include "shapesmodel.h"
+#include "shapegeometry.h"
 #include <QPointF>
-#include <QPolygonF>
 #include <QUuid>
 
 // One table behind data(), roleNames() and updateShape()'s key -> role lookup. Row order
@@ -40,9 +40,11 @@ constexpr RoleEntry kRoles[] = {
     {"boundElementIds", "boundElementIds"},
     {"bindings", "bindings"},
     {nullptr, "attachedText"},
+    {nullptr, "bounds"},
+    {nullptr, "attachedTextRect"},
 };
 constexpr int kRoleCount = int(sizeof(kRoles) / sizeof(kRoles[0]));
-static_assert(kRoleCount == ShapesModel::AttachedTextRole - ShapesModel::TypeRole + 1,
+static_assert(kRoleCount == ShapesModel::AttachedTextRectRole - ShapesModel::TypeRole + 1,
               "kRoles must have one row per ShapeRoles value, in enum order");
 
 int roleForKey(const QString &key)
@@ -106,14 +108,6 @@ QVariantList ShapesModel::withoutAttachedTextBinding(const QVariantMap &shape)
     return filtered;
 }
 
-bool ShapesModel::supportsAttachedText(const QString &type)
-{
-    return type == QStringLiteral("rectangle")
-        || type == QStringLiteral("ellipse")
-        || type == QStringLiteral("line")
-        || type == QStringLiteral("arrow");
-}
-
 ShapesModel::ShapesModel(QObject *parent)
     : QAbstractListModel(parent)
 {
@@ -135,8 +129,21 @@ QVariant ShapesModel::data(const QModelIndex &index, int role) const
     }
 
     const auto &shape = m_shapes[index.row()];
-    const char *key = kRoles[slot].key;
-    return key ? shape.value(QLatin1String(key)) : firstAttachedTextBinding(shape);
+    if (const char *key = kRoles[slot].key) {
+        return shape.value(QLatin1String(key));
+    }
+    switch (role) {
+    case AttachedTextRole:
+        return firstAttachedTextBinding(shape);
+    case BoundsRole:
+        return ShapeGeometry::bounds(shape);
+    default:
+        if (!ShapeGeometry::supportsAttachedText(shape.value(QStringLiteral("type")).toString())) {
+            return QVariant();
+        }
+        // Every attached text stores its own fontSize, so the fallback only covers hand-made maps.
+        return ShapeGeometry::attachedTextRect(shape, 20);
+    }
 }
 
 
@@ -297,9 +304,13 @@ void ShapesModel::updateShape(int index, const QVariantMap &properties)
                 if (role >= 0) {
                     changedRoles << role;
                 }
-                // attachedText is derived from bindings, so it changes with it.
+                // The computed roles change with the keys they are derived from.
                 if (role == BindingsRole) {
-                    changedRoles << AttachedTextRole;
+                    changedRoles << AttachedTextRole << AttachedTextRectRole;
+                } else if (role == FontSizeRole) {
+                    changedRoles << AttachedTextRectRole;
+                } else if (role == PointsRole || (role >= XRole && role <= ToYRole)) {
+                    changedRoles << BoundsRole << AttachedTextRectRole;
                 }
             }
         }
@@ -346,22 +357,4 @@ void ShapesModel::clear()
         m_shapes.clear();
         endResetModel();
     }
-}
-
-QRectF ShapesModel::shapeBounds(const QVariantMap &shape)
-{
-    const QString type = shape.value(QStringLiteral("type")).toString();
-    if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
-        return QRectF(QPointF(shape.value(QStringLiteral("fromX")).toDouble(), shape.value(QStringLiteral("fromY")).toDouble()),
-                      QPointF(shape.value(QStringLiteral("toX")).toDouble(), shape.value(QStringLiteral("toY")).toDouble())).normalized();
-    }
-    if (type == QStringLiteral("freehand")) {
-        QPolygonF points;
-        for (const QVariant &pv : shape.value(QStringLiteral("points")).toList()) {
-            points.append(pv.toPointF());
-        }
-        return points.boundingRect();
-    }
-    return QRectF(shape.value(QStringLiteral("x")).toDouble(), shape.value(QStringLiteral("y")).toDouble(),
-                  shape.value(QStringLiteral("width")).toDouble(), shape.value(QStringLiteral("height")).toDouble());
 }

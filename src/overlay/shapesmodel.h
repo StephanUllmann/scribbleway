@@ -42,7 +42,9 @@ public:
         EndBindingRole,
         BoundElementIdsRole,
         BindingsRole,
-        AttachedTextRole
+        AttachedTextRole,
+        BoundsRole,
+        AttachedTextRectRole
     };
     Q_ENUM(ShapeRoles)
 
@@ -57,9 +59,6 @@ public:
     QString shapeIdAt(int index) const;
     static QVariantMap firstAttachedTextBinding(const QVariantMap &shape);
     static QVariantList withoutAttachedTextBinding(const QVariantMap &shape);
-    static bool supportsAttachedText(const QString &type);
-    // The box around a shape, whatever way its type stores geometry.
-    static QRectF shapeBounds(const QVariantMap &shape);
 
     void addShape(const QVariantMap &shape);
     void updateShape(int index, const QVariantMap &properties);

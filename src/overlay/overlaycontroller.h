@@ -93,7 +93,6 @@ public:
     QVariantMap localShortcutSequences() const;
 
     Q_INVOKABLE int indexForId(const QString &id) const;
-    QPointF pointFromBinding(const QVariantMap &targetShape, double focus) const;
     Q_INVOKABLE QVariantMap findSnapInfo(double px, double py, int excludeIndex = -1) const;
     Q_INVOKABLE void createBindingsForShape(int lineIndex);
     Q_INVOKABLE void breakEndpointBinding(int lineIndex, bool isStart);
@@ -105,6 +104,7 @@ public:
     Q_INVOKABLE void endEdit();
     Q_INVOKABLE QVariantMap getShape(int index) const;
     Q_INVOKABLE QVariantMap attachedTextForShape(int index) const;
+    Q_INVOKABLE QRectF attachedTextRect(int index) const;
     Q_INVOKABLE QVariantMap ensureAttachedTextForShape(int index);
     Q_INVOKABLE void setAttachedText(int index, const QString &text);
     Q_INVOKABLE void removeAttachedText(int index);
@@ -174,9 +174,6 @@ private:
     // selection, add a delta, clamp, write it back.
     void bumpSelected(const QString &key, int delta, int lo,
                       int hi = std::numeric_limits<int>::max());
-    // Move one shape by (dx, dy). Each shape type stores its geometry differently, and
-    // paste, drag and nudge all need the same walk.
-    static void translateShape(QVariantMap &shape, double dx, double dy);
     // An arrow moved away from a shape that stayed put lets go of that shape.
     void detachFromUnmoved(int index, QVariantMap &shape, const QSet<int> &moved);
     void moveShapes(const QHash<int, QVariantMap> &starts, double dx, double dy);
@@ -207,9 +204,6 @@ private:
 
     static constexpr double kSnapThreshold = 20.0;
     BindingHit findSnapTarget(double px, double py, int excludeIndex = -1) const;
-    double focusForPoint(const QVariantMap &targetShape, double px, double py) const;
-    QPointF nearestPointOnRect(double rx, double ry, double rw, double rh, double px, double py) const;
-    QPointF nearestPointOnEllipse(double cx, double cy, double a, double b, double px, double py) const;
     void updateBoundEndpoints(int shapeIndex, const QSet<int> *skipIndices = nullptr);
     void cleanupBindingsForDelete(int deletedIndex);
     void addBackReference(const QString &targetId, const QString &lineId);

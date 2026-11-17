@@ -1,5 +1,6 @@
 #include "excalidraw.h"
 #include "shapesmodel.h"
+#include "shapegeometry.h"
 #include <QColor>
 #include <QJsonArray>
 #include <QPointF>
@@ -182,7 +183,7 @@ QJsonObject elementFromShape(const QVariantMap &shape)
             return elem;
         }
         
-        const QRectF bounds = ShapesModel::shapeBounds(shape);
+        const QRectF bounds = ShapeGeometry::bounds(shape);
         elem.insert(QStringLiteral("x"), bounds.x());
         elem.insert(QStringLiteral("y"), bounds.y());
         elem.insert(QStringLiteral("width"), bounds.width());
@@ -230,55 +231,29 @@ QJsonObject attachedTextElement(const QVariantMap &shape, const QVariantMap &att
     elem.insert(QStringLiteral("locked"), shape.value(QStringLiteral("locked"), false).toBool());
     elem.insert(QStringLiteral("text"), text);
     elem.insert(QStringLiteral("originalText"), text);
-    elem.insert(QStringLiteral("fontSize"), shape.value(QStringLiteral("fontSize"), attachedText.value(QStringLiteral("fontSize"), defaultFontSize)).toInt());
+    elem.insert(QStringLiteral("fontSize"), attachedText.value(QStringLiteral("fontSize"), shape.value(QStringLiteral("fontSize"), defaultFontSize)).toInt());
     elem.insert(QStringLiteral("fontFamily"), excalidrawFont(attachedText.value(QStringLiteral("fontFamily"), shape.value(QStringLiteral("fontFamily"))).toString()));
     elem.insert(QStringLiteral("textAlign"), QStringLiteral("center"));
     elem.insert(QStringLiteral("verticalAlign"), QStringLiteral("middle"));
     elem.insert(QStringLiteral("autoResize"), true);
     elem.insert(QStringLiteral("lineHeight"), 1.25);
 
-    // Same box as attachedTextRect() in main.qml, so the export matches the screen.
-    const double pad = 12.0;
-    const int fontSize = elem.value(QStringLiteral("fontSize")).toInt();
-    double x = 0.0;
-    double y = 0.0;
-    double width = 100.0;
-    double height = qMax(24, fontSize);
-    if (containerType == QStringLiteral("rectangle") || containerType == QStringLiteral("ellipse")) {
-        const double w = shape.value(QStringLiteral("width")).toDouble();
-        const double h = shape.value(QStringLiteral("height")).toDouble();
-        const bool ellipse = containerType == QStringLiteral("ellipse");
-        const double ix = ellipse ? w * (1.0 - std::sqrt(0.5)) / 2.0 + pad : pad;
-        const double iy = ellipse ? h * (1.0 - std::sqrt(0.5)) / 2.0 + pad : pad;
-        x = shape.value(QStringLiteral("x")).toDouble() + ix;
-        y = shape.value(QStringLiteral("y")).toDouble() + iy;
-        width = qMax(40.0, w - ix * 2.0);
-        height = qMax(24.0, h - iy * 2.0);
+    if (containerType == QStringLiteral("line")) {
+        // Excalidraw lines cannot contain text, so the link travels in customData.
+        elem.insert(QStringLiteral("containerId"), QString());
+        elem.insert(QStringLiteral("customData"), QJsonObject{
+            {QStringLiteral("scribbleway"), QJsonObject{{QStringLiteral("attachedTextFor"), shape.value(QStringLiteral("id")).toString()}}}
+        });
+    } else if (ShapeGeometry::supportsAttachedText(containerType)) {
         elem.insert(QStringLiteral("containerId"), shape.value(QStringLiteral("id")).toString());
-    } else if (containerType == QStringLiteral("arrow") || containerType == QStringLiteral("line")) {
-        const double fromX = shape.value(QStringLiteral("fromX")).toDouble();
-        const double fromY = shape.value(QStringLiteral("fromY")).toDouble();
-        const double toX = shape.value(QStringLiteral("toX")).toDouble();
-        const double toY = shape.value(QStringLiteral("toY")).toDouble();
-        width = qMax(80.0, std::hypot(toX - fromX, toY - fromY) * 0.7);
-        height = qMax(32.0, fontSize * 1.6);
-        x = (fromX + toX) / 2.0 - width / 2.0;
-        y = (fromY + toY) / 2.0 - height / 2.0;
-        if (containerType == QStringLiteral("arrow")) {
-            elem.insert(QStringLiteral("containerId"), shape.value(QStringLiteral("id")).toString());
-        } else {
-            // Excalidraw lines cannot contain text, so the link travels in customData.
-            elem.insert(QStringLiteral("containerId"), QString());
-            elem.insert(QStringLiteral("customData"), QJsonObject{
-                {QStringLiteral("scribbleway"), QJsonObject{{QStringLiteral("attachedTextFor"), shape.value(QStringLiteral("id")).toString()}}}
-            });
-        }
     }
 
-    elem.insert(QStringLiteral("x"), x);
-    elem.insert(QStringLiteral("y"), y);
-    elem.insert(QStringLiteral("width"), width);
-    elem.insert(QStringLiteral("height"), height);
+    // The same box the screen shows the text in.
+    const QRectF box = ShapeGeometry::attachedTextRect(shape, defaultFontSize);
+    elem.insert(QStringLiteral("x"), box.x());
+    elem.insert(QStringLiteral("y"), box.y());
+    elem.insert(QStringLiteral("width"), box.width());
+    elem.insert(QStringLiteral("height"), box.height());
     return elem;
 }
 
@@ -450,7 +425,7 @@ void attachBoundText(QList<QVariantMap> &shapes, const QString &defaultFontFamil
     for (int i = 0; i < shapes.size(); ++i) {
         const QString type = shapes[i].value(QStringLiteral("type")).toString();
         const QString id = shapes[i].value(QStringLiteral("id")).toString();
-        if (ShapesModel::supportsAttachedText(type) && !id.isEmpty()) {
+        if (ShapeGeometry::supportsAttachedText(type) && !id.isEmpty()) {
             containerIndexById.insert(id, i);
         }
     }

@@ -74,44 +74,10 @@ Item {
         style: Text.Raised
         styleColor: Qt.rgba(0, 0, 0, 0.6)
 
-        x: {
-            if (baseShapeRoot.mode === "line") {
-                return (baseShapeRoot.shapeFromX + baseShapeRoot.shapeToX) / 2 - width / 2;
-            }
-            if (model && model.type && model.type.toLowerCase() === "ellipse") {
-                return baseShapeRoot.shapeX + baseShapeRoot.shapeWidth * (1 - Math.SQRT1_2) / 2 + baseShapeRoot.attachedPadding;
-            }
-            return baseShapeRoot.shapeX + baseShapeRoot.attachedPadding;
-        }
-        y: {
-            if (baseShapeRoot.mode === "line") {
-                return (baseShapeRoot.shapeFromY + baseShapeRoot.shapeToY) / 2 - height / 2;
-            }
-            if (model && model.type && model.type.toLowerCase() === "ellipse") {
-                return baseShapeRoot.shapeY + baseShapeRoot.shapeHeight * (1 - Math.SQRT1_2) / 2 + baseShapeRoot.attachedPadding;
-            }
-            return baseShapeRoot.shapeY + baseShapeRoot.attachedPadding;
-        }
-        width: {
-            if (baseShapeRoot.mode === "line") {
-                return Math.max(80, baseShapeRoot.attachedLineLength * 0.7);
-            }
-            if (model && model.type && model.type.toLowerCase() === "ellipse") {
-                const inset = baseShapeRoot.shapeWidth * (1 - Math.SQRT1_2) / 2 + baseShapeRoot.attachedPadding;
-                return Math.max(40, baseShapeRoot.shapeWidth - inset * 2);
-            }
-            return Math.max(40, baseShapeRoot.shapeWidth - baseShapeRoot.attachedPadding * 2);
-        }
-        height: {
-            if (baseShapeRoot.mode === "line") {
-                return Math.max(32, font.pixelSize * 1.6);
-            }
-            if (model && model.type && model.type.toLowerCase() === "ellipse") {
-                const inset = baseShapeRoot.shapeHeight * (1 - Math.SQRT1_2) / 2 + baseShapeRoot.attachedPadding;
-                return Math.max(24, baseShapeRoot.shapeHeight - inset * 2);
-            }
-            return Math.max(24, baseShapeRoot.shapeHeight - baseShapeRoot.attachedPadding * 2);
-        }
+        x: baseShapeRoot.attachedTextBox.x
+        y: baseShapeRoot.attachedTextBox.y
+        width: baseShapeRoot.attachedTextBox.width
+        height: baseShapeRoot.attachedTextBox.height
     }
 
     property int index: -1
@@ -132,11 +98,9 @@ Item {
     property real modelFillOpacity: model.fillOpacity !== undefined ? model.fillOpacity : 0.0
     property var modelAttachedText: model.attachedText !== undefined ? model.attachedText : ({})
     readonly property bool hasAttachedText: modelAttachedText && modelAttachedText.text !== undefined && modelAttachedText.text !== ""
-    readonly property bool supportsAttachedText: {
-        const t = model && model.type ? model.type.toLowerCase() : "";
-        return t === "rectangle" || t === "ellipse" || t === "line" || t === "arrow";
-    }
-    readonly property real attachedPadding: 12
+    // The model leaves attachedTextRect undefined for a type that cannot hold text.
+    readonly property bool supportsAttachedText: model.attachedTextRect !== undefined
+    readonly property rect attachedTextBox: supportsAttachedText ? model.attachedTextRect : Qt.rect(0, 0, 0, 0)
     readonly property real attachedLineLength: Math.hypot(shapeToX - shapeFromX, shapeToY - shapeFromY)
 
     readonly property color resolvedFill: {

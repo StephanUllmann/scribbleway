@@ -3,6 +3,7 @@
 #include <QGuiApplication>
 #include <QSignalSpy>
 #include "shapesmodel.h"
+#include "shapegeometry.h"
 #include "overlaycontroller.h"
 #include "overlaywindow.h"
 #include "traypopup.h"
@@ -112,6 +113,7 @@ private Q_SLOTS:
     void testCopyPasteKeepsFonts();
     void testResizeHandleCursors();
     void testResizeShowsSizeLabel();
+    void testShapeGeometry();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -2163,6 +2165,7 @@ void ShapesModelTest::testTrayPopupFocusLoss()
     QTRY_VERIFY(!tp.isOpen());
 }
 
+
 QTEST_MAIN(ShapesModelTest)
 #include "shapesmodeltest.moc"
 
@@ -2246,17 +2249,17 @@ void ShapesModelTest::testBindingGeometry()
     rect[QStringLiteral("locked")] = false;
     ctrl.addShape(rect);
 
-    // pointFromBinding at focus=0.0 should be top-center (200, 100)
-    QPointF p0 = ctrl.pointFromBinding(rect, 0.0);
+    // pointAtFocus at focus=0.0 should be top-center (200, 100)
+    QPointF p0 = ShapeGeometry::pointAtFocus(rect, 0.0);
     QCOMPARE(p0, QPointF(200.0, 100.0));
 
     // focus=0.25 should be right-center (300, 150)
     // rw/2=100 is first segment. perim = 600. 0.25 * 600 = 150. 150-100=50 into right edge -> (300, 150)
-    QPointF p25 = ctrl.pointFromBinding(rect, 0.25);
+    QPointF p25 = ShapeGeometry::pointAtFocus(rect, 0.25);
     QCOMPARE(p25, QPointF(300.0, 150.0));
 
     // focus=0.5 should be bottom-center (200, 200)
-    QPointF p50 = ctrl.pointFromBinding(rect, 0.5);
+    QPointF p50 = ShapeGeometry::pointAtFocus(rect, 0.5);
     QCOMPARE(p50, QPointF(200.0, 200.0));
 
     // findSnapInfo: point at (201, 95) is 5px from top edge -> should snap to (201, 100)
@@ -2682,7 +2685,7 @@ void ShapesModelTest::testLineAttachedTextClipboardFallback()
     QCOMPARE(text.value(QStringLiteral("customData")).toObject()
                  .value(QStringLiteral("scribbleway")).toObject()
                  .value(QStringLiteral("attachedTextFor")).toString(), QStringLiteral("line-export"));
-    // A vertical line's label is 0.7 x its length wide, as on screen (attachedTextRect in main.qml).
+    // A vertical line's label is 0.7 x its length wide, as on screen.
     QCOMPARE(text.value(QStringLiteral("width")).toDouble(), 140.0);
     QCOMPARE(text.value(QStringLiteral("height")).toDouble(), 32.0);
     QCOMPARE(text.value(QStringLiteral("x")).toDouble(), -60.0);
@@ -3087,7 +3090,7 @@ void ShapesModelTest::testPastedBindingFocusIsRecomputed()
 
     const double focus = c.getShape(1).value(u"endBinding"_s).toMap().value(u"focus"_s).toDouble();
     QVERIFY(focus >= 0.0 && focus <= 1.0);
-    const QPointF anchor = c.pointFromBinding(c.getShape(0), focus);
+    const QPointF anchor = ShapeGeometry::pointAtFocus(c.getShape(0), focus);
     QCOMPARE(anchor.x(), c.getShape(1).value(u"toX"_s).toDouble());
     QCOMPARE(anchor.y(), c.getShape(1).value(u"toY"_s).toDouble());
 }
@@ -3227,4 +3230,66 @@ void ShapesModelTest::testResizeShowsSizeLabel()
     QVERIFY(label->isVisible());
     QTest::mouseRelease(window, Qt::LeftButton, {}, QPoint(300, 400));
     QVERIFY(!label->isVisible());
+}
+
+// Each Shape type stores its geometry differently; the answers all come from ShapeGeometry.
+void ShapesModelTest::testShapeGeometry()
+{
+    const QVariantMap rect{{u"type"_s, u"rectangle"_s}, {u"x"_s, 10.0}, {u"y"_s, 20.0}, {u"width"_s, 100.0}, {u"height"_s, 50.0}};
+    const QVariantMap ellipse{{u"type"_s, u"ellipse"_s}, {u"x"_s, 0.0}, {u"y"_s, 0.0}, {u"width"_s, 200.0}, {u"height"_s, 100.0}};
+    const QVariantMap arrow{{u"type"_s, u"arrow"_s}, {u"fromX"_s, 100.0}, {u"fromY"_s, 0.0}, {u"toX"_s, 0.0}, {u"toY"_s, 0.0}};
+    const QVariantMap freehand{{u"type"_s, u"freehand"_s},
+                               {u"points"_s, QVariantList{QPointF(5, 5), QPointF(25, 15), QPointF(15, 45)}}};
+
+    QCOMPARE(ShapeGeometry::bounds(rect), QRectF(10, 20, 100, 50));
+    QCOMPARE(ShapeGeometry::bounds(arrow), QRectF(0, 0, 100, 0));
+    QCOMPARE(ShapeGeometry::bounds(freehand), QRectF(5, 5, 20, 40));
+
+    QVariantMap moved = freehand;
+    ShapeGeometry::translate(moved, {10, -5});
+    QCOMPARE(ShapeGeometry::bounds(moved), QRectF(15, 0, 20, 40));
+    moved = arrow;
+    ShapeGeometry::translate(moved, {1, 2});
+    QCOMPARE(ShapeGeometry::bounds(moved), QRectF(1, 2, 100, 0));
+
+    // A selection rect crossing the arrow's middle catches it, though neither end is inside.
+    QVERIFY(ShapeGeometry::intersects(arrow, QRectF(40, -10, 20, 20)));
+    QVERIFY(!ShapeGeometry::intersects(arrow, QRectF(40, 10, 20, 20)));
+    QVERIFY(ShapeGeometry::intersects(freehand, QRectF(20, 10, 10, 10)));
+    QVERIFY(!ShapeGeometry::intersects(freehand, QRectF(30, 30, 10, 10)));
+
+    // The attached-text box: padded inside a rectangle, inside the inscribed square of an
+    // ellipse, and centred on a line, sized from the attached text's own font.
+    QCOMPARE(ShapeGeometry::attachedTextRect(rect, 20), QRectF(22, 32, 76, 26));
+    const QRectF inEllipse = ShapeGeometry::attachedTextRect(ellipse, 20);
+    QCOMPARE(inEllipse.center(), QPointF(100, 50));
+    QVERIFY(qAbs(inEllipse.width() - (200 * M_SQRT1_2 - 24)) < 1e-9);
+    QVariantMap labelled = arrow;
+    labelled[u"fontSize"_s] = 10;
+    labelled[u"bindings"_s] = QVariantList{QVariantMap{{u"type"_s, u"attachedText"_s}, {u"fontSize"_s, 30}}};
+    QCOMPARE(ShapeGeometry::attachedTextRect(labelled, 20), QRectF(10, -24, 80, 48));
+
+    // Focus goes round the outline and comes back to the same point.
+    QVERIFY(ShapeGeometry::hasOutline(u"ellipse"_s));
+    QVERIFY(!ShapeGeometry::hasOutline(u"arrow"_s));
+    QCOMPARE(ShapeGeometry::nearestOutlinePoint(rect, {60, 0}), QPointF(60, 20));
+    const QPointF onEllipse = ShapeGeometry::nearestOutlinePoint(ellipse, {300, 50});
+    QVERIFY(qAbs(onEllipse.x() - 200) < 1e-6 && qAbs(onEllipse.y() - 50) < 1e-6);
+    for (const QPointF p : {QPointF(60, 20), QPointF(110, 30), QPointF(10, 60)}) {
+        QCOMPARE(ShapeGeometry::pointAtFocus(rect, ShapeGeometry::focusAt(rect, p)), p);
+    }
+
+    // QML reads the same answers as model roles, and they follow edits.
+    ShapesModel model;
+    model.addShape(rect);
+    model.addShape(freehand);
+    const QModelIndex first = model.index(0, 0);
+    QCOMPARE(model.data(first, ShapesModel::AttachedTextRectRole).toRectF(), QRectF(22, 32, 76, 26));
+    QVERIFY(!model.data(model.index(1, 0), ShapesModel::AttachedTextRectRole).isValid());
+    QCOMPARE(model.data(model.index(1, 0), ShapesModel::BoundsRole).toRectF(), QRectF(5, 5, 20, 40));
+    QSignalSpy changed(&model, &QAbstractItemModel::dataChanged);
+    model.updateShape(0, {{u"width"_s, 200.0}});
+    QCOMPARE(changed.size(), 1);
+    QVERIFY(changed.at(0).at(2).value<QList<int>>().contains(ShapesModel::AttachedTextRectRole));
+    QCOMPARE(model.data(first, ShapesModel::AttachedTextRectRole).toRectF(), QRectF(22, 32, 176, 26));
 }

@@ -732,20 +732,6 @@ Window {
         }
     }
 
-    function attachedTextRect(shape) {
-        const pad = 12, type = (shape.type || "").toLowerCase();
-        const fSize = shape.fontSize || (shape.attachedText && shape.attachedText.fontSize) || controller.defaultFontSize;
-        if (type === "line" || type === "arrow") {
-            const midX = (shape.fromX + shape.toX) / 2, midY = (shape.fromY + shape.toY) / 2;
-            const len = Math.hypot(shape.toX - shape.fromX, shape.toY - shape.fromY);
-            const w = Math.max(80, len * 0.7), h = Math.max(32, fSize * 1.6);
-            return Qt.rect(midX - w / 2, midY - h / 2, w, h);
-        }
-        const ix = type === "ellipse" ? shape.width * (1 - Math.SQRT1_2) / 2 + pad : pad;
-        const iy = type === "ellipse" ? shape.height * (1 - Math.SQRT1_2) / 2 + pad : pad;
-        return Qt.rect(shape.x + ix, shape.y + iy, Math.max(40, shape.width - ix * 2), Math.max(24, shape.height - iy * 2));
-    }
-
     function startTextEditing(shapeIndex) {
         let shape = controller.getShape(shapeIndex);
         if (!shape) return;
@@ -774,7 +760,7 @@ Window {
         editingTextKind = "attached";
         controller.setSelectedIndex(shapeIndex);
 
-        const r = attachedTextRect(shape);
+        const r = controller.attachedTextRect(shapeIndex);
         textEditor.x = r.x;
         textEditor.y = r.y;
         textEditor.containerWidth = r.width;

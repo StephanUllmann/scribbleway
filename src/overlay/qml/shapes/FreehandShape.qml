@@ -6,51 +6,22 @@ BaseShape {
 
     mode: "none" // Move only, no resizing
     shapeIndex: index
-    // Compute bounding box from point list for selection and drag bounds
-    property real calculatedMinX: 0
-    property real calculatedMinY: 0
-    property real calculatedWidth: 0
-    property real calculatedHeight: 0
-
-    shapeX: calculatedMinX
-    shapeY: calculatedMinY
-    shapeWidth: calculatedWidth
-    shapeHeight: calculatedHeight
+    shapeX: model.bounds.x
+    shapeY: model.bounds.y
+    shapeWidth: Math.max(5, model.bounds.width)
+    shapeHeight: Math.max(5, model.bounds.height)
 
     property var points: model && model.points !== undefined ? model.points : []
-    onPointsChanged: recalculateBounds()
 
     onRectGeometryChanged: (nx, ny, nw, nh) => {
-        let dx = nx - calculatedMinX;
-        let dy = ny - calculatedMinY;
+        let dx = nx - shapeX;
+        let dy = ny - shapeY;
         let pts = root.points;
         let newPts = [];
         for (let i = 0; i < pts.length; ++i) {
             newPts.push(Qt.point(pts[i].x + dx, pts[i].y + dy));
         }
         controller.updateShape(index, { "points": newPts });
-    }
-
-    Component.onCompleted: recalculateBounds()
-
-    function recalculateBounds() {
-        let pts = root.points;
-        if (!pts || pts.length === 0) return;
-        let minX = pts[0].x;
-        let maxX = pts[0].x;
-        let minY = pts[0].y;
-        let maxY = pts[0].y;
-        for (let i = 1; i < pts.length; ++i) {
-            let p = pts[i];
-            if (p.x < minX) minX = p.x;
-            if (p.x > maxX) maxX = p.x;
-            if (p.y < minY) minY = p.y;
-            if (p.y > maxY) maxY = p.y;
-        }
-        calculatedMinX = minX;
-        calculatedMinY = minY;
-        calculatedWidth = Math.max(5, maxX - minX);
-        calculatedHeight = Math.max(5, maxY - minY);
     }
 
         Shape {

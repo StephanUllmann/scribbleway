@@ -18,6 +18,7 @@ static const QStringList kPresetColors = {
 #include <QUuid>
 #include "devlog.h"
 #include "excalidraw.h"
+#include "shapegeometry.h"
 #include <QClipboard>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -40,7 +41,7 @@ static QString describeShape(const QVariantMap &shape)
     if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
         return QStringLiteral("%1 (%2,%3)->(%4,%5)").arg(head, n("fromX"), n("fromY"), n("toX"), n("toY"));
     }
-    const QRectF b = ShapesModel::shapeBounds(shape);
+    const QRectF b = ShapeGeometry::bounds(shape);
     return QStringLiteral("%1 (%2,%3 %4x%5)")
         .arg(head).arg(qRound(b.x())).arg(qRound(b.y())).arg(qRound(b.width())).arg(qRound(b.height()));
 }
@@ -339,6 +340,14 @@ QVariantMap OverlayController::attachedTextForShape(int index) const
     return ShapesModel::firstAttachedTextBinding(m_shapesModel.shapes().at(index));
 }
 
+QRectF OverlayController::attachedTextRect(int index) const
+{
+    if (index < 0 || index >= m_shapesModel.rowCount()) {
+        return QRectF();
+    }
+    return ShapeGeometry::attachedTextRect(m_shapesModel.shapes().at(index), m_defaultFontSize);
+}
+
 QVariantMap OverlayController::ensureAttachedTextForShape(int index)
 {
     if (index < 0 || index >= m_shapesModel.rowCount()) {
@@ -347,7 +356,7 @@ QVariantMap OverlayController::ensureAttachedTextForShape(int index)
 
     QVariantMap shape = m_shapesModel.shapes().at(index);
     const QString type = shape.value(QStringLiteral("type")).toString();
-    if (!ShapesModel::supportsAttachedText(type)) {
+    if (!ShapeGeometry::supportsAttachedText(type)) {
         return QVariantMap();
     }
 
@@ -389,7 +398,7 @@ void OverlayController::setAttachedText(int index, const QString &text)
     }
 
     QVariantMap shape = m_shapesModel.shapes().at(index);
-    if (!ShapesModel::supportsAttachedText(shape.value(QStringLiteral("type")).toString())) {
+    if (!ShapeGeometry::supportsAttachedText(shape.value(QStringLiteral("type")).toString())) {
         return;
     }
 
@@ -1032,7 +1041,7 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
         binding[QStringLiteral("elementId")] = newId;
         for (const QVariantMap &target : list) {
             if (target.value(QStringLiteral("id")).toString() == newId) {
-                binding[QStringLiteral("focus")] = focusForPoint(target, endpoint.x(), endpoint.y());
+                binding[QStringLiteral("focus")] = ShapeGeometry::focusAt(target, endpoint);
                 break;
             }
         }
@@ -1082,7 +1091,7 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
     // Corners rather than QRectF::united, which drops a zero-size shape such as a lone point.
     // A freehand stroke without points has no position, so it does not pull the centre to 0,0.
     for (const QVariantMap &shape : list) {
-        const QRectF r = ShapesModel::shapeBounds(shape);
+        const QRectF r = ShapeGeometry::bounds(shape);
         if (shape.value(QStringLiteral("type")).toString() == QStringLiteral("freehand")
             && shape.value(QStringLiteral("points")).toList().isEmpty()) {
             continue;
@@ -1107,7 +1116,7 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
     for (QVariantMap shape : list) {
         shape.insert(QStringLiteral("selected"), true);
         shape.insert(QStringLiteral("locked"), false);
-        translateShape(shape, dx, dy);
+        ShapeGeometry::translate(shape, {dx, dy});
 
         m_shapesModel.addShape(shape);
         pastedIndices.append(m_shapesModel.rowCount() - 1);
@@ -1159,40 +1168,8 @@ void OverlayController::selectShapesInRect(double rx, double ry, double rw, doub
     int newSelectedIndex = -1;
 
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
-        QVariantMap shape = m_shapesModel.shapes()[i];
-        QString type = shape[QStringLiteral("type")].toString();
-        bool intersects = false;
-
-        if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
-            const QRectF shapeRect = ShapesModel::shapeBounds(shape);
-            intersects = selectRect.intersects(shapeRect) || selectRect.contains(shapeRect);
-        } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
-            double fx = shape[QStringLiteral("fromX")].toDouble();
-            double fy = shape[QStringLiteral("fromY")].toDouble();
-            double tx = shape[QStringLiteral("toX")].toDouble();
-            double ty = shape[QStringLiteral("toY")].toDouble();
-
-            QLineF shapeLine(fx, fy, tx, ty);
-            double srx = selectRect.x();
-            double sry = selectRect.y();
-            double srw = selectRect.width();
-            double srh = selectRect.height();
-
-            intersects = selectRect.contains(QPointF(fx, fy)) || selectRect.contains(QPointF(tx, ty)) ||
-                         shapeLine.intersects(QLineF(srx, sry, srx, sry + srh)) == QLineF::BoundedIntersection ||
-                         shapeLine.intersects(QLineF(srx + srw, sry, srx + srw, sry + srh)) == QLineF::BoundedIntersection ||
-                         shapeLine.intersects(QLineF(srx, sry, srx + srw, sry)) == QLineF::BoundedIntersection ||
-                         shapeLine.intersects(QLineF(srx, sry + srh, srx + srw, sry + srh)) == QLineF::BoundedIntersection;
-        } else if (type == QStringLiteral("freehand")) {
-            QVariantList points = shape[QStringLiteral("points")].toList();
-            for (const QVariant &pv : points) {
-                const QPointF p = pv.toPointF();
-                if (selectRect.contains(p)) {
-                    intersects = true;
-                    break;
-                }
-            }
-        }
+        const QVariantMap shape = m_shapesModel.shapes()[i];
+        const bool intersects = ShapeGeometry::intersects(shape, selectRect);
 
         // A locked shape never joins a selection, so group moves and deletes cannot reach it.
         bool shouldSelect = !shape.value(QStringLiteral("locked"), false).toBool()
@@ -1213,29 +1190,6 @@ void OverlayController::selectShapesInRect(double rx, double ry, double rw, doub
     }
 
     notifySelectionChanged();
-}
-
-void OverlayController::translateShape(QVariantMap &shape, double dx, double dy)
-{
-    const QString type = shape.value(QStringLiteral("type")).toString();
-    auto shift = [&shape, dx, dy](QLatin1String xKey, QLatin1String yKey) {
-        shape[xKey] = shape.value(xKey).toDouble() + dx;
-        shape[yKey] = shape.value(yKey).toDouble() + dy;
-    };
-
-    if (type == QStringLiteral("rectangle") || type == QStringLiteral("ellipse") || type == QStringLiteral("text")) {
-        shift(QLatin1String("x"), QLatin1String("y"));
-    } else if (type == QStringLiteral("line") || type == QStringLiteral("arrow")) {
-        shift(QLatin1String("fromX"), QLatin1String("fromY"));
-        shift(QLatin1String("toX"), QLatin1String("toY"));
-    } else if (type == QStringLiteral("freehand")) {
-        QVariantList newPoints;
-        const QVariantList points = shape.value(QStringLiteral("points")).toList();
-        for (const QVariant &pv : points) {
-            newPoints.append(pv.toPointF() + QPointF(dx, dy));
-        }
-        shape.insert(QStringLiteral("points"), newPoints);
-    }
 }
 
 void OverlayController::detachFromUnmoved(int index, QVariantMap &shape, const QSet<int> &moved)
@@ -1279,7 +1233,7 @@ void OverlayController::moveShapes(const QHash<int, QVariantMap> &starts, double
     for (auto it = starts.begin(); it != starts.end(); ++it) {
         QVariantMap shape = it.value();
         detachFromUnmoved(it.key(), shape, moved);
-        translateShape(shape, dx, dy);
+        ShapeGeometry::translate(shape, {dx, dy});
         m_shapesModel.updateShape(it.key(), shape);
     }
     for (int idx : moved) {
@@ -1289,145 +1243,6 @@ void OverlayController::moveShapes(const QHash<int, QVariantMap> &starts, double
         }
     }
     m_shapesModel.endEdit();
-}
-
-QPointF OverlayController::nearestPointOnRect(double rx, double ry, double rw, double rh, double px, double py) const
-{
-    // Nearest point on each edge, then keep the closest of the four.
-    QPointF top(qBound(rx, px, rx + rw), ry);
-    QPointF bottom(qBound(rx, px, rx + rw), ry + rh);
-    QPointF left(rx, qBound(ry, py, ry + rh));
-    QPointF right(rx + rw, qBound(ry, py, ry + rh));
-
-    auto dist2 = [&](const QPointF &a) {
-        double dx = a.x() - px, dy = a.y() - py;
-        return dx * dx + dy * dy;
-    };
-
-    QPointF candidates[] = { top, bottom, left, right };
-    double minDist = dist2(top);
-    QPointF best = top;
-
-    for (int i = 1; i < 4; ++i) {
-        double d = dist2(candidates[i]);
-        if (d < minDist) {
-            minDist = d;
-            best = candidates[i];
-        }
-    }
-    return best;
-}
-
-QPointF OverlayController::nearestPointOnEllipse(double cx, double cy, double a, double b, double px, double py) const
-{
-    double lx = px - cx;
-    double ly = py - cy;
-
-    if (qFuzzyIsNull(lx) && qFuzzyIsNull(ly)) {
-        return QPointF(cx, cy - b);
-    }
-
-    double theta = qAtan2(ly / b, lx / a);
-    for (int i = 0; i < 4; ++i) {
-        double ct = qCos(theta), st = qSin(theta);
-        double ex = a * ct, ey = b * st;
-        double dx = lx - ex, dy = ly - ey;
-        double dtx = -a * st, dty = b * ct;
-        double denom = dtx * dtx + dty * dty;
-        if (qFuzzyIsNull(denom)) break;
-        theta += (dx * dtx + dy * dty) / denom;
-    }
-
-    return QPointF(cx + a * qCos(theta), cy + b * qSin(theta));
-}
-
-double OverlayController::focusForPoint(const QVariantMap &shape, double px, double py) const
-{
-    QString type = shape.value(QStringLiteral("type")).toString();
-
-    if (type == QStringLiteral("rectangle")) {
-        double rx = shape[QStringLiteral("x")].toDouble();
-        double ry = shape[QStringLiteral("y")].toDouble();
-        double rw = shape[QStringLiteral("width")].toDouble();
-        double rh = shape[QStringLiteral("height")].toDouble();
-        QPointF sp = nearestPointOnRect(rx, ry, rw, rh, px, py);
-
-        double perim = 2.0 * (rw + rh);
-        if (perim < 1e-6) return 0.0;
-
-        double topCenter = rx + rw / 2.0;
-        double d = 0.0;
-
-        if (qFuzzyCompare(sp.y(), ry)) {
-            d = sp.x() - topCenter;
-            if (d < 0) d += perim;
-        } else if (qFuzzyCompare(sp.x(), rx + rw)) {
-            d = rw / 2.0 + (sp.y() - ry);
-        } else if (qFuzzyCompare(sp.y(), ry + rh)) {
-            d = rw / 2.0 + rh + (rx + rw - sp.x());
-        } else {
-            d = rw / 2.0 + rh + rw + (ry + rh - sp.y());
-        }
-
-        return d / perim;
-    } else if (type == QStringLiteral("ellipse")) {
-        double cx = shape[QStringLiteral("x")].toDouble() + shape[QStringLiteral("width")].toDouble() / 2.0;
-        double cy = shape[QStringLiteral("y")].toDouble() + shape[QStringLiteral("height")].toDouble() / 2.0;
-
-        const double a = shape[QStringLiteral("width")].toDouble() / 2.0;
-        const double b = shape[QStringLiteral("height")].toDouble() / 2.0;
-        if (a <= 0.0 || b <= 0.0) return 0.0;
-
-        // The parametric angle, the same one pointFromBinding() turns back into a point.
-        double angle = qAtan2((py - cy) / b, (px - cx) / a);
-        if (angle < 0) angle += 2.0 * std::numbers::pi;
-        return angle / (2.0 * std::numbers::pi);
-    }
-
-    return 0.0;
-}
-
-QPointF OverlayController::pointFromBinding(const QVariantMap &shape, double focus) const
-{
-    QString type = shape.value(QStringLiteral("type")).toString();
-
-    if (type == QStringLiteral("rectangle")) {
-        double rx = shape[QStringLiteral("x")].toDouble();
-        double ry = shape[QStringLiteral("y")].toDouble();
-        double rw = shape[QStringLiteral("width")].toDouble();
-        double rh = shape[QStringLiteral("height")].toDouble();
-        double perim = 2.0 * (rw + rh);
-        double d = focus * perim;
-        double topCenter = rx + rw / 2.0;
-
-        if (d <= rw / 2.0) {
-            return QPointF(topCenter + d, ry);
-        }
-        d -= rw / 2.0;
-        if (d <= rh) {
-            return QPointF(rx + rw, ry + d);
-        }
-        d -= rh;
-        if (d <= rw) {
-            return QPointF(rx + rw - d, ry + rh);
-        }
-        d -= rw;
-        if (d <= rh) {
-            return QPointF(rx, ry + rh - d);
-        }
-        d -= rh;
-        return QPointF(rx + d, ry);
-    } else if (type == QStringLiteral("ellipse")) {
-        double cx = shape[QStringLiteral("x")].toDouble() + shape[QStringLiteral("width")].toDouble() / 2.0;
-        double cy = shape[QStringLiteral("y")].toDouble() + shape[QStringLiteral("height")].toDouble() / 2.0;
-        double a = shape[QStringLiteral("width")].toDouble() / 2.0;
-        double b = shape[QStringLiteral("height")].toDouble() / 2.0;
-
-        double angle = focus * 2.0 * std::numbers::pi;
-        return QPointF(cx + a * qCos(angle), cy + b * qSin(angle));
-    }
-
-    return QPointF();
 }
 
 BindingHit OverlayController::findSnapTarget(double px, double py, int excludeIndex) const
@@ -1440,33 +1255,18 @@ BindingHit OverlayController::findSnapTarget(double px, double py, int excludeIn
         if (i == excludeIndex) continue;
 
         const auto &shape = shapes[i];
-        QString type = shape.value(QStringLiteral("type")).toString();
-        if (type != QStringLiteral("rectangle") && type != QStringLiteral("ellipse"))
+        if (!ShapeGeometry::hasOutline(shape.value(QStringLiteral("type")).toString()))
             continue;
         if (shape.value(QStringLiteral("locked"), false).toBool())
             continue;
 
-        QPointF snapPt;
-        if (type == QStringLiteral("rectangle")) {
-            double rx = shape[QStringLiteral("x")].toDouble();
-            double ry = shape[QStringLiteral("y")].toDouble();
-            double rw = shape[QStringLiteral("width")].toDouble();
-            double rh = shape[QStringLiteral("height")].toDouble();
-            snapPt = nearestPointOnRect(rx, ry, rw, rh, px, py);
-        } else {
-            double cx = shape[QStringLiteral("x")].toDouble() + shape[QStringLiteral("width")].toDouble() / 2.0;
-            double cy = shape[QStringLiteral("y")].toDouble() + shape[QStringLiteral("height")].toDouble() / 2.0;
-            double a = shape[QStringLiteral("width")].toDouble() / 2.0;
-            double b = shape[QStringLiteral("height")].toDouble() / 2.0;
-            snapPt = nearestPointOnEllipse(cx, cy, a, b, px, py);
-        }
-
+        const QPointF snapPt = ShapeGeometry::nearestOutlinePoint(shape, {px, py});
         double dx = snapPt.x() - px, dy = snapPt.y() - py;
         double dist = qSqrt(dx * dx + dy * dy);
         if (dist <= kSnapThreshold && dist < bestDist) {
             bestDist = dist;
             best.targetId = shape.value(QStringLiteral("id")).toString();
-            best.focus = focusForPoint(shape, snapPt.x(), snapPt.y());
+            best.focus = ShapeGeometry::focusAt(shape, snapPt);
             best.snapPoint = snapPt;
             best.valid = true;
         }
@@ -1582,14 +1382,14 @@ void OverlayController::updateBoundEndpoints(int shapeIndex, const QSet<int> *sk
 
         QVariantMap sb = lineShape.value(QStringLiteral("startBinding")).toMap();
         if (sb.value(QStringLiteral("elementId")).toString() == targetId) {
-            QPointF p = pointFromBinding(targetShape, sb.value(QStringLiteral("focus")).toDouble());
+            QPointF p = ShapeGeometry::pointAtFocus(targetShape, sb.value(QStringLiteral("focus")).toDouble());
             updates[QStringLiteral("fromX")] = p.x();
             updates[QStringLiteral("fromY")] = p.y();
         }
 
         QVariantMap eb = lineShape.value(QStringLiteral("endBinding")).toMap();
         if (eb.value(QStringLiteral("elementId")).toString() == targetId) {
-            QPointF p = pointFromBinding(targetShape, eb.value(QStringLiteral("focus")).toDouble());
+            QPointF p = ShapeGeometry::pointAtFocus(targetShape, eb.value(QStringLiteral("focus")).toDouble());
             updates[QStringLiteral("toX")] = p.x();
             updates[QStringLiteral("toY")] = p.y();
         }

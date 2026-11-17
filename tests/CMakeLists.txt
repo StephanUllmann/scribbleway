@@ -4,6 +4,8 @@ add_executable(shapesmodeltest
     shapesmodeltest.cpp
     ../src/overlay/shapesmodel.h
     ../src/overlay/shapesmodel.cpp
+    ../src/overlay/shapegeometry.h
+    ../src/overlay/shapegeometry.cpp
     ../src/overlay/overlaycontroller.h
     ../src/overlay/overlaycontroller.cpp
     ../src/overlay/overlaywindow.h

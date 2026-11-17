@@ -15,6 +15,8 @@ qt_add_executable(scribbleway-overlay
     excalidraw.cpp
     shapesmodel.h
     shapesmodel.cpp
+    shapegeometry.h
+    shapegeometry.cpp
     devlog.h
     devlog.cpp
 )
