@@ -41,8 +41,6 @@ class OverlayController : public QObject
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
     Q_PROPERTY(QVariantMap selection READ getSelectionState NOTIFY selectionChanged)
     Q_PROPERTY(QStringList presetColors READ presetColors CONSTANT)
-    Q_PROPERTY(bool trayPopupOpen READ trayPopupOpen NOTIFY trayPopupOpenChanged)
-    Q_PROPERTY(bool popupWantsKeyboard READ popupWantsKeyboard WRITE setPopupWantsKeyboard NOTIFY popupWantsKeyboardChanged)
 
 public:
     explicit OverlayController(QObject *parent = nullptr);
@@ -103,13 +101,6 @@ public:
 
     // QML-invokable methods
     Q_INVOKABLE void setSelectedIndex(int index);
-    bool trayPopupOpen() const;
-    void setTrayPopupOpen(bool open);
-    bool popupWantsKeyboard() const;
-    void setPopupWantsKeyboard(bool wants);
-    // Q_INVOKABLE, not just public: a plain public method is invisible to QML — only
-    // property WRITEs, slots and Q_INVOKABLEs reach the metaobject's method table.
-    Q_INVOKABLE void closeTrayPopup();
     Q_INVOKABLE void beginEdit();
     Q_INVOKABLE void endEdit();
     Q_INVOKABLE QVariantMap getShape(int index) const;
@@ -170,9 +161,6 @@ Q_SIGNALS:
     
     void selectionChanged();
     void modeChanged(const QString &mode);
-    void trayPopupOpenChanged();
-    void popupWantsKeyboardChanged();
-    void trayPopupCloseRequested();
 
     // Command signals to QML
     void enterSelectModeRequested();
@@ -216,9 +204,6 @@ private:
     QString m_defaultFillColor;
     double m_defaultFillOpacity = 0.25;
     int m_defaultFreehandSmoothing = 2;
-
-    bool m_trayPopupOpen = false;
-    bool m_popupWantsKeyboard = false;
 
     static constexpr double kSnapThreshold = 20.0;
     BindingHit findSnapTarget(double px, double py, int excludeIndex = -1) const;

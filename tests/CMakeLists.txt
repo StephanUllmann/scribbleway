@@ -8,6 +8,8 @@ add_executable(shapesmodeltest
     ../src/overlay/overlaycontroller.cpp
     ../src/overlay/overlaywindow.h
     ../src/overlay/overlaywindow.cpp
+    ../src/overlay/traypopup.h
+    ../src/overlay/traypopup.cpp
     ../src/overlay/layersurface.h
     ../src/overlay/excalidraw.h
     ../src/overlay/excalidraw.cpp

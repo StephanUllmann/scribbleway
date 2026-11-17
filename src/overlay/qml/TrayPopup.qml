@@ -3,12 +3,12 @@ import QtQuick.Window
 import QtQuick.Layouts
 
 Window {
-    id: trayPopup
+    id: popupWindow
 
     readonly property int menuWidth: 432
     readonly property int gap: 8
 
-    // The surface is layer-shell anchored Bottom|Right (see main.cpp), so its right edge
+    // The surface is layer-shell anchored Bottom|Right (see traypopup.h), so its right edge
     // is pinned and the extra width for the picker grows out to the left. The menu keeps
     // its own width either way.
     width: menuWidth + (picker.visible ? picker.implicitWidth + gap : 0)
@@ -26,13 +26,12 @@ Window {
     }
 
     // Escape reaches whichever of the two windows holds the keyboard, so it is handled
-    // on both sides. Closing goes through the controller, since main.cpp owns this
-    // window's visibility bookkeeping.
+    // on both sides. Closing goes through trayPopup, which owns this window's visibility.
     Shortcut {
         sequence: "Escape"
         onActivated: {
             picker.visible = false
-            controller.closeTrayPopup()
+            trayPopup.close()
             controller.enterPassthroughMode()
         }
     }
@@ -40,7 +39,7 @@ Window {
     RowLayout {
         anchors.fill: parent
         anchors.margins: 8
-        spacing: trayPopup.gap
+        spacing: popupWindow.gap
 
         ColorPickerPanel {
             id: picker
@@ -53,15 +52,15 @@ Window {
             // the panel on open must not write the colour straight back, or opening the
             // fill picker over a transparent fill would silently make it opaque.
             onSelectedColorChanged: {
-                if (visible) menu.applyCustomColor(selectedColor, trayPopup.pickerIsFill)
+                if (visible) menu.applyCustomColor(selectedColor, popupWindow.pickerIsFill)
             }
             onCloseRequested: visible = false
             onDraggingChanged: dragging ? controller.beginEdit() : controller.endEdit()
 
             // Hand the keyboard back and forth as the hex field takes and loses focus,
             // so the overlay keeps its hotkeys the rest of the time.
-            onTextEditingChanged: controller.popupWantsKeyboard = textEditing
-            onVisibleChanged: if (!visible) controller.popupWantsKeyboard = false
+            onTextEditingChanged: trayPopup.wantsKeyboard = textEditing
+            onVisibleChanged: if (!visible) trayPopup.wantsKeyboard = false
         }
 
         FullRepresentation {
@@ -71,7 +70,7 @@ Window {
 
             onCustomColorRequested: (current, isFill) => {
                 picker.visible = false   // suppress the apply while seeding — see above
-                trayPopup.pickerIsFill = isFill
+                popupWindow.pickerIsFill = isFill
                 picker.selectedColor = current
                 picker.visible = true
             }

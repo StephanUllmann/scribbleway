@@ -6,6 +6,8 @@ qt_add_executable(scribbleway-overlay
     overlaycontroller.cpp
     overlaywindow.h
     overlaywindow.cpp
+    traypopup.h
+    traypopup.cpp
     layersurface.h
     layershellsurface.h
     layershellsurface.cpp

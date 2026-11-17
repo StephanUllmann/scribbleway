@@ -701,42 +701,6 @@ void OverlayController::endEdit()
     m_shapesModel.endEdit();
 }
 
-bool OverlayController::trayPopupOpen() const
-{
-    return m_trayPopupOpen;
-}
-
-void OverlayController::setTrayPopupOpen(bool open)
-{
-    if (m_trayPopupOpen == open) return;
-    m_trayPopupOpen = open;
-    qCInfo(lcDev) << "tray popup" << (open ? "open" : "closed");
-    if (!open) setPopupWantsKeyboard(false);
-    Q_EMIT trayPopupOpenChanged();
-}
-
-bool OverlayController::popupWantsKeyboard() const
-{
-    return m_popupWantsKeyboard;
-}
-
-// Only the popup's text fields take the keyboard away from the overlay, and only while
-// they are focused. Yielding it for the whole time the popup is open killed every tool
-// hotkey the moment the popup was touched — the shortcuts live on the overlay window,
-// so an overlay with no keyboard is an overlay with no hotkeys.
-void OverlayController::setPopupWantsKeyboard(bool wants)
-{
-    if (m_popupWantsKeyboard == wants) return;
-    m_popupWantsKeyboard = wants;
-    qCInfo(lcDev) << "popup wants keyboard:" << wants;
-    Q_EMIT popupWantsKeyboardChanged();
-}
-
-void OverlayController::closeTrayPopup()
-{
-    Q_EMIT trayPopupCloseRequested();
-}
-
 void OverlayController::enterSelectMode()
 {
     Q_EMIT enterSelectModeRequested();

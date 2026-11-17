@@ -8,9 +8,6 @@
 #include <QStandardPaths>
 #include <QSystemTrayIcon>
 #include <QIcon>
-#include <QElapsedTimer>
-#include <QMargins>
-#include <QRect>
 #include <QDebug>
 #include <QDir>
 
@@ -23,6 +20,7 @@
 #include "layershellsurface.h"
 #include "overlaycontroller.h"
 #include "overlaywindow.h"
+#include "traypopup.h"
 #include "singleinstance.h"
 
 int main(int argc, char *argv[])
@@ -134,11 +132,13 @@ int main(int argc, char *argv[])
     });
     LayerShellSurface layerShell;
     OverlayWindow overlayWindow(&layerShell);
+    TrayPopup trayPopup(&layerShell, &overlayWindow);
 
     // Load QML Engine
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
     engine.rootContext()->setContextProperty(QStringLiteral("overlayWindow"), &overlayWindow);
+    engine.rootContext()->setContextProperty(QStringLiteral("trayPopup"), &trayPopup);
     engine.rootContext()->setContextProperty(QStringLiteral("devMode"), devMode);
     
     const QUrl url(QStringLiteral("qrc:/scribbleway/qml/main.qml"));
@@ -162,113 +162,21 @@ int main(int argc, char *argv[])
 
     engine.load(url);
 
-    // The Tray Popup is a small anchored layer-shell surface (menu-sized, corner-placed),
-    // not the fullscreen overlay above. Hidden until the tray icon is clicked.
+    // A small corner-anchored layer-shell surface, hidden until the tray icon is clicked.
     const QUrl trayPopupUrl(QStringLiteral("qrc:/scribbleway/qml/TrayPopup.qml"));
-    QQuickWindow *popupWindow = nullptr;
-    QElapsedTimer hiddenTimer;
-    // Only hides; the bookkeeping runs on visibleChanged (see below), which also catches
-    // the popup vanishing without passing through here. The reason is logged so a
-    // "closed" line with no "close requested" before it shows such an outside close.
-    auto hidePopup = [](QQuickWindow *w, const char *reason) {
-        if (w && w->isVisible()) {
-            qCInfo(lcDev) << "popup close requested:" << reason;
-            w->hide();
-        }
-    };
-    // Escape inside the popup, and Escape or a click on the overlay canvas, all close it
-    // from QML — which has no handle on this window.
-    QObject::connect(&controller, &OverlayController::trayPopupCloseRequested, &app,
-                     [&popupWindow, &hidePopup]() { hidePopup(popupWindow, "escape or canvas click"); });
-    // While a text field in the popup has focus, the overlay hands it the keyboard.
-    QObject::connect(&controller, &OverlayController::popupWantsKeyboardChanged, &overlayWindow,
-                     [&controller, &overlayWindow]() { overlayWindow.setKeyboardYielded(controller.popupWantsKeyboard()); });
-    // Anchor to the bottom-right corner: adjacent edges keep the window's natural size
-    // (menu-sized), unlike the overlay's opposite-edge fullscreen anchoring. The overlay
-    // places the popup's input hole from this same config.
-    const LayerConfig popupLayer{.anchors = Qt::BottomEdge | Qt::RightEdge,
-                                 .margins = QMargins(0, 0, 8, 8),
-                                 .exclusiveZone = 0,
-                                 .keyboard = LayerConfig::Keyboard::OnDemand,
-                                 .scope = QStringLiteral("scribbleway-traypopup"),
-                                 .onActiveScreen = true};
-    // Re-applied before every show so it survives the destroy()/recreate used to move screens.
-    auto configurePopupLayer = [&popupWindow, &layerShell, &popupLayer]() {
-        if (popupWindow) layerShell.apply(popupWindow, popupLayer);
-    };
-    // Qt-Wayland ignores QWindow::setScreen() (the compositor owns window placement),
-    // and Wayland gives no global cursor position or tray-icon geometry — so we can't
-    // force or detect the screen. Instead configurePopupLayer() uses ScreenFromCompositor,
-    // which makes KWin map the popup on whichever output is currently active. That is the
-    // behaviour we want: the popup follows the screen you're working on.
-    auto showPopup = [&popupWindow, &controller, &configurePopupLayer]() {
-        if (!popupWindow) return;
-
-        configurePopupLayer();
-        controller.setTrayPopupOpen(true);
-        popupWindow->show();
-        popupWindow->raise();
-        popupWindow->requestActivate();
-    };
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
-                     &app, [trayPopupUrl, &popupWindow, &hidePopup, &configurePopupLayer,
-                            &hiddenTimer, &controller, &overlayWindow, &popupLayer](QObject *obj, const QUrl &objUrl) {
+                     &app, [trayPopupUrl, &trayPopup](QObject *obj, const QUrl &objUrl) {
         if (objUrl != trayPopupUrl) return;
-        popupWindow = qobject_cast<QQuickWindow*>(obj);
-        if (!popupWindow) return;
-
-        configurePopupLayer();
-
-        // Keep the popup clickable even when a drawing tool has the overlay grabbing input.
-        // Width too, not just show: opening the colour picker widens the popup, and a hole
-        // left at the old width leaves the new strip unclickable while a tool is active.
-        auto updateHole = [popup = popupWindow, &overlayWindow, popupLayer]() {
-            overlayWindow.setHole(popup->isVisible() ? popup->screen() : nullptr, popupLayer, popup->size());
-        };
-        QObject::connect(popupWindow, &QWindow::screenChanged, &overlayWindow, updateHole);
-        QObject::connect(popupWindow, &QWindow::widthChanged, &overlayWindow, updateHole);
-        QObject::connect(popupWindow, &QWindow::heightChanged, &overlayWindow, updateHole);
-        QObject::connect(popupWindow, &QWindow::visibleChanged, &overlayWindow, updateHole);
-
-        // Every way the popup disappears ends here, including the compositor closing the
-        // surface or Qt closing it as a Qt.Popup window, so the controller never goes on
-        // believing it is open (which kept its input hole and withheld keyboard focus).
-        QObject::connect(popupWindow, &QWindow::visibleChanged, popupWindow,
-                         [&hiddenTimer, &controller](bool visible) {
-            if (visible) return;
-            hiddenTimer.restart();
-            controller.setTrayPopupOpen(false);
-        });
-
-        // Dismiss on focus loss (click outside) — but the overlay is our own window and
-        // holds an exclusive keyboard grab whenever a tool is active, so it takes focus
-        // constantly. Treating that as "clicked outside" is what made the popup close on
-        // its own actions. A click on the overlay canvas dismisses via the explicit
-        // close request instead (see main.qml), which is what the user means by outside.
-        QObject::connect(popupWindow, &QWindow::activeChanged, popupWindow,
-                         [&popupWindow, &hidePopup, &controller]() {
-            if (!popupWindow || popupWindow->isActive()) return;
-            if (QGuiApplication::focusWindow() == controller.window()) return;
-            hidePopup(popupWindow, "focus moved elsewhere");
-        });
+        if (auto *window = qobject_cast<QQuickWindow*>(obj)) trayPopup.attach(window);
     }, Qt::QueuedConnection);
     engine.load(trayPopupUrl);
 
     QSystemTrayIcon trayIcon(QIcon::fromTheme(QStringLiteral("draw-freehand"),
                                               QIcon(QStringLiteral(":/icons/draw-freehand.svg"))));
     trayIcon.setToolTip(QStringLiteral("Scribbleway"));
-    QObject::connect(&trayIcon, &QSystemTrayIcon::activated, &app,
-                     [&popupWindow, &hidePopup, &hiddenTimer, &showPopup](QSystemTrayIcon::ActivationReason reason) {
-        if (reason != QSystemTrayIcon::Trigger) return;
-        if (!popupWindow) return;
-
-        // If focus-out just hid it as part of this same click, don't reopen.
-        const bool recentlyHidden = hiddenTimer.isValid() && hiddenTimer.elapsed() < 250;
-        if (popupWindow->isVisible() || recentlyHidden) {
-            hidePopup(popupWindow, "tray icon");
-            return;
-        }
-        showPopup();
+    QObject::connect(&trayIcon, &QSystemTrayIcon::activated, &trayPopup,
+                     [&trayPopup](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::Trigger) trayPopup.toggle();
     });
     // Shown regardless: isSystemTrayAvailable() can be a false negative when the
     // StatusNotifierHost registers a moment later (documented Waybar/Hyprland race).

@@ -46,6 +46,7 @@ public:
     // Human-readable names in the same order as screenNames(), e.g. "Laptop screen (eDP-1)".
     QStringList screenLabels() const;
     QString targetScreen() const;
+    QQuickWindow *window() const { return m_window; }
 
 public Q_SLOTS:
     void setTargetScreen(const QString &screenName);

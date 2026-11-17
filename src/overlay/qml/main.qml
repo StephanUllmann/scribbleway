@@ -247,7 +247,7 @@ Window {
         overlayWindow.setToolWantsKeyboard(needsKeyboard);
         // Not while the tray popup is up: it dismisses on focus loss, and this fires on
         // every selection change — including the ones the popup itself just caused.
-        if (needsKeyboard && !controller.trayPopupOpen) {
+        if (needsKeyboard && !trayPopup.open) {
             canvasWindow.requestActivate();
         }
 
@@ -789,7 +789,7 @@ Window {
         if (textEditor.visible) {
             textEditor.commitText();
         }
-        controller.closeTrayPopup();
+        trayPopup.close();
         controller.enterPassthroughMode();
     }
 
@@ -802,9 +802,9 @@ Window {
         z: 1000
 
         PointHandler {
-            enabled: controller.trayPopupOpen
+            enabled: trayPopup.open
             acceptedButtons: Qt.AllButtons
-            onActiveChanged: if (active) controller.closeTrayPopup()
+            onActiveChanged: if (active) trayPopup.close()
         }
     }
 

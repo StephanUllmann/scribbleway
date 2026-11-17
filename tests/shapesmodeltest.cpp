@@ -5,6 +5,7 @@
 #include "shapesmodel.h"
 #include "overlaycontroller.h"
 #include "overlaywindow.h"
+#include "traypopup.h"
 #include "singleinstance.h"
 #include "devlog.h"
 #include <QTemporaryDir>
@@ -29,12 +30,14 @@ struct RecordingSurface : LayerSurface {
     void apply(QWindow *, const LayerConfig &config) override { applied << config; }
 };
 
-// The QML reaches the overlay window through this context property, so a test that loads
-// it needs one even when it never attaches a window.
-static void exposeOverlayWindow(QQmlEngine &engine)
+// The QML reaches both windows through these context properties, so a test that loads
+// it needs them even when it never attaches a window.
+static void exposeWindows(QQmlEngine &engine)
 {
     static RecordingSurface surface;
-    engine.rootContext()->setContextProperty(QStringLiteral("overlayWindow"), new OverlayWindow(&surface, &engine));
+    auto *overlay = new OverlayWindow(&surface, &engine);
+    engine.rootContext()->setContextProperty(QStringLiteral("overlayWindow"), overlay);
+    engine.rootContext()->setContextProperty(QStringLiteral("trayPopup"), new TrayPopup(&surface, overlay, &engine));
 }
 
 class ShapesModelTest : public QObject
@@ -50,6 +53,8 @@ private Q_SLOTS:
     void testOverlayStartsClickThrough();
     void testOverlayKeyboardAndLayer();
     void testOverlayRemapReappliesLayer();
+    void testTrayPopupToggle();
+    void testTrayPopupFocusLoss();
     void testRemoveShapeUndo();
     void testClearUndo();
     void testSelectionNoHistory();
@@ -2074,6 +2079,90 @@ void ShapesModelTest::testOverlayRemapReappliesLayer()
     QCOMPARE(screens.count(), 1);
 }
 
+// Opening the popup carves its hole out of the overlay; closing it, however that happens,
+// fills the hole and hands the keyboard back to the overlay.
+void ShapesModelTest::testTrayPopupToggle()
+{
+    RecordingSurface surface;
+    OverlayWindow ow(&surface);
+    QQuickWindow overlay;
+    ow.attach(&overlay);
+    overlay.resize(800, 600);
+    ow.setShapeRegion({QRectF(0, 0, 800, 600)});
+    ow.setToolWantsKeyboard(true);
+
+    TrayPopup tp(&surface, &ow);
+    QQuickWindow popup;
+    popup.resize(200, 100);
+    tp.attach(&popup);
+    QCOMPARE(surface.applied.last().scope, QStringLiteral("scribbleway-traypopup"));
+    QVERIFY(!tp.isOpen());
+
+    tp.toggle();
+    QVERIFY(tp.isOpen());
+    QVERIFY(!overlay.mask().contains(QPoint(700, 550))); // hole at (592,492 200x100)
+
+    // A text field in the popup takes the keyboard from the overlay while it has focus.
+    QVERIFY(tp.setProperty("wantsKeyboard", true));
+    QCOMPARE(surface.applied.last().keyboard, LayerConfig::Keyboard::None);
+
+    // Escape or a canvas click.
+    QSignalSpy openChanged(&tp, &TrayPopup::openChanged);
+    tp.close();
+    QVERIFY(!tp.isOpen());
+    QCOMPARE(openChanged.count(), 1);
+    QVERIFY(overlay.mask().contains(QPoint(700, 550)));
+    // A stuck claim would leave the overlay with no hotkeys and no visible cause.
+    QVERIFY(!tp.wantsKeyboard());
+    QCOMPARE(surface.applied.last().keyboard, LayerConfig::Keyboard::Exclusive);
+
+    // The click that hid it through focus loss also reaches the tray icon; it must not
+    // reopen the popup straight away.
+    tp.toggle();
+    QVERIFY(!tp.isOpen());
+    QTest::qWait(300);
+    tp.toggle();
+    QVERIFY(tp.isOpen());
+    tp.toggle();
+    QVERIFY(!tp.isOpen());
+
+    // Hidden from outside (the compositor, or Qt closing a Qt.Popup): same cleanup.
+    QTest::qWait(300);
+    tp.toggle();
+    tp.setWantsKeyboard(true);
+    popup.hide();
+    QVERIFY(!tp.isOpen());
+    QVERIFY(!tp.wantsKeyboard());
+    QVERIFY(overlay.mask().contains(QPoint(700, 550)));
+}
+
+// Focus moving to another window closes the popup, but not focus moving to the overlay,
+// which takes it whenever a tool is active.
+void ShapesModelTest::testTrayPopupFocusLoss()
+{
+    RecordingSurface surface;
+    OverlayWindow ow(&surface);
+    QQuickWindow overlay;
+    ow.attach(&overlay);
+    TrayPopup tp(&surface, &ow);
+    QQuickWindow popup;
+    popup.resize(200, 100);
+    tp.attach(&popup);
+
+    tp.toggle();
+    QTRY_VERIFY(popup.isActive());
+    overlay.requestActivate();
+    QTRY_VERIFY(overlay.isActive());
+    QVERIFY(tp.isOpen());
+
+    popup.requestActivate();
+    QTRY_VERIFY(popup.isActive());
+    QQuickWindow other;
+    other.show();
+    other.requestActivate();
+    QTRY_VERIFY(!tp.isOpen());
+}
+
 QTEST_MAIN(ShapesModelTest)
 #include "shapesmodeltest.moc"
 
@@ -2701,19 +2790,6 @@ void ShapesModelTest::testDefaultsReachableFromQml()
         QCOMPARE(controller.property(it.key().toUtf8().constData()), it.value());
     }
 
-    // The menu calls this by name when Escape or a canvas click should dismiss the popup.
-    QVERIFY2(QMetaObject::invokeMethod(&controller, "closeTrayPopup"),
-             "closeTrayPopup is not in the metaobject's method table");
-    QVERIFY(controller.setProperty("popupWantsKeyboard", true));
-    QVERIFY(controller.popupWantsKeyboard());
-
-    // Closing the popup must hand the keyboard back unconditionally. The overlay owns
-    // every tool hotkey, so a stuck claim here leaves the app with no shortcuts at all
-    // and no visible cause.
-    controller.setTrayPopupOpen(true);
-    controller.setPopupWantsKeyboard(true);
-    controller.setTrayPopupOpen(false);
-    QVERIFY(!controller.popupWantsKeyboard());
 }
 
 // The shape manager list binds straight to ShapesModel, so its delegate pulls `type`,
@@ -2729,7 +2805,7 @@ void ShapesModelTest::testShapeListDelegateReadsModelRoles()
 
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
-    exposeOverlayWindow(engine);
+    exposeWindows(engine);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
         QStringLiteral(QML_SOURCE_DIR) + QStringLiteral("/FullRepresentation.qml")));
     QScopedPointer<QObject> menu(component.create());
@@ -2764,6 +2840,7 @@ void ShapesModelTest::testEveryQmlControllerCallExists()
         {"controller", &OverlayController::staticMetaObject},
         {"backend", &OverlayController::staticMetaObject},
         {"overlayWindow", &OverlayWindow::staticMetaObject},
+        {"trayPopup", &TrayPopup::staticMetaObject},
     };
     for (const auto &[object, mo] : objects) {
         for (int i = 0; i < mo->methodCount(); ++i) {
@@ -2776,7 +2853,7 @@ void ShapesModelTest::testEveryQmlControllerCallExists()
         QStringLiteral("TrayPopup.qml"), QStringLiteral("ColorPickerPanel.qml"),
     };
     const QRegularExpression call(
-        QStringLiteral("\\b(controller|backend|overlayWindow)\\.([A-Za-z_][A-Za-z0-9_]*)\\s*\\("));
+        QStringLiteral("\\b(controller|backend|overlayWindow|trayPopup)\\.([A-Za-z_][A-Za-z0-9_]*)\\s*\\("));
 
     QStringList missing;
     for (const QString &name : files) {
@@ -2929,7 +3006,7 @@ void ShapesModelTest::testMainQmlFollowsTheModel()
     OverlayController c;
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(u"controller"_s, &c);
-    exposeOverlayWindow(engine);
+    exposeWindows(engine);
     QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
     QScopedPointer<QObject> root(component.create());
     QVERIFY2(root, qPrintable(component.errorString()));
@@ -3078,7 +3155,7 @@ void ShapesModelTest::testResizeHandleCursors()
     OverlayController c;
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(u"controller"_s, &c);
-    exposeOverlayWindow(engine);
+    exposeWindows(engine);
     QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
     QScopedPointer<QObject> root(component.create());
     QVERIFY2(root, qPrintable(component.errorString()));
@@ -3118,7 +3195,7 @@ void ShapesModelTest::testResizeShowsSizeLabel()
     OverlayController c;
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(u"controller"_s, &c);
-    exposeOverlayWindow(engine);
+    exposeWindows(engine);
     QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
     QScopedPointer<QObject> root(component.create());
     QVERIFY2(root, qPrintable(component.errorString()));
