@@ -171,7 +171,6 @@ Window {
 
         let shape = Object.assign(controller.styleForNewShape(activeDrawTool), {
             "type": activeDrawTool,
-            "selected": false,
             "locked": false,
             "seed": Math.floor(Math.random() * 1000000) + 1
         });

@@ -2,6 +2,8 @@ find_package(Qt6 REQUIRED COMPONENTS Test Quick QuickTest)
 
 add_executable(shapesmodeltest
     shapesmodeltest.cpp
+    ../src/overlay/selection.h
+    ../src/overlay/selection.cpp
     ../src/overlay/shapesmodel.h
     ../src/overlay/shapesmodel.cpp
     ../src/overlay/shapegeometry.h

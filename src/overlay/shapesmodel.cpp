@@ -1,5 +1,6 @@
 #include "shapesmodel.h"
 #include "shapegeometry.h"
+#include "selection.h"
 #include <QPointF>
 #include <QUuid>
 
@@ -14,7 +15,7 @@ constexpr RoleEntry kRoles[] = {
     {"color", "color"},
     {"strokeWidth", "strokeWidth"},
     {"opacity", "opacity"},
-    {"selected", "selected"},
+    {nullptr, "selected"},
     {"locked", "locked"},
     {"points", "points"},
     {"x", "x"},
@@ -133,6 +134,8 @@ QVariant ShapesModel::data(const QModelIndex &index, int role) const
         return shape.value(QLatin1String(key));
     }
     switch (role) {
+    case SelectedRole:
+        return m_selection && m_selection->contains(shape.value(QStringLiteral("id")).toString());
     case AttachedTextRole:
         return firstAttachedTextBinding(shape);
     case BoundsRole:
@@ -154,6 +157,17 @@ QHash<int, QByteArray> ShapesModel::roleNames() const
         roles[TypeRole + i] = kRoles[i].qmlName;
     }
     return roles;
+}
+
+void ShapesModel::setSelection(const Selection *selection)
+{
+    m_selection = selection;
+    // Any row may have flipped, and asking all of them is cheaper than working out which.
+    connect(selection, &Selection::changed, this, [this] {
+        if (!m_shapes.isEmpty()) {
+            Q_EMIT dataChanged(index(0), index(int(m_shapes.size()) - 1), {SelectedRole});
+        }
+    });
 }
 
 QString ShapesModel::shapeIdAt(int index) const
@@ -273,14 +287,13 @@ void ShapesModel::addShape(const QVariantMap &shape)
 void ShapesModel::updateShape(int index, const QVariantMap &properties)
 {
     if (index >= 0 && index < m_shapes.size()) {
-        // Check if anything other than 'selected' is changing, and if it's actually changing
+        // Only a real change to a stored key costs an undo step.
         bool hasRealChanges = false;
         const auto &currentShape = m_shapes[index];
         for (auto it = properties.begin(); it != properties.end(); ++it) {
             // A text shape's size just follows its rendered text, so it is not an edit either.
-            const bool derived = it.key() == QStringLiteral("selected")
-                || (currentShape.value(QStringLiteral("type")).toString() == QStringLiteral("text")
-                    && (it.key() == QStringLiteral("width") || it.key() == QStringLiteral("height")));
+            const bool derived = currentShape.value(QStringLiteral("type")).toString() == QStringLiteral("text")
+                && (it.key() == QStringLiteral("width") || it.key() == QStringLiteral("height"));
             if (!derived && currentShape.value(it.key()) != it.value()) {
                 hasRealChanges = true;
                 break;

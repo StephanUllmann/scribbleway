@@ -281,7 +281,6 @@ QVariantMap shapeFromElement(const QJsonObject &elem)
     double opacityInt = elem.value(QStringLiteral("opacity")).toDouble(100.0);
     shape.insert(QStringLiteral("opacity"), opacityInt / 100.0);
     
-    shape.insert(QStringLiteral("selected"), true);
     shape.insert(QStringLiteral("locked"), false);
     shape.insert(QStringLiteral("roughness"), qBound(0, elem.value(QStringLiteral("roughness")).toInt(1), 2));
     shape.insert(QStringLiteral("glow"), elem.value(QStringLiteral("glow")).toInt(0)); // Default to 0px

@@ -5,6 +5,8 @@
 #include <QList>
 #include <QRectF>
 
+class Selection;
+
 class ShapesModel : public QAbstractListModel
 {
     Q_OBJECT
@@ -59,6 +61,8 @@ public:
     QString shapeIdAt(int index) const;
     static QVariantMap firstAttachedTextBinding(const QVariantMap &shape);
     static QVariantList withoutAttachedTextBinding(const QVariantMap &shape);
+    // The selected role reads from `selection`, which must outlive the model.
+    void setSelection(const Selection *selection);
 
     void addShape(const QVariantMap &shape);
     void updateShape(int index, const QVariantMap &properties);
@@ -75,6 +79,7 @@ private:
     void recordHistory();
 
     QList<QVariantMap> m_shapes;
+    const Selection *m_selection = nullptr;
     QList<QList<QVariantMap>> m_history;
     QList<QList<QVariantMap>> m_redo;
     bool m_isApplyingUndo = false;

@@ -91,6 +91,8 @@ OverlayController::OverlayController(QObject *parent)
         m_style.insert(QLatin1String(k.key), k.initial);
     }
     m_shapesModel.setParent(this);
+    m_shapesModel.setSelection(&m_selection);
+    connect(&m_selection, &Selection::changed, this, &OverlayController::selectionChanged);
 
     // Hotkeys are read here only; there is no UI for rebinding them, but hand-edited
     // entries in ~/.config/scribbleway/shortcuts.conf still apply.
@@ -140,7 +142,12 @@ ShapesModel* OverlayController::shapesModel()
 
 int OverlayController::selectedIndex() const
 {
-    return m_selectedIndex;
+    return indexForId(m_selection.primary());
+}
+
+bool OverlayController::isSelected(int index) const
+{
+    return m_selection.contains(m_shapesModel.shapeIdAt(index));
 }
 
 QString OverlayController::activeTool() const
@@ -163,9 +170,7 @@ void OverlayController::setActiveTool(const QString &tool)
                 m_currentMode = QStringLiteral("draw");
                 Q_EMIT modeChanged(m_currentMode);
             }
-            if (m_selectedIndex != -1) {
-                setSelectedIndex(-1);
-            }
+            m_selection.clear();
         } else {
             if (m_currentMode == QStringLiteral("draw")) {
                 m_currentMode = QStringLiteral("passthrough");
@@ -296,7 +301,7 @@ QVariantMap OverlayController::ensureAttachedTextForShape(int index)
     }
     
     m_shapesModel.updateShape(index, updates);
-    if (index == m_selectedIndex) {
+    if (index == selectedIndex()) {
         notifySelectionChanged();
     }
     return binding;
@@ -341,7 +346,7 @@ void OverlayController::setAttachedText(int index, const QString &text)
     }
 
     m_shapesModel.updateShape(index, updates);
-    if (index == m_selectedIndex) {
+    if (index == selectedIndex()) {
         notifySelectionChanged();
     }
 }
@@ -359,7 +364,7 @@ void OverlayController::removeAttachedText(int index)
     }
 
     m_shapesModel.updateShape(index, {{QStringLiteral("bindings"), bindings}});
-    if (index == m_selectedIndex) {
+    if (index == selectedIndex()) {
         notifySelectionChanged();
     }
 }
@@ -368,7 +373,7 @@ void OverlayController::updateShape(int index, const QVariantMap &properties)
 {
     m_shapesModel.updateShape(index, properties);
 
-    if (index == m_selectedIndex) {
+    if (index == selectedIndex()) {
         notifySelectionChanged();
     }
 
@@ -386,43 +391,30 @@ void OverlayController::updateShape(int index, const QVariantMap &properties)
 
 void OverlayController::setSelectedIndex(int index)
 {
-    if (m_selectedIndex != index || index == -1) {
-        m_shapesModel.beginEdit();
-        // Clear selection state in all shapes
-        for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
-            if (i != index && m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
-                m_shapesModel.updateShape(i, {{QStringLiteral("selected"), false}});
-            }
-        }
-        
-        m_selectedIndex = index;
-        
-        // Set selection state in new shape
-        if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
-            m_shapesModel.updateShape(m_selectedIndex, {{QStringLiteral("selected"), true}});
-            
-            // The selected shape's style becomes the style for the next new shape.
-            const QVariantMap shape = m_shapesModel.shapes()[m_selectedIndex];
-            bool changed = false;
-            for (const StyleKey &k : kStyleKeys) {
-                const QString key = QLatin1String(k.key);
-                if (shape.contains(key)) changed |= writeStyle(key, shape.value(key));
-            }
-            if (changed) Q_EMIT styleChanged();
+    // Re-picking the primary leaves the rest of a multi-selection alone.
+    if (index != -1 && index == selectedIndex()) return;
+    const QString id = m_shapesModel.shapeIdAt(index);
+    m_selection.set({}, id);
+    if (id.isEmpty()) return;
 
-            ensureSelectMode();
-        }
-        m_shapesModel.endEdit();
-        
-        notifySelectionChanged();
+    // The selected shape's style becomes the style for the next new shape.
+    const QVariantMap shape = m_shapesModel.shapes()[index];
+    bool changed = false;
+    for (const StyleKey &k : kStyleKeys) {
+        const QString key = QLatin1String(k.key);
+        if (shape.contains(key)) changed |= writeStyle(key, shape.value(key));
     }
+    if (changed) Q_EMIT styleChanged();
+
+    ensureSelectMode();
 }
 
 QVariantMap OverlayController::getSelectionState() const
 {
     QVariantMap state = m_style;
-    if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
-        const QVariantMap shape = m_shapesModel.shapes()[m_selectedIndex];
+    const int index = selectedIndex();
+    if (index >= 0) {
+        const QVariantMap shape = m_shapesModel.shapes()[index];
         for (const StyleKey &k : kStyleKeys) {
             const QString key = QLatin1String(k.key);
             if (shape.contains(key)) state.insert(key, fitStyle(k, shape.value(key)));
@@ -431,7 +423,7 @@ QVariantMap OverlayController::getSelectionState() const
         state[QStringLiteral("type")] = shape[QStringLiteral("type")].toString();
         state[QStringLiteral("seed")] = shape.value(QStringLiteral("seed"), 123456).toInt();
         state[QStringLiteral("locked")] = shape.value(QStringLiteral("locked"), false).toBool();
-        state[QStringLiteral("selectedIndex")] = m_selectedIndex;
+        state[QStringLiteral("selectedIndex")] = index;
     } else {
         state[QStringLiteral("hasSelection")] = false;
         state[QStringLiteral("type")] = QStringLiteral("");
@@ -443,7 +435,7 @@ QVariantMap OverlayController::getSelectionState() const
 
 bool OverlayController::hasSelection() const
 {
-    return m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount();
+    return selectedIndex() >= 0;
 }
 
 
@@ -504,15 +496,8 @@ void OverlayController::updateProperties(const QVariantMap &properties)
     };
 
     m_shapesModel.beginEdit();
-    bool updatedAny = false;
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
-        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
-            applyTo(i);
-            updatedAny = true;
-        }
-    }
-    if (!updatedAny && m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
-        applyTo(m_selectedIndex);
+        if (isSelected(i)) applyTo(i);
     }
     m_shapesModel.endEdit();
 
@@ -539,8 +524,7 @@ void OverlayController::clear()
 {
     qCInfo(lcDev) << "clear" << m_shapesModel.rowCount() << "shape(s)";
     m_shapesModel.clear();
-    m_selectedIndex = -1;
-    notifySelectionChanged();
+    m_selection.clear();
 }
 
 void OverlayController::beginEdit()
@@ -549,7 +533,7 @@ void OverlayController::beginEdit()
     m_editStartShapes = m_shapesModel.shapes();
     m_dragStartShapes.clear();
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
-        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+        if (isSelected(i)) {
             m_dragStartShapes.insert(i, m_shapesModel.shapes()[i]);
         }
     }
@@ -597,51 +581,34 @@ void OverlayController::enterPassthroughMode()
 void OverlayController::deleteSelected()
 {
     m_shapesModel.beginEdit();
-    bool deletedAny = false;
     for (int i = m_shapesModel.rowCount() - 1; i >= 0; --i) {
-        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
-            deleteShape(i);
-            deletedAny = true;
-        }
-    }
-    if (!deletedAny && m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
-        deleteShape(m_selectedIndex);
+        if (isSelected(i)) deleteShape(i);
     }
     m_shapesModel.endEdit();
 }
 
 void OverlayController::raiseSelected()
 {
-    if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount() - 1) {
-        if (m_shapesModel.moveShape(m_selectedIndex, m_selectedIndex + 1)) {
-            m_selectedIndex++;
-            notifySelectionChanged();
-        }
+    const int index = selectedIndex();
+    if (index >= 0 && index < m_shapesModel.rowCount() - 1 && m_shapesModel.moveShape(index, index + 1)) {
+        notifySelectionChanged();
     }
 }
 
 void OverlayController::lowerSelected()
 {
-    if (m_selectedIndex > 0 && m_selectedIndex < m_shapesModel.rowCount()) {
-        if (m_shapesModel.moveShape(m_selectedIndex, m_selectedIndex - 1)) {
-            m_selectedIndex--;
-            notifySelectionChanged();
-        }
+    const int index = selectedIndex();
+    if (index > 0 && m_shapesModel.moveShape(index, index - 1)) {
+        notifySelectionChanged();
     }
 }
 
 void OverlayController::setShapeLocked(int index, bool locked)
 {
     if (index >= 0 && index < m_shapesModel.rowCount()) {
-        m_shapesModel.beginEdit();
         m_shapesModel.updateShape(index, {{QStringLiteral("locked"), locked}});
         // A locked shape must not stay in a selection, or group moves would still reach it.
-        if (locked && index == m_selectedIndex) {
-            setSelectedIndex(-1);
-        } else if (locked) {
-            m_shapesModel.updateShape(index, {{QStringLiteral("selected"), false}});
-        }
-        m_shapesModel.endEdit();
+        if (locked) deselect(index);
     }
 }
 
@@ -650,17 +617,14 @@ void OverlayController::deleteShape(int index)
     if (index >= 0 && index < m_shapesModel.rowCount()) {
         // One undo step for the detach and the removal, or undo brings the shape back unattached.
         qCInfo(lcDev).noquote() << "delete" << describeShape(m_shapesModel.shapes().at(index));
+        // The primary's row is re-read after the removal, which shifts every row below it.
+        const bool touchesSelection = isSelected(index) || index < selectedIndex();
+        deselect(index);
         m_shapesModel.beginEdit();
         cleanupBindingsForDelete(index);
         m_shapesModel.removeShape(index);
         m_shapesModel.endEdit();
-        if (m_selectedIndex == index) {
-            m_selectedIndex = -1;
-            notifySelectionChanged();
-        } else if (m_selectedIndex > index) {
-            m_selectedIndex--;
-            notifySelectionChanged();
-        }
+        if (touchesSelection) notifySelectionChanged();
     }
 }
 
@@ -677,48 +641,32 @@ void OverlayController::selectShape(int index, bool shiftHeld)
         return;
     }
 
-    bool wasSelected = m_shapesModel.shapes()[index].value(QStringLiteral("selected"), false).toBool();
+    const QString id = m_shapesModel.shapeIdAt(index);
+    const bool wasSelected = m_selection.contains(id);
 
-    if (shiftHeld) {
-        m_shapesModel.updateShape(index, {{QStringLiteral("selected"), !wasSelected}});
-        
-        if (!wasSelected) {
-            m_selectedIndex = index;
-            ensureSelectMode();
-        } else {
-            if (m_selectedIndex == index) {
-                int newSelected = -1;
-                for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
-                    if (m_shapesModel.shapes()[i].value(QStringLiteral("selected"), false).toBool()) {
-                        newSelected = i;
-                        break;
-                    }
-                }
-                m_selectedIndex = newSelected;
-            }
-        }
-        notifySelectionChanged();
-    } else {
-        if (wasSelected) {
-            if (m_selectedIndex != index) {
-                m_selectedIndex = index;
-                notifySelectionChanged();
-            }
-        } else {
-            m_shapesModel.beginEdit();
-            for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
-                if (i != index && m_shapesModel.shapes()[i].value(QStringLiteral("selected"), false).toBool()) {
-                    m_shapesModel.updateShape(i, {{QStringLiteral("selected"), false}});
-                }
-            }
-            m_shapesModel.updateShape(index, {{QStringLiteral("selected"), true}});
-            m_selectedIndex = index;
-            m_shapesModel.endEdit();
+    if (shiftHeld && wasSelected) {
+        deselect(index);
+        return;
+    }
+    // Shift adds to the selection; a plain click on a selected shape only makes it the primary.
+    m_selection.set(shiftHeld || wasSelected ? m_selection.ids() : QSet<QString>{}, id);
+    if (!wasSelected) ensureSelectMode();
+}
 
-            ensureSelectMode();
-            notifySelectionChanged();
+void OverlayController::deselect(int index)
+{
+    const QString id = m_shapesModel.shapeIdAt(index);
+    if (!m_selection.contains(id)) return;
+    QSet<QString> rest = m_selection.ids();
+    rest.remove(id);
+    QString primary = m_selection.primary();
+    if (primary == id) {
+        primary.clear();
+        for (int i = 0; i < m_shapesModel.rowCount() && primary.isEmpty(); ++i) {
+            if (rest.contains(m_shapesModel.shapeIdAt(i))) primary = m_shapesModel.shapeIdAt(i);
         }
     }
+    m_selection.set(rest, primary);
 }
 
 void OverlayController::notifySelectionChanged()
@@ -773,7 +721,7 @@ void OverlayController::cycleRoughness()
     const QVariant fallback = m_style.value(QStringLiteral("roughness"));
     int currentRoughness = fallback.toInt();
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
-        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+        if (isSelected(i)) {
             currentRoughness = m_shapesModel.shapes()[i].value(QStringLiteral("roughness"), fallback).toInt();
             break;
         }
@@ -831,7 +779,7 @@ void OverlayController::copySelected()
 {
     QJsonArray elements;
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
-        if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+        if (isSelected(i)) {
             QVariantMap shape = m_shapesModel.shapes().at(i);
             QJsonObject elemObj = Excalidraw::elementFromShape(shape);
             if (!elemObj.isEmpty()) {
@@ -974,40 +922,23 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
     double dy = localMousePos.y() - cy;
 
     m_shapesModel.beginEdit();
-    setSelectedIndex(-1);
-
-    QList<int> pastedIndices;
+    QSet<QString> pastedIds;
     for (QVariantMap shape : list) {
-        shape.insert(QStringLiteral("selected"), true);
         shape.insert(QStringLiteral("locked"), false);
         ShapeGeometry::translate(shape, {dx, dy});
-
         m_shapesModel.addShape(shape);
-        pastedIndices.append(m_shapesModel.rowCount() - 1);
+        pastedIds.insert(shape.value(QStringLiteral("id")).toString());
     }
-
-    qCInfo(lcDev) << "paste" << pastedIndices.size() << "shape(s)";
-    if (!pastedIndices.isEmpty()) {
-        m_selectedIndex = pastedIndices.last();
-    }
-
+    qCInfo(lcDev) << "paste" << list.size() << "shape(s)";
     m_shapesModel.endEdit();
-    notifySelectionChanged();
+
+    // The paste replaces the selection, with the last pasted shape as the primary.
+    m_selection.set(pastedIds, list.last().value(QStringLiteral("id")).toString());
 }
 
 bool OverlayController::hasMultiSelection() const
 {
-    int count = 0;
-    const auto shapesList = m_shapesModel.shapes();
-    for (const auto &shape : shapesList) {
-        if (shape.value(QStringLiteral("selected"), false).toBool()) {
-            count++;
-            if (count > 1) {
-                return true;
-            }
-        }
-    }
-    return false;
+    return m_selection.count() > 1;
 }
 
 void OverlayController::beginDragSelection(bool shiftHeld)
@@ -1015,7 +946,7 @@ void OverlayController::beginDragSelection(bool shiftHeld)
     m_preDragSelection.clear();
     if (shiftHeld) {
         for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
-            if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
+            if (isSelected(i)) {
                 m_preDragSelection.insert(i);
             }
         }
@@ -1027,10 +958,8 @@ void OverlayController::selectShapesInRect(double rx, double ry, double rw, doub
     QRectF selectRect(rx, ry, rw, rh);
     selectRect = selectRect.normalized();
 
-    m_shapesModel.beginEdit();
-
-    int newSelectedIndex = -1;
-
+    QSet<QString> ids;
+    QString primary;
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
         const QVariantMap shape = m_shapesModel.shapes()[i];
         const bool intersects = ShapeGeometry::intersects(shape, selectRect);
@@ -1039,21 +968,12 @@ void OverlayController::selectShapesInRect(double rx, double ry, double rw, doub
         bool shouldSelect = !shape.value(QStringLiteral("locked"), false).toBool()
             && (intersects || m_preDragSelection.contains(i));
 
-        m_shapesModel.updateShape(i, {{QStringLiteral("selected"), shouldSelect}});
         if (shouldSelect) {
-            newSelectedIndex = i;
+            primary = shape.value(QStringLiteral("id")).toString();
+            ids.insert(primary);
         }
     }
-
-    m_shapesModel.endEdit();
-
-    if (newSelectedIndex != -1) {
-        m_selectedIndex = newSelectedIndex;
-    } else {
-        m_selectedIndex = -1;
-    }
-
-    notifySelectionChanged();
+    m_selection.set(ids, primary);
 }
 
 void OverlayController::detachFromUnmoved(int index, QVariantMap &shape, const QSet<int> &moved)
@@ -1080,8 +1000,7 @@ void OverlayController::nudgeSelected(double dx, double dy)
     QHash<int, QVariantMap> starts;
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
         const QVariantMap &shape = m_shapesModel.shapes()[i];
-        if (shape.value(QStringLiteral("selected"), false).toBool()
-            && !shape.value(QStringLiteral("locked"), false).toBool()) {
+        if (isSelected(i) && !shape.value(QStringLiteral("locked"), false).toBool()) {
             starts.insert(i, shape);
         }
     }

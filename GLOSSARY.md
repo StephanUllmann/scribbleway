@@ -8,6 +8,10 @@ A vector-based drawing overlay application that allows users to sketch on top of
 A distinct drawing element placed on the canvas, such as a rectangle, ellipse, line, arrow, freehand path, or text block.
 _Avoid_: Drawing object, canvas element
 
+**Selection**:
+The set of Shapes the user has picked, held by id outside the Shapes themselves, so it never enters the undo history or the clipboard. One selected Shape is the **primary**: the last one picked, which the Tray Popup shows and raise/lower move.
+_Avoid_: Selected flag, current shape
+
 **Clipboard**:
 The system clipboard interface used for sharing serialized vector shapes within Scribbleway or with external applications.
 _Avoid_: Pasteboard

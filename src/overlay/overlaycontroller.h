@@ -9,6 +9,7 @@
 #include <QSet>
 #include <limits>
 #include "shapesmodel.h"
+#include "selection.h"
 
 struct BindingHit {
     QString targetId;
@@ -40,7 +41,9 @@ public:
     QQuickWindow* window() const;
     void setWindow(QQuickWindow *window);
 
+    // The row of the primary selected shape, or -1.
     int selectedIndex() const;
+    bool isSelected(int index) const;
     bool hasMultiSelection() const;
 
     bool hasSelection() const;
@@ -125,6 +128,8 @@ Q_SIGNALS:
 
 private:
     void notifySelectionChanged();
+    // Drops one shape from the selection; the first selected row left takes over as primary.
+    void deselect(int index);
     void ensureSelectMode();
     bool selectedTypeIs(const QString &type) const;
     // Clamps and converts a style value and stores it; true when the style changed.
@@ -141,8 +146,8 @@ private:
     QVariantMap m_localShortcutSequences;
 
     QQuickWindow *m_window = nullptr;
+    Selection m_selection; // declared first: m_shapesModel reads it until it is destroyed
     ShapesModel m_shapesModel;
-    int m_selectedIndex = -1;
     QHash<int, QVariantMap> m_dragStartShapes;
     QList<QVariantMap> m_editStartShapes; // the whole model at beginEdit(), for the dev log
     QSet<int> m_preDragSelection;

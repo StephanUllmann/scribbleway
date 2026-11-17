@@ -59,6 +59,7 @@ private Q_SLOTS:
     void testRemoveShapeUndo();
     void testClearUndo();
     void testSelectionNoHistory();
+    void testSelectionFollowsShapes();
     void testCappedHistory();
     void testEditTransaction();
     void testNestedEditTransaction();
@@ -178,24 +179,22 @@ void ShapesModelTest::testClearUndo()
 
 void ShapesModelTest::testSelectionNoHistory()
 {
+    Selection selection;
     ShapesModel model;
-    QVariantMap s1;
-    s1[QStringLiteral("type")] = QStringLiteral("rectangle");
-    s1[QStringLiteral("selected")] = false;
-    model.addShape(s1);
+    model.setSelection(&selection);
+    model.addShape({{QStringLiteral("type"), QStringLiteral("rectangle")}});
+    model.addShape({{QStringLiteral("type"), QStringLiteral("ellipse")}});
 
-    QVariantMap s2;
-    s2[QStringLiteral("type")] = QStringLiteral("ellipse");
-    s2[QStringLiteral("selected")] = false;
-    model.addShape(s2);
+    // The selected role follows the Selection, and tells the delegates when it flips.
+    QSignalSpy spy(&model, &QAbstractItemModel::dataChanged);
+    selection.set({}, model.shapeIdAt(1));
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(model.data(model.index(1), ShapesModel::SelectedRole).toBool(), true);
+    QCOMPARE(model.data(model.index(0), ShapesModel::SelectedRole).toBool(), false);
+    selection.set({}, model.shapeIdAt(1));
+    QCOMPARE(spy.count(), 1);
 
-    // Update selected property on the second shape
-    QVariantMap updateProps;
-    updateProps[QStringLiteral("selected")] = true;
-    model.updateShape(1, updateProps);
-
-    // Call undo once. If selection update did not save history, it should undo the addition of shape 2.
-    // So rowCount will become 1.
+    // Selecting is not an edit, so one undo takes back the second shape.
     model.undo();
     QCOMPARE(model.rowCount(), 1);
 }
@@ -426,7 +425,6 @@ void ShapesModelTest::testOverlayControllerRedo()
     shape[QStringLiteral("y")] = 5;
     shape[QStringLiteral("width")] = 40;
     shape[QStringLiteral("height")] = 30;
-    shape[QStringLiteral("selected")] = false;
     controller.addShape(shape);
     QCOMPARE(controller.shapesModel()->rowCount(), 1);
 
@@ -692,15 +690,15 @@ void ShapesModelTest::testMultiSelection()
     // Select shape 0 (clearing previous selection)
     controller.selectShape(0, false);
     QCOMPARE(controller.selectedIndex(), 0);
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), true);
-    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("selected")].toBool(), false);
-    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("selected")].toBool(), false);
+    QCOMPARE(controller.isSelected(0), true);
+    QCOMPARE(controller.isSelected(1), false);
+    QCOMPARE(controller.isSelected(2), false);
 
     // Shift-select shape 1
     controller.selectShape(1, true);
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), true);
-    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("selected")].toBool(), true);
-    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("selected")].toBool(), false);
+    QCOMPARE(controller.isSelected(0), true);
+    QCOMPARE(controller.isSelected(1), true);
+    QCOMPARE(controller.isSelected(2), false);
     QCOMPARE(controller.hasMultiSelection(), true);
 
     // Test dragging the selected shapes group
@@ -730,9 +728,9 @@ void ShapesModelTest::testMultiSelection()
     // Rect from (0,0) to (150, 150) should select shape 0 and 1, but not 2.
     controller.beginDragSelection(false);
     controller.selectShapesInRect(0.0, 0.0, 150.0, 150.0, false);
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), true);
-    QCOMPARE(controller.shapesModel()->shapes().at(1)[QStringLiteral("selected")].toBool(), true);
-    QCOMPARE(controller.shapesModel()->shapes().at(2)[QStringLiteral("selected")].toBool(), false);
+    QCOMPARE(controller.isSelected(0), true);
+    QCOMPARE(controller.isSelected(1), true);
+    QCOMPARE(controller.isSelected(2), false);
 
     // Test deleting selected shapes
     controller.deleteSelected();
@@ -1269,12 +1267,12 @@ void ShapesModelTest::testShapeLock()
     
     QCOMPARE(controller.selectedIndex(), 0);
     QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), false);
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), true);
+    QCOMPARE(controller.isSelected(0), true);
     
     // Lock shape
     controller.setShapeLocked(0, true);
     QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("locked")].toBool(), true);
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), false);
+    QCOMPARE(controller.isSelected(0), false);
     QCOMPARE(controller.selectedIndex(), -1);
     
     // Undo locking
@@ -1294,7 +1292,7 @@ void ShapesModelTest::testShapeLock()
     QCOMPARE(controller.hasMultiSelection(), true);
 
     controller.setShapeLocked(0, true);
-    QCOMPARE(controller.shapesModel()->shapes().at(0)[QStringLiteral("selected")].toBool(), false);
+    QCOMPARE(controller.isSelected(0), false);
     QCOMPARE(controller.selectedIndex(), 1);
 }
 
@@ -2245,7 +2243,6 @@ void ShapesModelTest::testBindingGeometry()
     rect[QStringLiteral("y")] = 100.0;
     rect[QStringLiteral("width")] = 200.0;
     rect[QStringLiteral("height")] = 100.0;
-    rect[QStringLiteral("selected")] = false;
     rect[QStringLiteral("locked")] = false;
     ctrl.addShape(rect);
 
@@ -2278,7 +2275,6 @@ void ShapesModelTest::testBindingGeometry()
     ell[QStringLiteral("y")] = 100.0;
     ell[QStringLiteral("width")] = 100.0;
     ell[QStringLiteral("height")] = 60.0;
-    ell[QStringLiteral("selected")] = false;
     ell[QStringLiteral("locked")] = false;
     ctrl.addShape(ell);
 
@@ -2301,7 +2297,6 @@ void ShapesModelTest::testBindingMovePropagate()
     rect[QStringLiteral("y")] = 100.0;
     rect[QStringLiteral("width")] = 200.0;
     rect[QStringLiteral("height")] = 100.0;
-    rect[QStringLiteral("selected")] = false;
     rect[QStringLiteral("locked")] = false;
     ctrl.addShape(rect);
 
@@ -2313,7 +2308,6 @@ void ShapesModelTest::testBindingMovePropagate()
     arrow[QStringLiteral("fromY")] = 50.0;
     arrow[QStringLiteral("toX")] = 200.0;  // top-center of rect
     arrow[QStringLiteral("toY")] = 100.0;
-    arrow[QStringLiteral("selected")] = false;
     arrow[QStringLiteral("locked")] = false;
     ctrl.addShape(arrow);
 
@@ -2361,7 +2355,7 @@ void ShapesModelTest::testBindingDeleteCleanup()
     rect[QStringLiteral("id")] = QStringLiteral("rect-del");
     rect[QStringLiteral("x")] = 100.0; rect[QStringLiteral("y")] = 100.0;
     rect[QStringLiteral("width")] = 200.0; rect[QStringLiteral("height")] = 100.0;
-    rect[QStringLiteral("selected")] = false; rect[QStringLiteral("locked")] = false;
+    rect[QStringLiteral("locked")] = false;
     ctrl.addShape(rect);
 
     QVariantMap arrow;
@@ -2369,7 +2363,7 @@ void ShapesModelTest::testBindingDeleteCleanup()
     arrow[QStringLiteral("id")] = QStringLiteral("arrow-del");
     arrow[QStringLiteral("fromX")] = 50.0; arrow[QStringLiteral("fromY")] = 50.0;
     arrow[QStringLiteral("toX")] = 200.0; arrow[QStringLiteral("toY")] = 100.0;
-    arrow[QStringLiteral("selected")] = false; arrow[QStringLiteral("locked")] = false;
+    arrow[QStringLiteral("locked")] = false;
     ctrl.addShape(arrow);
     ctrl.createBindingsForShape(1);
 
@@ -2395,7 +2389,7 @@ void ShapesModelTest::testBindingResizePropagate()
     rect[QStringLiteral("id")] = QStringLiteral("rect-resize");
     rect[QStringLiteral("x")] = 100.0; rect[QStringLiteral("y")] = 100.0;
     rect[QStringLiteral("width")] = 200.0; rect[QStringLiteral("height")] = 100.0;
-    rect[QStringLiteral("selected")] = false; rect[QStringLiteral("locked")] = false;
+    rect[QStringLiteral("locked")] = false;
     ctrl.addShape(rect);
 
     // Arrow endpoint at top-center (200, 100)
@@ -2404,7 +2398,7 @@ void ShapesModelTest::testBindingResizePropagate()
     arrow[QStringLiteral("id")] = QStringLiteral("arrow-resize");
     arrow[QStringLiteral("fromX")] = 50.0; arrow[QStringLiteral("fromY")] = 50.0;
     arrow[QStringLiteral("toX")] = 200.0; arrow[QStringLiteral("toY")] = 100.0;
-    arrow[QStringLiteral("selected")] = false; arrow[QStringLiteral("locked")] = false;
+    arrow[QStringLiteral("locked")] = false;
     ctrl.addShape(arrow);
     ctrl.createBindingsForShape(1);
 
@@ -2427,7 +2421,7 @@ void ShapesModelTest::testExcalidrawBindingRoundtrip()
     rect[QStringLiteral("id")] = QStringLiteral("rect-ex");
     rect[QStringLiteral("x")] = 100.0; rect[QStringLiteral("y")] = 100.0;
     rect[QStringLiteral("width")] = 200.0; rect[QStringLiteral("height")] = 100.0;
-    rect[QStringLiteral("selected")] = true; rect[QStringLiteral("locked")] = false;
+    rect[QStringLiteral("locked")] = false;
     rect[QStringLiteral("color")] = QStringLiteral("#e63946"); rect[QStringLiteral("strokeWidth")] = 2;
     rect[QStringLiteral("opacity")] = 1.0; rect[QStringLiteral("roughness")] = 1; rect[QStringLiteral("seed")] = 12345;
     QVariantList boundIds;
@@ -2440,7 +2434,7 @@ void ShapesModelTest::testExcalidrawBindingRoundtrip()
     arrow[QStringLiteral("id")] = QStringLiteral("arrow-ex");
     arrow[QStringLiteral("fromX")] = 50.0; arrow[QStringLiteral("fromY")] = 50.0;
     arrow[QStringLiteral("toX")] = 200.0; arrow[QStringLiteral("toY")] = 100.0;
-    arrow[QStringLiteral("selected")] = true; arrow[QStringLiteral("locked")] = false;
+    arrow[QStringLiteral("locked")] = false;
     arrow[QStringLiteral("color")] = QStringLiteral("#e63946"); arrow[QStringLiteral("strokeWidth")] = 2;
     arrow[QStringLiteral("opacity")] = 1.0; arrow[QStringLiteral("roughness")] = 1; arrow[QStringLiteral("seed")] = 67890;
     QVariantMap endBinding;
@@ -2924,7 +2918,7 @@ void ShapesModelTest::testControllerUndoSteps()
     // Restored shapes must not stay marked selected behind the controller's back.
     QCOMPARE(c.selectedIndex(), -1);
     for (int i = 0; i < 3; ++i) {
-        QVERIFY(!c.getShape(i).value(u"selected"_s).toBool());
+        QVERIFY(!c.isSelected(i));
     }
 
     // A press without movement and a long rubber band cost neither history nor redo.
@@ -3100,6 +3094,38 @@ void ShapesModelTest::testPastedBindingFocusIsRecomputed()
     QCOMPARE(anchor.y(), c.getShape(1).value(u"toY"_s).toDouble());
 }
 
+void ShapesModelTest::testSelectionFollowsShapes()
+{
+    OverlayController c;
+    for (int i = 0; i < 3; ++i) {
+        c.addShape(box(i * 200.0, 0.0));
+    }
+    c.selectShape(0, false);
+    c.selectShape(1, true);
+    c.selectShape(2, true);
+    QCOMPARE(c.selectedIndex(), 2);
+
+    // Shift-clicking the primary away hands the primary to the first selected row left.
+    c.selectShape(2, true);
+    QCOMPARE(c.selectedIndex(), 0);
+    QVERIFY(!c.isSelected(2));
+    QVERIFY(c.hasMultiSelection());
+
+    // Deleting the primary keeps the rest selected; the primary's id survives the row shift.
+    c.selectShape(1, false);
+    QCOMPARE(c.selectedIndex(), 1);
+    c.deleteShape(0);
+    QCOMPARE(c.selectedIndex(), 0);
+    QVERIFY(c.isSelected(0));
+    QVERIFY(!c.hasMultiSelection());
+    c.deleteShape(0);
+    QCOMPARE(c.selectedIndex(), -1);
+    QVERIFY(!c.hasSelection());
+
+    // Selection never lands in the Shape maps, so it cannot reach the history or the clipboard.
+    QVERIFY(!c.getShape(0).contains(u"selected"_s));
+}
+
 void ShapesModelTest::testLockedShapesStayOutOfGroups()
 {
     OverlayController c;
@@ -3109,8 +3135,8 @@ void ShapesModelTest::testLockedShapesStayOutOfGroups()
 
     c.beginDragSelection(false);
     c.selectShapesInRect(0.0, 0.0, 1000.0, 200.0, false);
-    QVERIFY(!c.getShape(0).value(u"selected"_s).toBool());
-    QVERIFY(c.getShape(1).value(u"selected"_s).toBool());
+    QVERIFY(!c.isSelected(0));
+    QVERIFY(c.isSelected(1));
 
     c.beginEdit();
     c.dragSelected(50.0, 0.0);
