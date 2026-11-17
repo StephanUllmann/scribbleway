@@ -13,7 +13,6 @@ static const QStringList kPresetColors = {
     QStringLiteral("#457b9d"),
     QStringLiteral("#8338ec")
 };
-#include <LayerShellQt/Window>
 #include <QScreen>
 #include <QGuiApplication>
 #include <QUuid>
@@ -90,22 +89,8 @@ QQuickWindow* OverlayController::window() const
 void OverlayController::setWindow(QQuickWindow *window)
 {
     if (m_window != window) {
-        if (m_window) disconnect(m_window, nullptr, this, nullptr);
         m_window = window;
-        // A remap to another screen keeps this QWindow but changes its screen and size,
-        // and the popup's hole has to follow, or it leaves a dead zone where it used to be.
-        if (m_window) {
-            connect(m_window, &QWindow::screenChanged, this, &OverlayController::updatePopupExclusion);
-            connect(m_window, &QWindow::widthChanged, this, &OverlayController::updatePopupExclusion);
-            connect(m_window, &QWindow::heightChanged, this, &OverlayController::updatePopupExclusion);
-        }
         Q_EMIT windowChanged();
-        // Remembered so remapWindow() can return here: Qt's primary screen changes when
-        // screens come and go, so it can't be relied on to mean the same one afterwards.
-        if (m_window && m_targetScreen.isEmpty()) {
-            m_targetScreen = m_window->screen()->name();
-            Q_EMIT targetScreenChanged();
-        }
     }
 }
 
@@ -535,76 +520,6 @@ void OverlayController::setSelectedIndex(int index)
     }
 }
 
-void OverlayController::updateInputMask(const QVariantList &rects)
-{
-    QRegion region;
-    for (const QVariant &v : rects) {
-        QRect r = v.toRectF().toRect();
-        if (r.isValid()) {
-            region += r;
-        }
-    }
-    m_baseInputMask = region;
-    applyInputMask();
-}
-
-void OverlayController::setPopupExclusion(const QRect &rect)
-{
-    if (m_popupExclusion == rect) return;
-    qCInfo(lcDev) << "popup exclusion:" << rect;
-    m_popupExclusion = rect;
-    applyInputMask();
-}
-
-void OverlayController::setPopupWindow(QQuickWindow *popup)
-{
-    m_popupWindow = popup;
-    // Width too, not just show: opening the colour picker widens the popup, and a hole
-    // left at the old width leaves the new strip unclickable while a tool is active.
-    connect(popup, &QWindow::screenChanged, this, &OverlayController::updatePopupExclusion);
-    connect(popup, &QWindow::widthChanged, this, &OverlayController::updatePopupExclusion);
-    connect(popup, &QWindow::heightChanged, this, &OverlayController::updatePopupExclusion);
-    connect(popup, &QWindow::visibleChanged, this, &OverlayController::updatePopupExclusion);
-}
-
-// The hole sits in the overlay's bottom-right corner, matching the popup's layer-shell
-// anchor and its 8px margin. A popup on another screen needs no hole at all.
-void OverlayController::updatePopupExclusion()
-{
-    QRect exclusion;
-    if (m_window && m_popupWindow && m_popupWindow->isVisible()
-        && m_window->screen() == m_popupWindow->screen()) {
-        const int pw = m_popupWindow->width();
-        const int ph = m_popupWindow->height();
-        exclusion = QRect(m_window->width() - pw - 8, m_window->height() - ph - 8, pw, ph);
-    }
-    setPopupExclusion(exclusion);
-}
-
-void OverlayController::applyInputMask()
-{
-    if (!m_window) return;
-
-    QRegion region = m_baseInputMask;
-    if (m_popupExclusion.isValid()) {
-        region -= m_popupExclusion;
-    }
-
-    // Safety fallback: if region is empty, set to a 1x1 pixel so the overlay is fully click-through.
-    // We cannot use off-screen coordinates or a truly empty region because Qt Wayland
-    // will treat it as "no mask" and block the entire screen.
-    if (region.isEmpty()) {
-        region += QRect(0, 0, 1, 1);
-    }
-
-    if (m_lastInputMask == region) {
-        return;
-    }
-    m_lastInputMask = region;
-    qCInfo(lcDev) << "input mask:" << region.rectCount() << "rect(s), bounds" << region.boundingRect();
-    m_window->setMask(region);
-}
-
 QVariantMap OverlayController::getSelectionState() const
 {
     QVariantMap state;
@@ -656,42 +571,6 @@ QStringList OverlayController::presetColors()
 {
     return kPresetColors;
 }
-
-QStringList OverlayController::screenNames() const
-{
-    QStringList names;
-    for (QScreen *screen : QGuiApplication::screens()) {
-        names << screen->name();
-    }
-    return names;
-}
-
-QStringList OverlayController::screenLabels() const
-{
-    QStringList labels;
-    for (QScreen *screen : QGuiApplication::screens()) {
-        const QString name = screen->name();
-        // Built-in panels are wired as eDP (or LVDS/DSI on older or ARM machines).
-        const bool builtIn = name.startsWith(QLatin1String("eDP")) || name.startsWith(QLatin1String("LVDS"))
-            || name.startsWith(QLatin1String("DSI"));
-        const QString model = screen->model().trimmed();
-        if (builtIn) {
-            labels << QStringLiteral("Laptop screen (%1)").arg(name);
-        } else if (!model.isEmpty()) {
-            labels << QStringLiteral("External screen: %1 (%2)").arg(model, name);
-        } else {
-            labels << QStringLiteral("External screen (%1)").arg(name);
-        }
-    }
-    return labels;
-}
-
-QString OverlayController::targetScreen() const
-{
-    return m_targetScreen;
-}
-
-
 
 void OverlayController::updateProperties(const QVariantMap &properties)
 {
@@ -822,12 +701,6 @@ void OverlayController::endEdit()
     m_shapesModel.endEdit();
 }
 
-void OverlayController::setKeyboardInteractivity(bool interactive)
-{
-    m_wantsKeyboard = interactive;
-    applyKeyboardInteractivity();
-}
-
 bool OverlayController::trayPopupOpen() const
 {
     return m_trayPopupOpen;
@@ -856,88 +729,12 @@ void OverlayController::setPopupWantsKeyboard(bool wants)
     if (m_popupWantsKeyboard == wants) return;
     m_popupWantsKeyboard = wants;
     qCInfo(lcDev) << "popup wants keyboard:" << wants;
-    applyKeyboardInteractivity();
     Q_EMIT popupWantsKeyboardChanged();
 }
 
 void OverlayController::closeTrayPopup()
 {
     Q_EMIT trayPopupCloseRequested();
-}
-
-void OverlayController::applyKeyboardInteractivity()
-{
-    if (!m_window) return;
-    auto *layerWindow = LayerShellQt::Window::get(m_window);
-    if (!layerWindow) return;
-
-    const bool interactive = m_wantsKeyboard && !m_popupWantsKeyboard;
-
-    // Exclusive, not OnDemand: OnDemand means "focus me when the user clicks me",
-    // and a layer surface has no way to ask for focus itself — QWindow::requestActivate()
-    // is a no-op here. KWin happened to hand focus over anyway; Hyprland does not, so
-    // every QML Shortcut in main.qml was dead there. Exclusive is what an annotation
-    // overlay wants while a tool is active, and it works on both.
-    const auto wanted = interactive
-        ? LayerShellQt::Window::KeyboardInteractivityExclusive
-        : LayerShellQt::Window::KeyboardInteractivityNone;
-
-    // The QML side calls this from requestInputRegionUpdate(), which runs on every
-    // draw event — several times a second while drawing. Only act on real
-    // transitions, so this neither spams the journal nor re-commits the layer
-    // surface for a value it already has.
-    if (layerWindow->keyboardInteractivity() == wanted) return;
-
-    // Logged because "my hotkeys don't work" is otherwise undebuggable from outside:
-    // neither hyprctl nor kwin exposes layer-shell keyboard focus.
-    qInfo() << "keyboard interactivity:" << (interactive ? "exclusive" : "none");
-    layerWindow->setKeyboardInteractivity(wanted);
-}
-
-static QScreen *screenNamed(const QString &name)
-{
-    for (QScreen *screen : QGuiApplication::screens()) {
-        if (screen->name() == name) return screen;
-    }
-    return nullptr;
-}
-
-// The compositor closes a layer surface when its output goes away, and nothing maps it
-// again by itself, so the hotkeys would keep driving a window nobody can see. A fresh
-// surface also puts the overlay back on its own screen once that screen returns.
-void OverlayController::remapWindow()
-{
-    Q_EMIT screensChanged();
-    if (!m_window) return;
-
-    QScreen *target = screenNamed(m_targetScreen);
-    m_window->hide();
-    // Without destroy() the native window survives and keeps its old output.
-    m_window->destroy();
-    // setGeometry(), not setScreen(): show() re-picks the screen from the window's
-    // position, and a stale (0,0) lands on whichever screen sits at the top left.
-    m_window->setGeometry((target ? target : QGuiApplication::primaryScreen())->geometry());
-    m_window->show();
-    qInfo() << "overlay remapped to" << m_window->screen()->name() << "wanted" << m_targetScreen
-            << m_window->geometry();
-    DevLog::logScreens("after remap");
-}
-
-void OverlayController::setTargetScreen(const QString &screenName)
-{
-    if (!m_window || screenName.isEmpty()) return;
-
-    QScreen *target = screenNamed(screenName);
-    qCInfo(lcDev) << "target screen chosen:" << screenName << (target ? "" : "(not found)");
-
-    if (m_targetScreen != screenName) {
-        m_targetScreen = screenName;
-        Q_EMIT targetScreenChanged();
-    }
-
-    // remapWindow() destroys the native window first; a plain setScreen() leaves it on
-    // its old output under Wayland.
-    if (target && m_window->screen() != target) remapWindow();
 }
 
 void OverlayController::enterSelectMode()

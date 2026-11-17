@@ -4,6 +4,7 @@
 #include <QSignalSpy>
 #include "shapesmodel.h"
 #include "overlaycontroller.h"
+#include "overlaywindow.h"
 #include "singleinstance.h"
 #include "devlog.h"
 #include <QTemporaryDir>
@@ -22,6 +23,20 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 
+// Records what the overlay asks of the compositor, in place of LayerShellQt.
+struct RecordingSurface : LayerSurface {
+    QList<LayerConfig> applied;
+    void apply(QWindow *, const LayerConfig &config) override { applied << config; }
+};
+
+// The QML reaches the overlay window through this context property, so a test that loads
+// it needs one even when it never attaches a window.
+static void exposeOverlayWindow(QQmlEngine &engine)
+{
+    static RecordingSurface surface;
+    engine.rootContext()->setContextProperty(QStringLiteral("overlayWindow"), new OverlayWindow(&surface, &engine));
+}
+
 class ShapesModelTest : public QObject
 {
     Q_OBJECT
@@ -31,7 +46,10 @@ private Q_SLOTS:
     void cleanupTestCase();
     void testAddShapeUndo();
     void testDevLogPruneKeepsAWeek();
-    void testPopupHoleFollowsOverlayResize();
+    void testOverlayHoleFollowsOverlayResize();
+    void testOverlayStartsClickThrough();
+    void testOverlayKeyboardAndLayer();
+    void testOverlayRemapReappliesLayer();
     void testRemoveShapeUndo();
     void testClearUndo();
     void testSelectionNoHistory();
@@ -508,8 +526,6 @@ void ShapesModelTest::testOverlayControllerSelectionProperties()
     QCOMPARE(controller.getSelectionState().value(QStringLiteral("color")).toString(), QStringLiteral("#00ffff"));
     QCOMPARE(controller.getSelectionState().value(QStringLiteral("strokeWidth")).toInt(), 7);
 
-    QVERIFY(!controller.screenNames().isEmpty());
-    QCOMPARE(controller.screenLabels().size(), controller.screenNames().size());
 }
 
 void ShapesModelTest::testSingleInstanceGuard()
@@ -1970,29 +1986,92 @@ void ShapesModelTest::testDevLogPruneKeepsAWeek()
                                 QStringLiteral("notes.log")}));
 }
 
+static const LayerConfig kBottomRightPopup{.anchors = Qt::BottomEdge | Qt::RightEdge,
+                                         .margins = QMargins(0, 0, 8, 8),
+                                         .exclusiveZone = 0,
+                                         .keyboard = LayerConfig::Keyboard::OnDemand,
+                                         .scope = {},
+                                         .onActiveScreen = true};
+
 // The overlay moving to a bigger screen used to leave the popup's hole at its old
 // position: a dead zone where clicks fell through the overlay.
-void ShapesModelTest::testPopupHoleFollowsOverlayResize()
+void ShapesModelTest::testOverlayHoleFollowsOverlayResize()
 {
-    OverlayController c;
+    RecordingSurface surface;
+    OverlayWindow ow(&surface);
     QQuickWindow overlay;
-    QQuickWindow popup;
+    ow.attach(&overlay);
     overlay.resize(800, 600);
-    popup.resize(200, 100);
-    c.setWindow(&overlay);
-    c.setPopupWindow(&popup);
-    c.updateInputMask({QRectF(0, 0, 800, 600)});
-    popup.show();
-    c.updatePopupExclusion();
+    ow.setShapeRegion({QRectF(0, 0, 800, 600)});
+    ow.setHole(overlay.screen(), kBottomRightPopup, QSize(200, 100));
     QVERIFY(!overlay.mask().contains(QPoint(600, 500))); // hole at (592,492 200x100)
 
     overlay.resize(1000, 700);
-    c.updateInputMask({QRectF(0, 0, 1000, 700)}); // main.qml does this on every resize
+    ow.setShapeRegion({QRectF(0, 0, 1000, 700)}); // main.qml does this on every resize
     QVERIFY(overlay.mask().contains(QPoint(600, 500)));
     QVERIFY(!overlay.mask().contains(QPoint(800, 600))); // hole now at (792,592 200x100)
 
-    popup.hide(); // however it gets hidden, the hole goes with it
+    ow.setHole(nullptr, kBottomRightPopup, QSize(200, 100)); // the popup was hidden
     QVERIFY(overlay.mask().contains(QPoint(800, 600)));
+}
+
+// The first mask follows the same rule as every later one. It used to be set off-screen
+// at startup, bypassing the rule.
+void ShapesModelTest::testOverlayStartsClickThrough()
+{
+    RecordingSurface surface;
+    OverlayWindow ow(&surface);
+    QQuickWindow overlay;
+    ow.attach(&overlay);
+    QCOMPARE(overlay.mask(), QRegion(0, 0, 1, 1));
+    QCOMPARE(ow.targetScreen(), overlay.screen()->name());
+    QVERIFY(!ow.screenNames().isEmpty());
+    QCOMPARE(ow.screenLabels().size(), ow.screenNames().size());
+}
+
+// The overlay holds the keyboard only while a tool wants it and the popup hasn't taken
+// it, and tells the compositor only about real changes.
+void ShapesModelTest::testOverlayKeyboardAndLayer()
+{
+    RecordingSurface surface;
+    OverlayWindow ow(&surface);
+    QQuickWindow overlay;
+    ow.attach(&overlay);
+    QVERIFY(!surface.applied.isEmpty());
+    const LayerConfig first = surface.applied.last();
+    QCOMPARE(first.anchors, Qt::TopEdge | Qt::BottomEdge | Qt::LeftEdge | Qt::RightEdge);
+    QCOMPARE(first.exclusiveZone, 0); // -1 covered the panel that holds the tray icon
+    QCOMPARE(first.keyboard, LayerConfig::Keyboard::None);
+
+    ow.setToolWantsKeyboard(true);
+    QCOMPARE(surface.applied.last().keyboard, LayerConfig::Keyboard::Exclusive);
+    const qsizetype calls = surface.applied.size();
+    ow.setToolWantsKeyboard(true); // QML repeats this on every draw event
+    QCOMPARE(surface.applied.size(), calls);
+
+    ow.setKeyboardYielded(true);
+    QCOMPARE(surface.applied.last().keyboard, LayerConfig::Keyboard::None);
+    ow.setKeyboardYielded(false);
+    QCOMPARE(surface.applied.last().keyboard, LayerConfig::Keyboard::Exclusive);
+}
+
+// The fresh surface after a screen change gets the whole config again.
+void ShapesModelTest::testOverlayRemapReappliesLayer()
+{
+    RecordingSurface surface;
+    OverlayWindow ow(&surface);
+    QQuickWindow overlay;
+    ow.attach(&overlay);
+    ow.setToolWantsKeyboard(true);
+    const LayerConfig before = surface.applied.last();
+    const qsizetype calls = surface.applied.size();
+    QSignalSpy screens(&ow, &OverlayWindow::screensChanged);
+
+    ow.remap();
+    QVERIFY(surface.applied.size() > calls);
+    QVERIFY(surface.applied.last() == before);
+    QVERIFY(overlay.isVisible());
+    QCOMPARE(screens.count(), 1);
 }
 
 QTEST_MAIN(ShapesModelTest)
@@ -2650,6 +2729,7 @@ void ShapesModelTest::testShapeListDelegateReadsModelRoles()
 
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
+    exposeOverlayWindow(engine);
     QQmlComponent component(&engine, QUrl::fromLocalFile(
         QStringLiteral(QML_SOURCE_DIR) + QStringLiteral("/FullRepresentation.qml")));
     QScopedPointer<QObject> menu(component.create());
@@ -2678,10 +2758,17 @@ void ShapesModelTest::testShapeListDelegateReadsModelRoles()
 // in a log nobody reads, not a build failure.
 void ShapesModelTest::testEveryQmlControllerCallExists()
 {
-    QSet<QString> callable;
-    const QMetaObject *mo = &OverlayController::staticMetaObject;
-    for (int i = 0; i < mo->methodCount(); ++i) {
-        callable.insert(QString::fromUtf8(mo->method(i).name()));
+    // backend is FullRepresentation's name for the controller.
+    QHash<QString, QSet<QString>> callable;
+    const std::pair<const char *, const QMetaObject *> objects[] = {
+        {"controller", &OverlayController::staticMetaObject},
+        {"backend", &OverlayController::staticMetaObject},
+        {"overlayWindow", &OverlayWindow::staticMetaObject},
+    };
+    for (const auto &[object, mo] : objects) {
+        for (int i = 0; i < mo->methodCount(); ++i) {
+            callable[QLatin1String(object)].insert(QString::fromUtf8(mo->method(i).name()));
+        }
     }
 
     const QStringList files = {
@@ -2689,7 +2776,7 @@ void ShapesModelTest::testEveryQmlControllerCallExists()
         QStringLiteral("TrayPopup.qml"), QStringLiteral("ColorPickerPanel.qml"),
     };
     const QRegularExpression call(
-        QStringLiteral("\\b(?:controller|backend)\\.([A-Za-z_][A-Za-z0-9_]*)\\s*\\("));
+        QStringLiteral("\\b(controller|backend|overlayWindow)\\.([A-Za-z_][A-Za-z0-9_]*)\\s*\\("));
 
     QStringList missing;
     for (const QString &name : files) {
@@ -2699,9 +2786,11 @@ void ShapesModelTest::testEveryQmlControllerCallExists()
 
         auto it = call.globalMatch(src);
         while (it.hasNext()) {
-            const QString method = it.next().captured(1);
-            if (!callable.contains(method)) {
-                missing << (name + QStringLiteral(": controller.") + method + QStringLiteral("()"));
+            const QRegularExpressionMatch match = it.next();
+            const QString object = match.captured(1);
+            const QString method = match.captured(2);
+            if (!callable.value(object).contains(method)) {
+                missing << (name + QStringLiteral(": ") + object + QLatin1Char('.') + method + QStringLiteral("()"));
             }
         }
     }
@@ -2840,6 +2929,7 @@ void ShapesModelTest::testMainQmlFollowsTheModel()
     OverlayController c;
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(u"controller"_s, &c);
+    exposeOverlayWindow(engine);
     QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
     QScopedPointer<QObject> root(component.create());
     QVERIFY2(root, qPrintable(component.errorString()));
@@ -2988,6 +3078,7 @@ void ShapesModelTest::testResizeHandleCursors()
     OverlayController c;
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(u"controller"_s, &c);
+    exposeOverlayWindow(engine);
     QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
     QScopedPointer<QObject> root(component.create());
     QVERIFY2(root, qPrintable(component.errorString()));
@@ -3027,6 +3118,7 @@ void ShapesModelTest::testResizeShowsSizeLabel()
     OverlayController c;
     QQmlEngine engine;
     engine.rootContext()->setContextProperty(u"controller"_s, &c);
+    exposeOverlayWindow(engine);
     QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
     QScopedPointer<QObject> root(component.create());
     QVERIFY2(root, qPrintable(component.errorString()));

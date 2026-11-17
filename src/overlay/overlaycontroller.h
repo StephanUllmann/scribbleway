@@ -4,7 +4,6 @@
 #include <QVariantList>
 #include <QVariantMap>
 #include <QQuickWindow>
-#include <QRegion>
 #include <QRect>
 #include <QHash>
 #include <QSet>
@@ -42,9 +41,6 @@ class OverlayController : public QObject
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
     Q_PROPERTY(QVariantMap selection READ getSelectionState NOTIFY selectionChanged)
     Q_PROPERTY(QStringList presetColors READ presetColors CONSTANT)
-    Q_PROPERTY(QStringList screenNames READ screenNames NOTIFY screensChanged)
-    Q_PROPERTY(QStringList screenLabels READ screenLabels NOTIFY screensChanged)
-    Q_PROPERTY(QString targetScreen READ targetScreen NOTIFY targetScreenChanged)
     Q_PROPERTY(bool trayPopupOpen READ trayPopupOpen NOTIFY trayPopupOpenChanged)
     Q_PROPERTY(bool popupWantsKeyboard READ popupWantsKeyboard WRITE setPopupWantsKeyboard NOTIFY popupWantsKeyboardChanged)
 
@@ -63,10 +59,6 @@ public:
     // The same list selectPresetColor()/the number hotkeys index, so the swatches
     // in the menu cannot drift out of step with them.
     static QStringList presetColors();
-    QStringList screenNames() const;
-    // Human-readable names in the same order as screenNames(), e.g. "Laptop screen (eDP-1)".
-    QStringList screenLabels() const;
-    QString targetScreen() const;
 
     QString currentMode() const;
 
@@ -111,15 +103,6 @@ public:
 
     // QML-invokable methods
     Q_INVOKABLE void setSelectedIndex(int index);
-    Q_INVOKABLE void updateInputMask(const QVariantList &rects);
-    // Carve a rect (overlay-local coords) out of the input region so an on-top
-    // window (the Tray Popup) stays clickable while a tool is active. Empty = none.
-    void setPopupExclusion(const QRect &rect);
-    // The Tray Popup's window. While it is open on the overlay's screen, the overlay
-    // keeps a hole in its input region where the popup sits.
-    void setPopupWindow(QQuickWindow *popup);
-    void updatePopupExclusion();
-    Q_INVOKABLE void setKeyboardInteractivity(bool interactive);
     bool trayPopupOpen() const;
     void setTrayPopupOpen(bool open);
     bool popupWantsKeyboard() const;
@@ -162,8 +145,6 @@ public Q_SLOTS:
     void deleteSelected();
     void raiseSelected();
     void lowerSelected();
-    void setTargetScreen(const QString &screenName);
-    void remapWindow();
 
     void enterSelectMode();
     void enterPassthroughMode();
@@ -189,8 +170,6 @@ Q_SIGNALS:
     
     void selectionChanged();
     void modeChanged(const QString &mode);
-    void screensChanged();
-    void targetScreenChanged();
     void trayPopupOpenChanged();
     void popupWantsKeyboardChanged();
     void trayPopupCloseRequested();
@@ -218,7 +197,6 @@ private:
     QVariantMap m_localShortcutSequences;
 
     QQuickWindow *m_window = nullptr;
-    QQuickWindow *m_popupWindow = nullptr;
     ShapesModel m_shapesModel;
     int m_selectedIndex = -1;
     QHash<int, QVariantMap> m_dragStartShapes;
@@ -226,7 +204,6 @@ private:
     QSet<int> m_preDragSelection;
 
     QString m_activeTool;
-    QString m_targetScreen;
     QString m_currentMode = QStringLiteral("passthrough");
     QString m_defaultColor;
     int m_defaultStrokeWidth = 2;
@@ -242,13 +219,6 @@ private:
 
     bool m_trayPopupOpen = false;
     bool m_popupWantsKeyboard = false;
-    bool m_wantsKeyboard = false;
-    void applyKeyboardInteractivity();
-
-    QRegion m_lastInputMask;
-    QRegion m_baseInputMask;
-    QRect m_popupExclusion;
-    void applyInputMask();
 
     static constexpr double kSnapThreshold = 20.0;
     BindingHit findSnapTarget(double px, double py, int excludeIndex = -1) const;

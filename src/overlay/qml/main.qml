@@ -244,7 +244,7 @@ Window {
         let isPassthrough = (controller.currentMode === "passthrough" && activeDrawTool === "");
         let needsKeyboard = !isPassthrough || textEditor.visible;
 
-        controller.setKeyboardInteractivity(needsKeyboard);
+        overlayWindow.setToolWantsKeyboard(needsKeyboard);
         // Not while the tray popup is up: it dismisses on focus loss, and this fires on
         // every selection change — including the ones the popup itself just caused.
         if (needsKeyboard && !controller.trayPopupOpen) {
@@ -252,11 +252,11 @@ Window {
         }
 
         if (isPassthrough && !textEditor.visible) {
-            controller.updateInputMask([]);
+            overlayWindow.setShapeRegion([]);
         } else if (isPassthrough && textEditor.visible) {
-            controller.updateInputMask([Qt.rect(textEditor.x - 5, textEditor.y - 5, textEditor.width + 10, textEditor.height + 10)]);
+            overlayWindow.setShapeRegion([Qt.rect(textEditor.x - 5, textEditor.y - 5, textEditor.width + 10, textEditor.height + 10)]);
         } else {
-            controller.updateInputMask([Qt.rect(0, 0, canvasWindow.width, canvasWindow.height)]);
+            overlayWindow.setShapeRegion([Qt.rect(0, 0, canvasWindow.width, canvasWindow.height)]);
         }
     }
 

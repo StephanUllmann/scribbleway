@@ -4,6 +4,11 @@ qt_add_executable(scribbleway-overlay
     main.cpp
     overlaycontroller.h
     overlaycontroller.cpp
+    overlaywindow.h
+    overlaywindow.cpp
+    layersurface.h
+    layershellsurface.h
+    layershellsurface.cpp
     excalidraw.h
     excalidraw.cpp
     shapesmodel.h

@@ -11,18 +11,18 @@
 #include <QElapsedTimer>
 #include <QMargins>
 #include <QRect>
-#include <QTimer>
 #include <QDebug>
 #include <QDir>
 
 #include <LayerShellQt/Shell>
-#include <LayerShellQt/Window>
 #include <KGlobalAccel>
 
 #include <signal.h>
 
 #include "devlog.h"
+#include "layershellsurface.h"
 #include "overlaycontroller.h"
+#include "overlaywindow.h"
 #include "singleinstance.h"
 
 int main(int argc, char *argv[])
@@ -132,15 +132,19 @@ int main(int argc, char *argv[])
         });
         QObject::connect(client, &QLocalSocket::disconnected, client, &QLocalSocket::deleteLater);
     });
+    LayerShellSurface layerShell;
+    OverlayWindow overlayWindow(&layerShell);
+
     // Load QML Engine
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
+    engine.rootContext()->setContextProperty(QStringLiteral("overlayWindow"), &overlayWindow);
     engine.rootContext()->setContextProperty(QStringLiteral("devMode"), devMode);
     
     const QUrl url(QStringLiteral("qrc:/scribbleway/qml/main.qml"));
     
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
-                     &app, [url, &controller](QObject *obj, const QUrl &objUrl) {
+                     &app, [url, &controller, &overlayWindow](QObject *obj, const QUrl &objUrl) {
         if (!obj && url == objUrl) {
             QCoreApplication::exit(-1);
             return;
@@ -150,56 +154,13 @@ int main(int argc, char *argv[])
             return; // Only the overlay window gets the fullscreen layer-shell treatment.
         }
 
-        auto *window = qobject_cast<QQuickWindow*>(obj);
-        if (window) {
-            // Geometry, not setScreen(): see OverlayController::remapWindow().
-            window->setGeometry(QGuiApplication::primaryScreen()->geometry());
+        if (auto *window = qobject_cast<QQuickWindow*>(obj)) {
+            overlayWindow.attach(window);
             controller.setWindow(window);
-            qCInfo(lcDev) << "overlay placed on" << window->screen()->name() << window->geometry();
-            
-            // Apply LayerShell configuration
-            if (auto *layerWindow = LayerShellQt::Window::get(window)) {
-                LayerShellQt::Window::Anchors anchors;
-                anchors.setFlag(LayerShellQt::Window::AnchorTop);
-                anchors.setFlag(LayerShellQt::Window::AnchorBottom);
-                anchors.setFlag(LayerShellQt::Window::AnchorLeft);
-                anchors.setFlag(LayerShellQt::Window::AnchorRight);
-                layerWindow->setAnchors(anchors);
-                layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
-                // 0, not -1: "reserve nothing but keep me clear of other exclusive zones".
-                // With -1 the overlay covered every panel, so the tray icon that opens the
-                // Tray Popup could not be clicked while a tool was active. The popup also
-                // uses 0, so both are placed in the same area and its hole lines up.
-                layerWindow->setExclusiveZone(0);
-                layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
-                layerWindow->setScope(QStringLiteral("scribbleway-overlay"));
-            }
-            
-            // Set initial input region to be fully click-through (1x1 pixel offscreen)
-            window->setMask(QRegion(-100, -100, 1, 1));
-
-            // Show window after configuration
-            window->show();
         }
     }, Qt::QueuedConnection);
 
     engine.load(url);
-
-    // A display switch fires a burst of these, briefly with no screens at all, so wait
-    // for it to settle before giving the overlay a new surface.
-    QTimer remapTimer;
-    remapTimer.setSingleShot(true);
-    remapTimer.setInterval(500);
-    QObject::connect(&remapTimer, &QTimer::timeout, &controller, &OverlayController::remapWindow);
-    QObject::connect(&app, &QGuiApplication::screenAdded, &app,
-                     [](QScreen *s) { qCInfo(lcDev) << "screen added:" << s->name(); });
-    QObject::connect(&app, &QGuiApplication::screenRemoved, &app,
-                     [](QScreen *s) { qCInfo(lcDev) << "screen removed:" << s->name(); });
-    QObject::connect(&app, &QGuiApplication::primaryScreenChanged, &app,
-                     [](QScreen *s) { qCInfo(lcDev) << "primary screen now:" << (s ? s->name() : QString()); });
-    QObject::connect(&app, &QGuiApplication::screenAdded, &remapTimer, qOverload<>(&QTimer::start));
-    QObject::connect(&app, &QGuiApplication::screenRemoved, &remapTimer, qOverload<>(&QTimer::start));
-    QObject::connect(&app, &QGuiApplication::primaryScreenChanged, &remapTimer, qOverload<>(&QTimer::start));
 
     // The Tray Popup is a small anchored layer-shell surface (menu-sized, corner-placed),
     // not the fullscreen overlay above. Hidden until the tray icon is clicked.
@@ -219,61 +180,55 @@ int main(int argc, char *argv[])
     // from QML — which has no handle on this window.
     QObject::connect(&controller, &OverlayController::trayPopupCloseRequested, &app,
                      [&popupWindow, &hidePopup]() { hidePopup(popupWindow, "escape or canvas click"); });
+    // While a text field in the popup has focus, the overlay hands it the keyboard.
+    QObject::connect(&controller, &OverlayController::popupWantsKeyboardChanged, &overlayWindow,
+                     [&controller, &overlayWindow]() { overlayWindow.setKeyboardYielded(controller.popupWantsKeyboard()); });
     // Anchor to the bottom-right corner: adjacent edges keep the window's natural size
-    // (menu-sized), unlike the overlay's opposite-edge fullscreen anchoring. Re-applied
-    // before every show so it survives the destroy()/recreate used to move screens.
-    auto configurePopupLayer = [&popupWindow]() {
-        if (!popupWindow) return;
-        if (auto *layerWindow = LayerShellQt::Window::get(popupWindow)) {
-            LayerShellQt::Window::Anchors anchors;
-            anchors.setFlag(LayerShellQt::Window::AnchorBottom);
-            anchors.setFlag(LayerShellQt::Window::AnchorRight);
-            layerWindow->setAnchors(anchors);
-            layerWindow->setMargins(QMargins(0, 0, 8, 8));
-            layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
-            layerWindow->setExclusiveZone(0);
-            layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
-            // Qt-Wayland ignores setScreen() (compositor owns placement), so let the
-            // compositor pick the output — it maps a null-output layer surface on the
-            // active screen. setScreenConfiguration() is the pre-6.6 spelling of this.
-#ifdef HAVE_LAYERSHELL_ACTIVE_SCREEN
-            layerWindow->setWantsToBeOnActiveScreen(true);
-#else
-            layerWindow->setScreenConfiguration(LayerShellQt::Window::ScreenFromCompositor);
-#endif
-            layerWindow->setScope(QStringLiteral("scribbleway-traypopup"));
-        }
+    // (menu-sized), unlike the overlay's opposite-edge fullscreen anchoring. The overlay
+    // places the popup's input hole from this same config.
+    const LayerConfig popupLayer{.anchors = Qt::BottomEdge | Qt::RightEdge,
+                                 .margins = QMargins(0, 0, 8, 8),
+                                 .exclusiveZone = 0,
+                                 .keyboard = LayerConfig::Keyboard::OnDemand,
+                                 .scope = QStringLiteral("scribbleway-traypopup"),
+                                 .onActiveScreen = true};
+    // Re-applied before every show so it survives the destroy()/recreate used to move screens.
+    auto configurePopupLayer = [&popupWindow, &layerShell, &popupLayer]() {
+        if (popupWindow) layerShell.apply(popupWindow, popupLayer);
     };
     // Qt-Wayland ignores QWindow::setScreen() (the compositor owns window placement),
     // and Wayland gives no global cursor position or tray-icon geometry — so we can't
     // force or detect the screen. Instead configurePopupLayer() uses ScreenFromCompositor,
     // which makes KWin map the popup on whichever output is currently active. That is the
     // behaviour we want: the popup follows the screen you're working on.
-    // Keep the popup clickable even when a drawing tool has the overlay grabbing input:
-    // the controller carves the popup's rect out of the overlay's input region.
     auto showPopup = [&popupWindow, &controller, &configurePopupLayer]() {
         if (!popupWindow) return;
 
         configurePopupLayer();
-        // Before show(): the overlay must drop its exclusive keyboard grab, or the
-        // compositor never hands focus to the popup.
         controller.setTrayPopupOpen(true);
         popupWindow->show();
         popupWindow->raise();
         popupWindow->requestActivate();
-
-        controller.updatePopupExclusion();
     };
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [trayPopupUrl, &popupWindow, &hidePopup, &configurePopupLayer,
-                            &hiddenTimer, &controller](QObject *obj, const QUrl &objUrl) {
+                            &hiddenTimer, &controller, &overlayWindow, &popupLayer](QObject *obj, const QUrl &objUrl) {
         if (objUrl != trayPopupUrl) return;
         popupWindow = qobject_cast<QQuickWindow*>(obj);
         if (!popupWindow) return;
 
         configurePopupLayer();
 
-        controller.setPopupWindow(popupWindow);
+        // Keep the popup clickable even when a drawing tool has the overlay grabbing input.
+        // Width too, not just show: opening the colour picker widens the popup, and a hole
+        // left at the old width leaves the new strip unclickable while a tool is active.
+        auto updateHole = [popup = popupWindow, &overlayWindow, popupLayer]() {
+            overlayWindow.setHole(popup->isVisible() ? popup->screen() : nullptr, popupLayer, popup->size());
+        };
+        QObject::connect(popupWindow, &QWindow::screenChanged, &overlayWindow, updateHole);
+        QObject::connect(popupWindow, &QWindow::widthChanged, &overlayWindow, updateHole);
+        QObject::connect(popupWindow, &QWindow::heightChanged, &overlayWindow, updateHole);
+        QObject::connect(popupWindow, &QWindow::visibleChanged, &overlayWindow, updateHole);
 
         // Every way the popup disappears ends here, including the compositor closing the
         // surface or Qt closing it as a Qt.Popup window, so the controller never goes on

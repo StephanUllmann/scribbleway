@@ -1,5 +1,4 @@
 find_package(Qt6 REQUIRED COMPONENTS Test Quick QuickTest)
-find_package(LayerShellQt REQUIRED)
 
 add_executable(shapesmodeltest
     shapesmodeltest.cpp
@@ -7,6 +6,9 @@ add_executable(shapesmodeltest
     ../src/overlay/shapesmodel.cpp
     ../src/overlay/overlaycontroller.h
     ../src/overlay/overlaycontroller.cpp
+    ../src/overlay/overlaywindow.h
+    ../src/overlay/overlaywindow.cpp
+    ../src/overlay/layersurface.h
     ../src/overlay/excalidraw.h
     ../src/overlay/excalidraw.cpp
     ../src/overlay/singleinstance.h
@@ -26,7 +28,6 @@ target_link_libraries(shapesmodeltest PRIVATE
     Qt6::Core
     Qt6::Test
     Qt6::Quick
-    LayerShellQt::Interface
 )
 
 add_test(NAME shapesmodeltest COMMAND shapesmodeltest)
