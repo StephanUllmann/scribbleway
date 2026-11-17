@@ -166,10 +166,11 @@ int main(int argc, char *argv[])
                 anchors.setFlag(LayerShellQt::Window::AnchorRight);
                 layerWindow->setAnchors(anchors);
                 layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
-                // -1, not 0: an annotation overlay must cover the whole output. 0 means
-                // "reserve nothing but keep me clear of other exclusive zones", which
-                // makes any bar (Waybar, a Plasma panel) shrink the drawable area.
-                layerWindow->setExclusiveZone(-1);
+                // 0, not -1: "reserve nothing but keep me clear of other exclusive zones".
+                // With -1 the overlay covered every panel, so the tray icon that opens the
+                // Tray Popup could not be clicked while a tool was active. The popup also
+                // uses 0, so both are placed in the same area and its hole lines up.
+                layerWindow->setExclusiveZone(0);
                 layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
                 layerWindow->setScope(QStringLiteral("scribbleway-overlay"));
             }
