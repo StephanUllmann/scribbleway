@@ -169,28 +169,17 @@ Window {
 
 
 
-        let shape = {
+        let shape = Object.assign(controller.styleForNewShape(activeDrawTool), {
             "type": activeDrawTool,
-            "color": controller.defaultColor,
-            "strokeWidth": controller.defaultStrokeWidth,
-            "opacity": controller.defaultOpacity,
             "selected": false,
             "locked": false,
-            "roughness": controller.defaultRoughness,
-            "glow": controller.defaultGlow,
-            "fillColor": controller.defaultFillColor,
-            "fillOpacity": controller.defaultFillOpacity,
             "seed": Math.floor(Math.random() * 1000000) + 1
-        };
+        });
 
         if (activeDrawTool === "freehand") {
             // Only add if we have at least 2 points
             if (activePoints.length >= 2) {
-                let level = controller.defaultFreehandSmoothing;
-                if (level === undefined || level === null) {
-                    level = 2;
-                }
-                shape["points"] = RoughPathGenerator.smoothFreehandPoints(activePoints, level);
+                shape["points"] = RoughPathGenerator.smoothFreehandPoints(activePoints, controller.style.freehandSmoothing);
                 controller.addShape(shape);
             }
         } else if (activeDrawTool === "line" || activeDrawTool === "arrow") {
@@ -214,8 +203,6 @@ Window {
             shape["width"] = 100;
             shape["height"] = 40;
             shape["text"] = "";
-            shape["fontFamily"] = controller.defaultFontFamily;
-            shape["fontSize"] = controller.defaultFontSize;
             
             controller.addShape(shape);
             // Open editor on the newly created text shape (last item)
@@ -227,9 +214,6 @@ Window {
                 shape["y"] = previewY;
                 shape["width"] = previewW;
                 shape["height"] = previewH;
-                if (activeDrawTool === "rectangle") {
-                    shape["borderRadius"] = controller.defaultBorderRadius;
-                }
                 controller.addShape(shape);
             }
         }
@@ -392,11 +376,11 @@ Window {
         preferredRendererType: Shape.CurveRenderer
         anchors.fill: parent
         visible: isDrawing && activeDrawTool === "freehand"
-        opacity: controller.defaultOpacity
+        opacity: controller.style.opacity
         
         ShapePath {
-            strokeColor: controller.defaultColor
-            strokeWidth: controller.defaultStrokeWidth
+            strokeColor: controller.style.color
+            strokeWidth: controller.style.strokeWidth
             fillColor: "transparent"
             capStyle: ShapePath.RoundCap
             joinStyle: ShapePath.RoundJoin
@@ -415,18 +399,18 @@ Window {
         y: previewY
         width: previewW
         height: previewH
-        opacity: controller.defaultOpacity
-        border.color: controller.defaultColor
-        border.width: controller.defaultStrokeWidth
+        opacity: controller.style.opacity
+        border.color: controller.style.color
+        border.width: controller.style.strokeWidth
         color: {
-            let fc = controller.defaultFillColor;
-            let fo = controller.defaultFillOpacity;
+            let fc = controller.style.fillColor;
+            let fo = controller.style.fillOpacity;
             if (!fc || fc === "transparent" || fo <= 0)
                 return "transparent";
             let c = Qt.color(fc);
             return Qt.rgba(c.r, c.g, c.b, fo);
         }
-        radius: controller.defaultBorderRadius
+        radius: controller.style.borderRadius
     }
 
     // Ellipse Live Preview
@@ -434,14 +418,14 @@ Window {
         preferredRendererType: Shape.CurveRenderer
         anchors.fill: parent
         visible: isDrawing && activeDrawTool === "ellipse"
-        opacity: controller.defaultOpacity
+        opacity: controller.style.opacity
 
         ShapePath {
-            strokeColor: controller.defaultColor
-            strokeWidth: controller.defaultStrokeWidth
+            strokeColor: controller.style.color
+            strokeWidth: controller.style.strokeWidth
             fillColor: {
-                let fc = controller.defaultFillColor;
-                let fo = controller.defaultFillOpacity;
+                let fc = controller.style.fillColor;
+                let fo = controller.style.fillOpacity;
                 if (!fc || fc === "transparent" || fo <= 0)
                     return "transparent";
                 let c = Qt.color(fc);
@@ -476,11 +460,11 @@ Window {
         preferredRendererType: Shape.CurveRenderer
         anchors.fill: parent
         visible: isDrawing && activeDrawTool === "line"
-        opacity: controller.defaultOpacity
+        opacity: controller.style.opacity
 
         ShapePath {
-            strokeColor: controller.defaultColor
-            strokeWidth: controller.defaultStrokeWidth
+            strokeColor: controller.style.color
+            strokeWidth: controller.style.strokeWidth
             fillColor: "transparent"
 
             startX: drawStartPoint.x
@@ -497,12 +481,12 @@ Window {
         id: arrowPreviewShape
         anchors.fill: parent
         visible: isDrawing && activeDrawTool === "arrow"
-        opacity: controller.defaultOpacity
+        opacity: controller.style.opacity
         preferredRendererType: Shape.CurveRenderer
 
         // Arrow trigonometry calculations
         property real angle: Math.atan2(previewH, previewW)
-        property real len: 10 + controller.defaultStrokeWidth * 1.5
+        property real len: 10 + controller.style.strokeWidth * 1.5
         property real halfAng: Math.PI / 6
         property real tx: drawStartPoint.x + previewW
         property real ty: drawStartPoint.y + previewH
@@ -514,8 +498,8 @@ Window {
         property real baseY: drawStartPoint.y + stemLength * Math.sin(angle)
 
         ShapePath {
-            strokeColor: controller.defaultColor
-            strokeWidth: controller.defaultStrokeWidth
+            strokeColor: controller.style.color
+            strokeWidth: controller.style.strokeWidth
             fillColor: "transparent"
 
             startX: drawStartPoint.x
@@ -525,7 +509,7 @@ Window {
 
         ShapePath {
             strokeColor: "transparent"
-            fillColor: controller.defaultColor
+            fillColor: controller.style.color
 
             startX: arrowPreviewShape.tx
             startY: arrowPreviewShape.ty
@@ -576,7 +560,7 @@ Window {
         id: toolCursorBadge
         visible: canvasWindow.showToolCursorBadge
         tool: canvasWindow.activeDrawTool
-        accent: controller.defaultColor
+        accent: controller.style.color
         z: 1000
         opacity: canvasWindow.isDrawing ? 0.55 : 0.92
         x: {
@@ -594,7 +578,7 @@ Window {
         id: selectToolBadge
         visible: canvasWindow.showSelectToolBadge
         tool: "select"
-        accent: controller.defaultColor
+        accent: controller.style.color
         z: 1000
         x: 16
         y: 16
@@ -654,7 +638,7 @@ Window {
                 if (shape && shape.fontFamily) return shape.fontFamily;
                 if (shape && shape.attachedText && shape.attachedText.fontFamily) return shape.attachedText.fontFamily;
             }
-            return controller.defaultFontFamily;
+            return controller.style.fontFamily;
         }
         font.pixelSize: {
             if (editingShapeIndex !== -1 && editingShapeIndex < controller.shapesModel.rowCount()) {
@@ -662,7 +646,7 @@ Window {
                 if (shape && shape.fontSize) return shape.fontSize;
                 if (shape && shape.attachedText && shape.attachedText.fontSize) return shape.attachedText.fontSize;
             }
-            return controller.defaultFontSize;
+            return controller.style.fontSize;
         }
         color: {
             if (inShape && editingShapeIndex !== -1 && editingShapeIndex < controller.shapesModel.rowCount()) {

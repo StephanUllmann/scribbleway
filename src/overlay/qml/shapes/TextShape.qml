@@ -21,7 +21,7 @@ BaseShape {
             textFormat: Text.PlainText
             color: root.modelColor
             opacity: root.modelOpacity
-            font.family: typeof fontFamily !== "undefined" ? fontFamily : controller.defaultFontFamily
+            font.family: typeof fontFamily !== "undefined" ? fontFamily : controller.style.fontFamily
             font.pixelSize: typeof fontSize !== "undefined" ? fontSize : 20
 
             // Sync size changes to the shape model

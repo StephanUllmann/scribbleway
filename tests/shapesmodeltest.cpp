@@ -519,8 +519,8 @@ void ShapesModelTest::testOverlayControllerSelectionProperties()
 
     // No selection: falls back to defaults, matching getSelectionState()
     QCOMPARE(controller.hasSelection(), false);
-    QCOMPARE(controller.getSelectionState().value(QStringLiteral("color")).toString(), controller.defaultColor());
-    QCOMPARE(controller.getSelectionState().value(QStringLiteral("strokeWidth")).toInt(), controller.defaultStrokeWidth());
+    QCOMPARE(controller.getSelectionState().value(QStringLiteral("color")).toString(), controller.style().value(QStringLiteral("color")).toString());
+    QCOMPARE(controller.getSelectionState().value(QStringLiteral("strokeWidth")).toInt(), controller.style().value(QStringLiteral("strokeWidth")).toInt());
 
     QVariantMap shape;
     shape[QStringLiteral("type")] = QStringLiteral("rectangle");
@@ -755,7 +755,7 @@ void ShapesModelTest::testBorderRadius()
     controller.updateProperties(updateProps);
 
     QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 12);
-    QCOMPARE(controller.defaultBorderRadius(), 12);
+    QCOMPARE(controller.style().value(QStringLiteral("borderRadius")).toInt(), 12);
 
     // Create a shape, select it, and check it inherits/updates border radius
     QVariantMap shape;
@@ -781,13 +781,13 @@ void ShapesModelTest::testBorderRadius()
     controller.increaseBorderRadius();
     QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 22);
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 22);
-    QCOMPARE(controller.defaultBorderRadius(), 22);
+    QCOMPARE(controller.style().value(QStringLiteral("borderRadius")).toInt(), 22);
 
     // Test decreaseBorderRadius()
     controller.decreaseBorderRadius();
     QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 20);
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 20);
-    QCOMPARE(controller.defaultBorderRadius(), 20);
+    QCOMPARE(controller.style().value(QStringLiteral("borderRadius")).toInt(), 20);
 
     // Decrease below 0
     for (int i = 0; i < 12; ++i) {
@@ -795,7 +795,7 @@ void ShapesModelTest::testBorderRadius()
     }
     QCOMPARE(controller.getSelectionState()[QStringLiteral("borderRadius")].toInt(), 0);
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("borderRadius")].toInt(), 0);
-    QCOMPARE(controller.defaultBorderRadius(), 0);
+    QCOMPARE(controller.style().value(QStringLiteral("borderRadius")).toInt(), 0);
 
     // Deselect and verify selectedType() is empty
     controller.setSelectedIndex(-1);
@@ -803,7 +803,7 @@ void ShapesModelTest::testBorderRadius()
 
     // Test increaseBorderRadius() when no shape is selected (should do nothing)
     controller.increaseBorderRadius();
-    QCOMPARE(controller.defaultBorderRadius(), 0); // remains 0
+    QCOMPARE(controller.style().value(QStringLiteral("borderRadius")).toInt(), 0); // remains 0
 
     // Add a non-rectangle shape and select it
     QVariantMap lineShape;
@@ -815,7 +815,7 @@ void ShapesModelTest::testBorderRadius()
     // increaseBorderRadius() on line should do nothing
     controller.increaseBorderRadius();
     // Default border radius shouldn't change
-    QCOMPARE(controller.defaultBorderRadius(), 0);
+    QCOMPARE(controller.style().value(QStringLiteral("borderRadius")).toInt(), 0);
 }
 
 void ShapesModelTest::testRoughness()
@@ -823,19 +823,19 @@ void ShapesModelTest::testRoughness()
     OverlayController controller;
 
     // 1. Check initial default roughness is 1
-    QCOMPARE(controller.defaultRoughness(), 1);
+    QCOMPARE(controller.style().value(QStringLiteral("roughness")).toInt(), 1);
 
     // 2. Update default roughness
     QVariantMap updateProps;
     updateProps[QStringLiteral("roughness")] = 2;
     controller.updateProperties(updateProps);
 
-    QCOMPARE(controller.defaultRoughness(), 2);
+    QCOMPARE(controller.style().value(QStringLiteral("roughness")).toInt(), 2);
 
     // 3. Create a shape and ensure it gets default roughness and random seed
     QVariantMap shape;
     shape[QStringLiteral("type")] = QStringLiteral("rectangle");
-    shape[QStringLiteral("roughness")] = controller.defaultRoughness();
+    shape[QStringLiteral("roughness")] = controller.style().value(QStringLiteral("roughness")).toInt();
     shape[QStringLiteral("seed")] = 99999;
     controller.addShape(shape); // selects it automatically
 
@@ -849,7 +849,7 @@ void ShapesModelTest::testRoughness()
     // S cycles the default while a tool is active, and leaves the tool alone
     controller.cycleRoughness();
     QCOMPARE(controller.activeTool(), QStringLiteral("rectangle"));
-    QCOMPARE(controller.defaultRoughness(), 0);
+    QCOMPARE(controller.style().value(QStringLiteral("roughness")).toInt(), 0);
 
     // 5. Test cycleRoughness() when in select mode (cycles roughness from 2 -> 0 -> 1 -> 2)
     controller.setSelectedIndex(0);
@@ -871,19 +871,19 @@ void ShapesModelTest::testGlow()
     OverlayController controller;
 
     // 1. Check initial default glow is 10
-    QCOMPARE(controller.defaultGlow(), 10);
+    QCOMPARE(controller.style().value(QStringLiteral("glow")).toInt(), 10);
 
     // 2. Update default glow
     QVariantMap updateProps;
     updateProps[QStringLiteral("glow")] = 20;
     controller.updateProperties(updateProps);
 
-    QCOMPARE(controller.defaultGlow(), 20);
+    QCOMPARE(controller.style().value(QStringLiteral("glow")).toInt(), 20);
 
     // 3. Create a shape and ensure it gets default glow
     QVariantMap shape;
     shape[QStringLiteral("type")] = QStringLiteral("rectangle");
-    shape[QStringLiteral("glow")] = controller.defaultGlow();
+    shape[QStringLiteral("glow")] = controller.style().value(QStringLiteral("glow")).toInt();
     controller.addShape(shape);
 
     QCOMPARE(controller.selectedIndex(), 0);
@@ -894,15 +894,15 @@ void ShapesModelTest::testFillColor()
 {
     OverlayController controller;
 
-    QCOMPARE(controller.defaultFillColor(), QStringLiteral("#e63946"));
-    QCOMPARE(controller.defaultFillOpacity(), 0.25);
+    QCOMPARE(controller.style().value(QStringLiteral("fillColor")).toString(), QStringLiteral("#e63946"));
+    QCOMPARE(controller.style().value(QStringLiteral("fillOpacity")).toDouble(), 0.25);
 
     QVariantMap defaults;
     defaults[QStringLiteral("fillColor")] = QStringLiteral("#00ff00");
     defaults[QStringLiteral("fillOpacity")] = 0.5;
     controller.updateProperties(defaults);
-    QCOMPARE(controller.defaultFillColor(), QStringLiteral("#00ff00"));
-    QCOMPARE(controller.defaultFillOpacity(), 0.5);
+    QCOMPARE(controller.style().value(QStringLiteral("fillColor")).toString(), QStringLiteral("#00ff00"));
+    QCOMPARE(controller.style().value(QStringLiteral("fillOpacity")).toDouble(), 0.5);
 
     // No selection state exposes defaults
     QVariantMap noSel = controller.getSelectionState();
@@ -919,14 +919,14 @@ void ShapesModelTest::testFillColor()
     QVariantMap sel = controller.getSelectionState();
     QCOMPARE(sel[QStringLiteral("fillColor")].toString(), QStringLiteral("#112233"));
     QCOMPARE(sel[QStringLiteral("fillOpacity")].toDouble(), 0.25);
-    QCOMPARE(controller.defaultFillColor(), QStringLiteral("#112233"));
-    QCOMPARE(controller.defaultFillOpacity(), 0.25);
+    QCOMPARE(controller.style().value(QStringLiteral("fillColor")).toString(), QStringLiteral("#112233"));
+    QCOMPARE(controller.style().value(QStringLiteral("fillOpacity")).toDouble(), 0.25);
 
     // A new stroke color carries over to a switched-on fill, on the shape and the default
     controller.updateProperties({{QStringLiteral("color"), QStringLiteral("#2a9d8f")}});
     QCOMPARE(controller.shapesModel()->shapes().first()[QStringLiteral("fillColor")].toString(),
              QStringLiteral("#2a9d8f"));
-    QCOMPARE(controller.defaultFillColor(), QStringLiteral("#2a9d8f"));
+    QCOMPARE(controller.style().value(QStringLiteral("fillColor")).toString(), QStringLiteral("#2a9d8f"));
 
     // updateProperties mutates selected shape + defaults
     QVariantMap upd;
@@ -952,10 +952,10 @@ void ShapesModelTest::testFillColor()
     QCOMPARE(model->data(idx, ShapesModel::FillOpacityRole).toDouble(), 0.0);
 
     // Clamp opacity
-    controller.setDefaultFillOpacity(1.5);
-    QCOMPARE(controller.defaultFillOpacity(), 1.0);
-    controller.setDefaultFillOpacity(-0.2);
-    QCOMPARE(controller.defaultFillOpacity(), 0.0);
+    controller.updateProperties({{QStringLiteral("fillOpacity"), 1.5}});
+    QCOMPARE(controller.style().value(QStringLiteral("fillOpacity")).toDouble(), 1.0);
+    controller.updateProperties({{QStringLiteral("fillOpacity"), -0.2}});
+    QCOMPARE(controller.style().value(QStringLiteral("fillOpacity")).toDouble(), 0.0);
 
     // Round-trip export encoding
     QVariantMap exportShape;
@@ -988,20 +988,20 @@ void ShapesModelTest::testFreehandSmoothing()
     OverlayController controller;
 
     // Default level is medium (2)
-    QCOMPARE(controller.defaultFreehandSmoothing(), 2);
+    QCOMPARE(controller.style().value(QStringLiteral("freehandSmoothing")).toInt(), 2);
 
     QVariantMap updateProps;
     updateProps[QStringLiteral("freehandSmoothing")] = 0;
     controller.updateProperties(updateProps);
-    QCOMPARE(controller.defaultFreehandSmoothing(), 0);
+    QCOMPARE(controller.style().value(QStringLiteral("freehandSmoothing")).toInt(), 0);
 
     // Clamp high
     controller.updateProperties({{QStringLiteral("freehandSmoothing"), 99}});
-    QCOMPARE(controller.defaultFreehandSmoothing(), 3);
+    QCOMPARE(controller.style().value(QStringLiteral("freehandSmoothing")).toInt(), 3);
 
     // Clamp low
     controller.updateProperties({{QStringLiteral("freehandSmoothing"), -5}});
-    QCOMPARE(controller.defaultFreehandSmoothing(), 0);
+    QCOMPARE(controller.style().value(QStringLiteral("freehandSmoothing")).toInt(), 0);
 
     // Selection state always reports the draw default
     QVariantMap state = controller.getSelectionState();
@@ -1344,12 +1344,12 @@ void ShapesModelTest::testPropertiesDefaultsUpdates()
     
     controller.updateProperties(defaults);
     
-    QCOMPARE(controller.defaultColor(), QStringLiteral("#00ff00"));
-    QCOMPARE(controller.defaultStrokeWidth(), 6);
-    QCOMPARE(controller.defaultOpacity(), 0.75);
-    QCOMPARE(controller.defaultFontFamily(), QStringLiteral("serif"));
-    QCOMPARE(controller.defaultFontSize(), 25);
-    QCOMPARE(controller.defaultBorderRadius(), 15);
+    QCOMPARE(controller.style().value(QStringLiteral("color")).toString(), QStringLiteral("#00ff00"));
+    QCOMPARE(controller.style().value(QStringLiteral("strokeWidth")).toInt(), 6);
+    QCOMPARE(controller.style().value(QStringLiteral("opacity")).toDouble(), 0.75);
+    QCOMPARE(controller.style().value(QStringLiteral("fontFamily")).toString(), QStringLiteral("serif"));
+    QCOMPARE(controller.style().value(QStringLiteral("fontSize")).toInt(), 25);
+    QCOMPARE(controller.style().value(QStringLiteral("borderRadius")).toInt(), 15);
     
     QVariantMap s1; s1[QStringLiteral("type")] = QStringLiteral("rectangle");
     QVariantMap s2; s2[QStringLiteral("type")] = QStringLiteral("ellipse");
@@ -1385,10 +1385,10 @@ void ShapesModelTest::testPropertiesDefaultsUpdates()
     
     QVERIFY(shape2[QStringLiteral("color")].toString() != QStringLiteral("#ff00ff"));
     
-    QCOMPARE(controller.defaultColor(), QStringLiteral("#ff00ff"));
-    QCOMPARE(controller.defaultStrokeWidth(), 10);
-    QCOMPARE(controller.defaultOpacity(), 0.4);
-    QCOMPARE(controller.defaultBorderRadius(), 30);
+    QCOMPARE(controller.style().value(QStringLiteral("color")).toString(), QStringLiteral("#ff00ff"));
+    QCOMPARE(controller.style().value(QStringLiteral("strokeWidth")).toInt(), 10);
+    QCOMPARE(controller.style().value(QStringLiteral("opacity")).toDouble(), 0.4);
+    QCOMPARE(controller.style().value(QStringLiteral("borderRadius")).toInt(), 30);
 }
 
 void ShapesModelTest::testMultiSelectionDragDelete()
@@ -1613,11 +1613,11 @@ void ShapesModelTest::testReworkedShortcutsSlots()
     QCOMPARE(controller.currentMode(), QStringLiteral("draw"));
 
     // 2. Test cycleColor()
-    QCOMPARE(controller.defaultColor(), QStringLiteral("#e63946"));
+    QCOMPARE(controller.style().value(QStringLiteral("color")).toString(), QStringLiteral("#e63946"));
     controller.cycleColor();
-    QCOMPARE(controller.defaultColor(), QStringLiteral("#f4a261"));
+    QCOMPARE(controller.style().value(QStringLiteral("color")).toString(), QStringLiteral("#f4a261"));
     controller.cycleColor();
-    QCOMPARE(controller.defaultColor(), QStringLiteral("#e9c46a"));
+    QCOMPARE(controller.style().value(QStringLiteral("color")).toString(), QStringLiteral("#e9c46a"));
 
     // 3. Test growSelected() and shrinkSelected() with rectangle shape
     QVariantMap rect;
@@ -1657,9 +1657,9 @@ void ShapesModelTest::testReworkedShortcutsSlots()
 
     // 6. Test selectPresetColor
     controller.selectPresetColor(0); // Red: #e63946
-    QCOMPARE(controller.defaultColor(), QStringLiteral("#e63946"));
+    QCOMPARE(controller.style().value(QStringLiteral("color")).toString(), QStringLiteral("#e63946"));
     controller.selectPresetColor(1); // Orange: #f4a261
-    QCOMPARE(controller.defaultColor(), QStringLiteral("#f4a261"));
+    QCOMPARE(controller.style().value(QStringLiteral("color")).toString(), QStringLiteral("#f4a261"));
 
     // 7. Test localShortcutSequences property maps
     QVariantMap localSeqs = controller.localShortcutSequences();
@@ -2711,7 +2711,7 @@ void ShapesModelTest::testDecoupledAttachedTextFontProperties()
     controller.addShape(rect); // index 0
 
     controller.setAttachedText(0, QStringLiteral("Rectangle Text"));
-    const QString defaultFont = controller.defaultFontFamily();
+    const QString defaultFont = controller.style().value(QStringLiteral("fontFamily")).toString();
     QVariantMap rectShape1 = controller.getShape(0);
     QCOMPARE(rectShape1.value(QStringLiteral("fontFamily")).toString(), defaultFont);
     QCOMPARE(rectShape1.value(QStringLiteral("fontSize")).toInt(), 20);
@@ -2764,35 +2764,40 @@ void ShapesModelTest::testDecoupledAttachedTextFontProperties()
     QCOMPARE(textShapeFinal.value(QStringLiteral("fontFamily")).toString(), QStringLiteral("Cascadia Code"));
 }
 
-// QML only ever sees a QObject through its metaobject: property WRITEs, slots and
-// Q_INVOKABLEs. A plain public setter is invisible, so `controller.setDefaultColor(c)`
-// was a silent TypeError and every default silently failed to stick with nothing
-// selected. Pin the two ways QML actually reaches this object.
+// QML can only write the style through updateProperties(): `style` is read-only, and a
+// plain public setter would be invisible to it (that was a silent TypeError once, and no
+// default stuck with nothing selected). Pin that every key written there lands in
+// `style`, and that new shapes only get the keys their type carries.
 void ShapesModelTest::testDefaultsReachableFromQml()
 {
     OverlayController controller;
 
-    const QVariantMap defaults = {
-        {QStringLiteral("defaultColor"), QStringLiteral("#123456")},
-        {QStringLiteral("defaultStrokeWidth"), 7},
-        {QStringLiteral("defaultOpacity"), 0.42},
-        {QStringLiteral("defaultFontFamily"), QStringLiteral("Cascadia Code")},
-        {QStringLiteral("defaultFontSize"), 33},
-        {QStringLiteral("defaultBorderRadius"), 11},
-        {QStringLiteral("defaultRoughness"), 2},
-        {QStringLiteral("defaultGlow"), 21},
-        {QStringLiteral("defaultFillColor"), QStringLiteral("#654321")},
-        {QStringLiteral("defaultFillOpacity"), 0.33},
-        {QStringLiteral("defaultFreehandSmoothing"), 3},
+    const QVariantMap values = {
+        {QStringLiteral("color"), QStringLiteral("#123456")},
+        {QStringLiteral("strokeWidth"), 7},
+        {QStringLiteral("opacity"), 0.42},
+        {QStringLiteral("fontFamily"), QStringLiteral("Cascadia Code")},
+        {QStringLiteral("fontSize"), 33},
+        {QStringLiteral("borderRadius"), 11},
+        {QStringLiteral("roughness"), 2},
+        {QStringLiteral("glow"), 21},
+        {QStringLiteral("fillColor"), QStringLiteral("#654321")},
+        {QStringLiteral("fillOpacity"), 0.33},
+        {QStringLiteral("freehandSmoothing"), 3},
     };
+    controller.updateProperties(values);
+    QCOMPARE(controller.style(), values);
+    QCOMPARE(controller.property("style").toMap(), values);
 
-    for (auto it = defaults.cbegin(); it != defaults.cend(); ++it) {
-        QVERIFY2(controller.setProperty(it.key().toUtf8().constData(), it.value()),
-                 qPrintable(QStringLiteral("%1 is not writable through the metaobject")
-                            .arg(it.key())));
-        QCOMPARE(controller.property(it.key().toUtf8().constData()), it.value());
-    }
-
+    const QString fontSize = QStringLiteral("fontSize");
+    const QString borderRadius = QStringLiteral("borderRadius");
+    QVERIFY(controller.styleForNewShape(QStringLiteral("text")).contains(fontSize));
+    QVERIFY(!controller.styleForNewShape(QStringLiteral("ellipse")).contains(fontSize));
+    QVERIFY(controller.styleForNewShape(QStringLiteral("rectangle")).contains(borderRadius));
+    QVERIFY(!controller.styleForNewShape(QStringLiteral("text")).contains(borderRadius));
+    QVERIFY(!controller.styleForNewShape(QStringLiteral("freehand")).contains(QStringLiteral("freehandSmoothing")));
+    QCOMPARE(controller.styleForNewShape(QStringLiteral("ellipse")).value(QStringLiteral("color")),
+             QVariant(QStringLiteral("#123456")));
 }
 
 // The shape manager list binds straight to ShapesModel, so its delegate pulls `type`,

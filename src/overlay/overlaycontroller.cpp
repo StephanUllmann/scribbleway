@@ -46,13 +46,50 @@ static QString describeShape(const QVariantMap &shape)
         .arg(head).arg(qRound(b.x())).arg(qRound(b.y())).arg(qRound(b.width())).arg(qRound(b.height()));
 }
 
+// The one list of style keys, with each key's starting value, the Shapes that carry it and
+// its range. Adding a style key is one row here. onlyFor: nullptr = every Shape, a type =
+// that type only, "" = app-level, never stored on a Shape. A range applies when lo <= hi.
+namespace {
+struct StyleKey { const char *key; QVariant initial; const char *onlyFor = nullptr; double lo = 0, hi = -1; };
+const StyleKey kStyleKeys[] = {
+    {"color", QStringLiteral("#e63946")},
+    {"strokeWidth", 2},
+    {"opacity", 1.0},
+    {"fontFamily", QStringLiteral("monospace"), "text"},
+    {"fontSize", 20, "text"},
+    {"borderRadius", 8, "rectangle"},
+    {"roughness", 1, nullptr, 0, 2},
+    {"glow", 10},
+    {"fillColor", QStringLiteral("#e63946")},
+    {"fillOpacity", 0.25, nullptr, 0, 1},
+    // Shapes store the smoothed points, not the setting.
+    {"freehandSmoothing", 2, "", 0, 3},
+};
+
+const StyleKey *findStyleKey(const QString &key)
+{
+    for (const StyleKey &k : kStyleKeys) {
+        if (key == QLatin1String(k.key)) return &k;
+    }
+    return nullptr;
+}
+
+// The value clamped to the key's range and converted to the type of its starting value.
+QVariant fitStyle(const StyleKey &k, QVariant value)
+{
+    if (k.lo <= k.hi) value = qBound(k.lo, value.toDouble(), k.hi);
+    value.convert(k.initial.metaType());
+    return value;
+}
+} // namespace
+
 OverlayController::OverlayController(QObject *parent)
     : QObject(parent)
     , m_activeTool(QStringLiteral("freehand"))
-    , m_defaultColor(QStringLiteral("#e63946"))
-    , m_defaultFillColor(QStringLiteral("#e63946"))
 {
-    m_defaultFontFamily = QStringLiteral("monospace");
+    for (const StyleKey &k : kStyleKeys) {
+        m_style.insert(QLatin1String(k.key), k.initial);
+    }
     m_shapesModel.setParent(this);
 
     // Hotkeys are read here only; there is no UI for rebinding them, but hand-edited
@@ -143,150 +180,30 @@ QString OverlayController::currentMode() const
     return m_currentMode;
 }
 
-QString OverlayController::defaultColor() const
+QVariantMap OverlayController::style() const
 {
-    return m_defaultColor;
+    return m_style;
 }
 
-void OverlayController::setDefaultColor(const QString &color)
+QVariantMap OverlayController::styleForNewShape(const QString &type) const
 {
-    if (m_defaultColor != color) {
-        m_defaultColor = color;
-        Q_EMIT defaultColorChanged();
+    QVariantMap out;
+    for (const StyleKey &k : kStyleKeys) {
+        if (!k.onlyFor || (*k.onlyFor && type == QLatin1String(k.onlyFor))) {
+            out.insert(QLatin1String(k.key), m_style.value(QLatin1String(k.key)));
+        }
     }
+    return out;
 }
 
-int OverlayController::defaultStrokeWidth() const
+bool OverlayController::writeStyle(const QString &key, const QVariant &value)
 {
-    return m_defaultStrokeWidth;
-}
-
-void OverlayController::setDefaultStrokeWidth(int width)
-{
-    if (m_defaultStrokeWidth != width) {
-        m_defaultStrokeWidth = width;
-        Q_EMIT defaultStrokeWidthChanged();
-    }
-}
-
-double OverlayController::defaultOpacity() const
-{
-    return m_defaultOpacity;
-}
-
-void OverlayController::setDefaultOpacity(double opacity)
-{
-    if (m_defaultOpacity != opacity) {
-        m_defaultOpacity = opacity;
-        Q_EMIT defaultOpacityChanged();
-    }
-}
-
-QString OverlayController::defaultFontFamily() const
-{
-    return m_defaultFontFamily;
-}
-
-void OverlayController::setDefaultFontFamily(const QString &family)
-{
-    if (m_defaultFontFamily != family) {
-        m_defaultFontFamily = family;
-        Q_EMIT defaultFontFamilyChanged();
-    }
-}
-
-int OverlayController::defaultFontSize() const
-{
-    return m_defaultFontSize;
-}
-
-void OverlayController::setDefaultFontSize(int size)
-{
-    if (m_defaultFontSize != size) {
-        m_defaultFontSize = size;
-        Q_EMIT defaultFontSizeChanged();
-    }
-}
-
-int OverlayController::defaultBorderRadius() const
-{
-    return m_defaultBorderRadius;
-}
-
-void OverlayController::setDefaultBorderRadius(int radius)
-{
-    if (m_defaultBorderRadius != radius) {
-        m_defaultBorderRadius = radius;
-        Q_EMIT defaultBorderRadiusChanged();
-    }
-}
-
-int OverlayController::defaultRoughness() const
-{
-    return m_defaultRoughness;
-}
-
-void OverlayController::setDefaultRoughness(int roughness)
-{
-    roughness = qBound(0, roughness, 2);
-    if (m_defaultRoughness != roughness) {
-        m_defaultRoughness = roughness;
-        Q_EMIT defaultRoughnessChanged();
-    }
-}
-
-int OverlayController::defaultGlow() const
-{
-    return m_defaultGlow;
-}
-
-void OverlayController::setDefaultGlow(int glow)
-{
-    if (m_defaultGlow != glow) {
-        m_defaultGlow = glow;
-        Q_EMIT defaultGlowChanged();
-    }
-}
-
-QString OverlayController::defaultFillColor() const
-{
-    return m_defaultFillColor;
-}
-
-void OverlayController::setDefaultFillColor(const QString &color)
-{
-    if (m_defaultFillColor != color) {
-        m_defaultFillColor = color;
-        Q_EMIT defaultFillColorChanged();
-    }
-}
-
-double OverlayController::defaultFillOpacity() const
-{
-    return m_defaultFillOpacity;
-}
-
-void OverlayController::setDefaultFillOpacity(double opacity)
-{
-    const double clamped = qBound(0.0, opacity, 1.0);
-    if (!qFuzzyCompare(m_defaultFillOpacity, clamped)) {
-        m_defaultFillOpacity = clamped;
-        Q_EMIT defaultFillOpacityChanged();
-    }
-}
-
-int OverlayController::defaultFreehandSmoothing() const
-{
-    return m_defaultFreehandSmoothing;
-}
-
-void OverlayController::setDefaultFreehandSmoothing(int level)
-{
-    int clamped = qBound(0, level, 3);
-    if (m_defaultFreehandSmoothing != clamped) {
-        m_defaultFreehandSmoothing = clamped;
-        Q_EMIT defaultFreehandSmoothingChanged();
-    }
+    const StyleKey *k = findStyleKey(key);
+    if (!k) return false;
+    const QVariant fitted = fitStyle(*k, value);
+    if (m_style.value(key) == fitted) return false;
+    m_style.insert(key, fitted);
+    return true;
 }
 
 void OverlayController::addShape(const QVariantMap &shape)
@@ -325,8 +242,8 @@ QVariantMap OverlayController::makeAttachedTextBinding(const QVariantMap &shape)
         {QStringLiteral("type"), QStringLiteral("attachedText")},
         {QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces)},
         {QStringLiteral("text"), QString()},
-        {QStringLiteral("fontFamily"), shape.value(QStringLiteral("fontFamily"), m_defaultFontFamily)},
-        {QStringLiteral("fontSize"), shape.value(QStringLiteral("fontSize"), m_defaultFontSize)},
+        {QStringLiteral("fontFamily"), shape.value(QStringLiteral("fontFamily"), m_style.value(QStringLiteral("fontFamily")))},
+        {QStringLiteral("fontSize"), shape.value(QStringLiteral("fontSize"), m_style.value(QStringLiteral("fontSize")))},
         {QStringLiteral("textAlign"), QStringLiteral("center")},
         {QStringLiteral("verticalAlign"), QStringLiteral("middle")}
     };
@@ -345,7 +262,7 @@ QRectF OverlayController::attachedTextRect(int index) const
     if (index < 0 || index >= m_shapesModel.rowCount()) {
         return QRectF();
     }
-    return ShapeGeometry::attachedTextRect(m_shapesModel.shapes().at(index), m_defaultFontSize);
+    return ShapeGeometry::attachedTextRect(m_shapesModel.shapes().at(index), m_style.value(QStringLiteral("fontSize")).toInt());
 }
 
 QVariantMap OverlayController::ensureAttachedTextForShape(int index)
@@ -407,8 +324,8 @@ void OverlayController::setAttachedText(int index, const QString &text)
     if (binding.isEmpty()) {
         binding = makeAttachedTextBinding(shape);
     }
-    const QString fontFamily = shape.value(QStringLiteral("fontFamily"), m_defaultFontFamily).toString();
-    const int fontSize = shape.value(QStringLiteral("fontSize"), m_defaultFontSize).toInt();
+    const QString fontFamily = shape.value(QStringLiteral("fontFamily"), m_style.value(QStringLiteral("fontFamily"))).toString();
+    const int fontSize = shape.value(QStringLiteral("fontSize"), m_style.value(QStringLiteral("fontSize"))).toInt();
     binding.insert(QStringLiteral("text"), trimmed);
     binding.insert(QStringLiteral("fontFamily"), fontFamily);
     binding.insert(QStringLiteral("fontSize"), fontSize);
@@ -484,42 +401,14 @@ void OverlayController::setSelectedIndex(int index)
         if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
             m_shapesModel.updateShape(m_selectedIndex, {{QStringLiteral("selected"), true}});
             
-            // Set properties from selected shape
-            QVariantMap shape = m_shapesModel.shapes()[m_selectedIndex];
-            m_defaultColor = shape[QStringLiteral("color")].toString();
-            m_defaultStrokeWidth = shape[QStringLiteral("strokeWidth")].toInt();
-            m_defaultOpacity = shape[QStringLiteral("opacity")].toDouble();
-            if (shape.contains(QStringLiteral("fontFamily"))) {
-                m_defaultFontFamily = shape[QStringLiteral("fontFamily")].toString();
+            // The selected shape's style becomes the style for the next new shape.
+            const QVariantMap shape = m_shapesModel.shapes()[m_selectedIndex];
+            bool changed = false;
+            for (const StyleKey &k : kStyleKeys) {
+                const QString key = QLatin1String(k.key);
+                if (shape.contains(key)) changed |= writeStyle(key, shape.value(key));
             }
-            if (shape.contains(QStringLiteral("fontSize"))) {
-                m_defaultFontSize = shape[QStringLiteral("fontSize")].toInt();
-            }
-            if (shape.contains(QStringLiteral("borderRadius"))) {
-                m_defaultBorderRadius = shape[QStringLiteral("borderRadius")].toInt();
-            }
-            if (shape.contains(QStringLiteral("roughness"))) {
-                m_defaultRoughness = shape[QStringLiteral("roughness")].toInt();
-            }
-            if (shape.contains(QStringLiteral("glow"))) {
-                m_defaultGlow = shape[QStringLiteral("glow")].toInt();
-            }
-            if (shape.contains(QStringLiteral("fillColor"))) {
-                m_defaultFillColor = shape[QStringLiteral("fillColor")].toString();
-            }
-            if (shape.contains(QStringLiteral("fillOpacity"))) {
-                m_defaultFillOpacity = shape[QStringLiteral("fillOpacity")].toDouble();
-            }
-            Q_EMIT defaultColorChanged();
-            Q_EMIT defaultStrokeWidthChanged();
-            Q_EMIT defaultOpacityChanged();
-            Q_EMIT defaultFontFamilyChanged();
-            Q_EMIT defaultFontSizeChanged();
-            Q_EMIT defaultBorderRadiusChanged();
-            Q_EMIT defaultRoughnessChanged();
-            Q_EMIT defaultGlowChanged();
-            Q_EMIT defaultFillColorChanged();
-            Q_EMIT defaultFillOpacityChanged();
+            if (changed) Q_EMIT styleChanged();
 
             ensureSelectMode();
         }
@@ -531,39 +420,21 @@ void OverlayController::setSelectedIndex(int index)
 
 QVariantMap OverlayController::getSelectionState() const
 {
-    QVariantMap state;
+    QVariantMap state = m_style;
     if (m_selectedIndex >= 0 && m_selectedIndex < m_shapesModel.rowCount()) {
-        QVariantMap shape = m_shapesModel.shapes()[m_selectedIndex];
+        const QVariantMap shape = m_shapesModel.shapes()[m_selectedIndex];
+        for (const StyleKey &k : kStyleKeys) {
+            const QString key = QLatin1String(k.key);
+            if (shape.contains(key)) state.insert(key, fitStyle(k, shape.value(key)));
+        }
         state[QStringLiteral("hasSelection")] = true;
         state[QStringLiteral("type")] = shape[QStringLiteral("type")].toString();
-        state[QStringLiteral("color")] = shape[QStringLiteral("color")].toString();
-        state[QStringLiteral("strokeWidth")] = shape[QStringLiteral("strokeWidth")].toInt();
-        state[QStringLiteral("opacity")] = shape[QStringLiteral("opacity")].toDouble();
-        state[QStringLiteral("fontFamily")] = shape.value(QStringLiteral("fontFamily"), m_defaultFontFamily).toString();
-        state[QStringLiteral("fontSize")] = shape.value(QStringLiteral("fontSize"), m_defaultFontSize).toInt();
-        state[QStringLiteral("borderRadius")] = shape.value(QStringLiteral("borderRadius"), m_defaultBorderRadius).toInt();
-        state[QStringLiteral("roughness")] = shape.value(QStringLiteral("roughness"), m_defaultRoughness).toInt();
-        state[QStringLiteral("glow")] = shape.value(QStringLiteral("glow"), m_defaultGlow).toInt();
-        state[QStringLiteral("fillColor")] = shape.value(QStringLiteral("fillColor"), m_defaultFillColor).toString();
-        state[QStringLiteral("fillOpacity")] = shape.value(QStringLiteral("fillOpacity"), m_defaultFillOpacity).toDouble();
-        state[QStringLiteral("freehandSmoothing")] = m_defaultFreehandSmoothing;
         state[QStringLiteral("seed")] = shape.value(QStringLiteral("seed"), 123456).toInt();
         state[QStringLiteral("locked")] = shape.value(QStringLiteral("locked"), false).toBool();
         state[QStringLiteral("selectedIndex")] = m_selectedIndex;
     } else {
         state[QStringLiteral("hasSelection")] = false;
         state[QStringLiteral("type")] = QStringLiteral("");
-        state[QStringLiteral("color")] = m_defaultColor;
-        state[QStringLiteral("strokeWidth")] = m_defaultStrokeWidth;
-        state[QStringLiteral("opacity")] = m_defaultOpacity;
-        state[QStringLiteral("fontFamily")] = m_defaultFontFamily;
-        state[QStringLiteral("fontSize")] = m_defaultFontSize;
-        state[QStringLiteral("borderRadius")] = m_defaultBorderRadius;
-        state[QStringLiteral("roughness")] = m_defaultRoughness;
-        state[QStringLiteral("glow")] = m_defaultGlow;
-        state[QStringLiteral("fillColor")] = m_defaultFillColor;
-        state[QStringLiteral("fillOpacity")] = m_defaultFillOpacity;
-        state[QStringLiteral("freehandSmoothing")] = m_defaultFreehandSmoothing;
         state[QStringLiteral("locked")] = false;
         state[QStringLiteral("selectedIndex")] = -1;
     }
@@ -585,23 +456,15 @@ void OverlayController::updateProperties(const QVariantMap &properties)
 {
     QVariantMap demarshalled = properties;
 
-    if (demarshalled.contains(QStringLiteral("roughness"))) {
-        demarshalled[QStringLiteral("roughness")] = qBound(0, demarshalled[QStringLiteral("roughness")].toInt(), 2);
-    }
-    // App-level default only: shapes store the smoothed points, not the setting.
-    const QVariant smoothing = demarshalled.take(QStringLiteral("freehandSmoothing"));
-    if (smoothing.isValid()) {
-        setDefaultFreehandSmoothing(smoothing.toInt());
-    }
-
-    // Every shape key has a matching `default<Key>` Q_PROPERTY, so route through the
-    // metaobject instead of writing one near-identical branch per property -- the branch
-    // someone forgets to add is exactly how defaults silently stop sticking. Keys with no
-    // such property (bindings, text, geometry) simply don't match and fall through.
-    // testDefaultsReachableFromQml() pins that these properties stay writable.
-    for (auto it = demarshalled.cbegin(); it != demarshalled.cend(); ++it) {
-        const QString name = QStringLiteral("default") + it.key().at(0).toUpper() + it.key().mid(1);
-        setProperty(name.toUtf8().constData(), it.value());
+    // A style key both sets the style for new shapes and goes on to the selected shapes,
+    // except an app-level key, which no shape stores.
+    bool changed = false;
+    for (const StyleKey &k : kStyleKeys) {
+        const auto it = demarshalled.find(QLatin1String(k.key));
+        if (it == demarshalled.end()) continue;
+        *it = fitStyle(k, *it);
+        changed |= writeStyle(it.key(), *it);
+        if (k.onlyFor && !*k.onlyFor) demarshalled.erase(it);
     }
 
     // The fill is the stroke color at fill opacity: a new stroke color carries over to
@@ -611,9 +474,10 @@ void OverlayController::updateProperties(const QVariantMap &properties)
     auto hasFill = [](const QString &fill) {
         return !fill.isEmpty() && fill.compare(QStringLiteral("transparent"), Qt::CaseInsensitive) != 0;
     };
-    if (fillFollows && hasFill(m_defaultFillColor)) {
-        setDefaultFillColor(newColor.toString());
+    if (fillFollows && hasFill(m_style.value(QStringLiteral("fillColor")).toString())) {
+        changed |= writeStyle(QStringLiteral("fillColor"), newColor);
     }
+    if (changed) Q_EMIT styleChanged();
 
     const bool hasFontUpdate = demarshalled.contains(QStringLiteral("fontFamily")) || demarshalled.contains(QStringLiteral("fontSize"));
     // A container's attached text carries its own font, so a font change has to reach
@@ -906,11 +770,11 @@ void OverlayController::cycleColor()
 
 void OverlayController::cycleRoughness()
 {
-    // Otherwise, place the roughness cycling on S
-    int currentRoughness = m_defaultRoughness;
+    const QVariant fallback = m_style.value(QStringLiteral("roughness"));
+    int currentRoughness = fallback.toInt();
     for (int i = 0; i < m_shapesModel.rowCount(); ++i) {
         if (m_shapesModel.shapes()[i].value(QStringLiteral("selected")).toBool()) {
-            currentRoughness = m_shapesModel.shapes()[i].value(QStringLiteral("roughness"), 1).toInt();
+            currentRoughness = m_shapesModel.shapes()[i].value(QStringLiteral("roughness"), fallback).toInt();
             break;
         }
     }
@@ -974,7 +838,7 @@ void OverlayController::copySelected()
                 elements.append(elemObj);
                 const QVariantMap attached = ShapesModel::firstAttachedTextBinding(shape);
                 if (!attached.isEmpty()) {
-                    const QJsonObject textObj = Excalidraw::attachedTextElement(shape, attached, m_defaultFontSize);
+                    const QJsonObject textObj = Excalidraw::attachedTextElement(shape, attached, m_style.value(QStringLiteral("fontSize")).toInt());
                     if (!textObj.isEmpty()) {
                         elements.append(textObj);
                     }
@@ -1015,7 +879,7 @@ void OverlayController::pasteFromClipboard(double localX, double localY)
     }
     if (list.isEmpty()) return;
 
-    Excalidraw::attachBoundText(list, m_defaultFontFamily, m_defaultFontSize);
+    Excalidraw::attachBoundText(list, m_style.value(QStringLiteral("fontFamily")).toString(), m_style.value(QStringLiteral("fontSize")).toInt());
 
     // Pre-pass: generate new unique IDs for pasted elements and map them
     QHash<QString, QString> idMap;

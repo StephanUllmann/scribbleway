@@ -29,19 +29,13 @@ Item {
 
     readonly property var backend: controller
 
-    function cap(key) { return key.charAt(0).toUpperCase() + key.slice(1) }
-
-    // Read side of the routing below: the selected shape's value if there is one, else
-    // the matching default. Both are read eagerly on purpose — `selection` notifies on
-    // selectionChanged only, so a binding that touched just one of them would
-    // go stale when a default is written with nothing selected.
+    // The selected shape's value if there is one, else the style for new shapes.
+    // `selection` stays current because updateProperties() is the only way to write either.
     function get(key) {
-        const selected = backend.selection[key]
-        const fallback = backend["default" + cap(key)]
-        return backend.hasSelection ? selected : fallback
+        return backend.selection[key]
     }
 
-    // updateProperties writes the matching default<Key> and, if there is a selection,
+    // updateProperties writes the key into `style` and, if there is a selection,
     // the selected shapes too; it also keeps a filled shape's fill in its stroke color.
     function set(key, value) {
         let props = {}

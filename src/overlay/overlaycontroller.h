@@ -25,17 +25,9 @@ class OverlayController : public QObject
     Q_PROPERTY(int selectedIndex READ selectedIndex NOTIFY selectionChanged)
     Q_PROPERTY(QString activeTool READ activeTool WRITE setActiveTool NOTIFY activeToolChanged)
     Q_PROPERTY(QString currentMode READ currentMode NOTIFY modeChanged)
-    Q_PROPERTY(QString defaultColor READ defaultColor WRITE setDefaultColor NOTIFY defaultColorChanged)
-    Q_PROPERTY(int defaultStrokeWidth READ defaultStrokeWidth WRITE setDefaultStrokeWidth NOTIFY defaultStrokeWidthChanged)
-    Q_PROPERTY(double defaultOpacity READ defaultOpacity WRITE setDefaultOpacity NOTIFY defaultOpacityChanged)
-    Q_PROPERTY(QString defaultFontFamily READ defaultFontFamily WRITE setDefaultFontFamily NOTIFY defaultFontFamilyChanged)
-    Q_PROPERTY(int defaultFontSize READ defaultFontSize WRITE setDefaultFontSize NOTIFY defaultFontSizeChanged)
-    Q_PROPERTY(int defaultBorderRadius READ defaultBorderRadius WRITE setDefaultBorderRadius NOTIFY defaultBorderRadiusChanged)
-    Q_PROPERTY(int defaultRoughness READ defaultRoughness WRITE setDefaultRoughness NOTIFY defaultRoughnessChanged)
-    Q_PROPERTY(int defaultGlow READ defaultGlow WRITE setDefaultGlow NOTIFY defaultGlowChanged)
-    Q_PROPERTY(QString defaultFillColor READ defaultFillColor WRITE setDefaultFillColor NOTIFY defaultFillColorChanged)
-    Q_PROPERTY(double defaultFillOpacity READ defaultFillOpacity WRITE setDefaultFillOpacity NOTIFY defaultFillOpacityChanged)
-    Q_PROPERTY(int defaultFreehandSmoothing READ defaultFreehandSmoothing WRITE setDefaultFreehandSmoothing NOTIFY defaultFreehandSmoothingChanged)
+    // The style new Shapes get, and the Tray Popup shows with nothing selected. Read-only:
+    // QML writes it through updateProperties(), the one path that also updates the selection.
+    Q_PROPERTY(QVariantMap style READ style NOTIFY styleChanged)
     Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
     Q_PROPERTY(QVariantMap localShortcutSequences READ localShortcutSequences CONSTANT)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
@@ -60,34 +52,9 @@ public:
 
     QString currentMode() const;
 
-    QString defaultColor() const;
-    void setDefaultColor(const QString &color);
-
-    int defaultStrokeWidth() const;
-    void setDefaultStrokeWidth(int width);
-
-    double defaultOpacity() const;
-    void setDefaultOpacity(double opacity);
-
-    QString defaultFontFamily() const;
-    void setDefaultFontFamily(const QString &family);
-
-    int defaultFontSize() const;
-    void setDefaultFontSize(int size);
-    
-    int defaultBorderRadius() const;
-
-    int defaultRoughness() const;
-    void setDefaultRoughness(int roughness);
-    int defaultGlow() const;
-    void setDefaultGlow(int glow);
-    QString defaultFillColor() const;
-    void setDefaultFillColor(const QString &color);
-    double defaultFillOpacity() const;
-    void setDefaultFillOpacity(double opacity);
-    int defaultFreehandSmoothing() const;
-    void setDefaultFreehandSmoothing(int level);
-    void setDefaultBorderRadius(int radius);
+    QVariantMap style() const;
+    // The style keys a Shape of `type` carries, from style().
+    Q_INVOKABLE QVariantMap styleForNewShape(const QString &type) const;
 
     ShapesModel* shapesModel();
     QVariantMap localShortcutSequences() const;
@@ -147,17 +114,7 @@ public Q_SLOTS:
 Q_SIGNALS:
     void windowChanged();
     void activeToolChanged(const QString &tool);
-    void defaultColorChanged();
-    void defaultStrokeWidthChanged();
-    void defaultOpacityChanged();
-    void defaultFontFamilyChanged();
-    void defaultFontSizeChanged();
-    void defaultBorderRadiusChanged();
-    void defaultRoughnessChanged();
-    void defaultGlowChanged();
-    void defaultFillColorChanged();
-    void defaultFillOpacityChanged();
-    void defaultFreehandSmoothingChanged();
+    void styleChanged();
     
     void selectionChanged();
     void modeChanged(const QString &mode);
@@ -170,6 +127,8 @@ private:
     void notifySelectionChanged();
     void ensureSelectMode();
     bool selectedTypeIs(const QString &type) const;
+    // Clamps and converts a style value and stores it; true when the style changed.
+    bool writeStyle(const QString &key, const QVariant &value);
     // grow / shrink / border-radius are all the same move: read one int off the
     // selection, add a delta, clamp, write it back.
     void bumpSelected(const QString &key, int delta, int lo,
@@ -190,17 +149,7 @@ private:
 
     QString m_activeTool;
     QString m_currentMode = QStringLiteral("passthrough");
-    QString m_defaultColor;
-    int m_defaultStrokeWidth = 2;
-    double m_defaultOpacity = 1.0;
-    QString m_defaultFontFamily;
-    int m_defaultFontSize = 20;
-    int m_defaultBorderRadius = 8;
-    int m_defaultRoughness = 1;
-    int m_defaultGlow = 10;
-    QString m_defaultFillColor;
-    double m_defaultFillOpacity = 0.25;
-    int m_defaultFreehandSmoothing = 2;
+    QVariantMap m_style;
 
     static constexpr double kSnapThreshold = 20.0;
     BindingHit findSnapTarget(double px, double py, int excludeIndex = -1) const;

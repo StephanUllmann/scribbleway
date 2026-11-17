@@ -57,13 +57,13 @@ Item {
             if (baseShapeRoot.modelAttachedText && baseShapeRoot.modelAttachedText.fontFamily !== undefined) {
                 return baseShapeRoot.modelAttachedText.fontFamily;
             }
-            return model.fontFamily !== undefined ? model.fontFamily : controller.defaultFontFamily;
+            return model.fontFamily !== undefined ? model.fontFamily : controller.style.fontFamily;
         }
         font.pixelSize: {
             if (baseShapeRoot.modelAttachedText && baseShapeRoot.modelAttachedText.fontSize !== undefined) {
                 return baseShapeRoot.modelAttachedText.fontSize;
             }
-            return model.fontSize !== undefined ? model.fontSize : controller.defaultFontSize;
+            return model.fontSize !== undefined ? model.fontSize : controller.style.fontSize;
         }
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
