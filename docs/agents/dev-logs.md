@@ -17,7 +17,7 @@ HH:mm:ss.zzz level    [category] message
 
 The level is `info`, `warning`, `critical`, `fatal` or `debug`. The `[category]` tag appears only on lines from other code, such as `[layershellqt]` or `[qt.*]`. Warnings and criticals include every Qt and QML runtime error, such as a `TypeError` or a binding loop, with its `qrc:/scribbleway/qml/<file>:<line>`.
 
-To find the code that writes a given line, grep for its literal text. Every dev line is either `qCInfo(lcDev)` in C++ or `console.info(devLog, …)` in `main.qml`.
+To find the code that writes a given line, grep for its literal text. Every dev line is a `qCInfo(lcDev)` call in C++.
 
 ## Vocabulary
 
