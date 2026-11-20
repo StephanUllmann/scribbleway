@@ -22,15 +22,6 @@ Window {
         }
     }
     property bool isDrawing: false
-    property bool shapesHidden: false
-    onShapesHiddenChanged: console.info(devLog, "shapes", shapesHidden ? "hidden" : "shown")
-    // Same category as the C++ dev lines, so it is silent unless the app runs with --dev.
-    LoggingCategory {
-        id: devLog
-        name: "scribbleway.dev"
-        defaultLogLevel: LoggingCategory.Warning
-    }
-    property string previousMode: controller.currentMode
     property point drawStartPoint: Qt.point(0, 0)
     property var activePoints: []
     
@@ -133,17 +124,13 @@ Window {
             if (textEditor.visible) {
                 textEditor.commitText();
             }
+            trayPopup.close();
             canvasWindow.activeDrawTool = "";
             controller.setSelectedIndex(-1);
             canvasWindow.requestInputRegionUpdate();
         }
 
         function onModeChanged(mode) {
-            // Reopening the overlay always starts with the shapes visible.
-            if (canvasWindow.previousMode === "passthrough" && mode !== "passthrough") {
-                canvasWindow.shapesHidden = false;
-            }
-            canvasWindow.previousMode = mode;
             canvasWindow.requestInputRegionUpdate();
         }
 
@@ -289,12 +276,10 @@ Window {
     Repeater {
         id: shapeRepeater
         model: controller.shapesModel
-        // A new shape would otherwise vanish the moment it's drawn.
-        onItemAdded: canvasWindow.shapesHidden = false
         delegate: Loader {
             id: loader
             anchors.fill: parent
-            visible: !canvasWindow.shapesHidden
+            visible: !controller.shapesHidden
             source: canvasWindow.shapeSource(model.type)
             onLoaded: {
                 if (item) {
@@ -527,8 +512,7 @@ Window {
                 // ShortcutOverride, so every single-letter tool shortcut dies until
                 // restart. Escape survives only because TextArea doesn't claim it —
                 // which is exactly how this presents. Done here rather than in
-                // commitText() so cancelInteraction() and the mode handlers are
-                // covered by the same line.
+                // commitText() so the mode handlers are covered by the same line.
                 focus = false;
             }
             canvasWindow.requestInputRegionUpdate();
@@ -558,11 +542,7 @@ Window {
             canvasWindow.requestInputRegionUpdate();
         }
 
-        Keys.onEscapePressed: {
-            canvasWindow.cancelInteraction();
-        }
-
-        // On Tab or Shift+Enter, complete text. Let enter key create new lines.
+        // On Tab or Return (without Shift), complete text. Shift+Enter inserts a newline.
         Keys.onPressed: (event) => {
             if (event.key === Qt.Key_Return && !(event.modifiers & Qt.ShiftModifier)) {
                 commitText();
@@ -613,14 +593,6 @@ Window {
         canvasWindow.requestInputRegionUpdate();
     }
 
-    function cancelInteraction() {
-        if (textEditor.visible) {
-            textEditor.commitText();
-        }
-        trayPopup.close();
-        controller.enterPassthroughMode();
-    }
-
     // A press anywhere the overlay can receive one is by construction outside the popup:
     // the popup's rect is carved out of the overlay's input region. A passive
     // PointHandler sees it without competing with the draw/select MouseAreas for the
@@ -636,104 +608,22 @@ Window {
         }
     }
 
-    // Cancel selection or focus when Escape is pressed
-    Shortcut {
-        sequence: "Escape"
-        onActivated: {
-            canvasWindow.cancelInteraction();
-        }
-    }
-
-    Shortcut {
-        sequence: "Delete"
-        enabled: !textEditor.visible
-        onActivated: {
-            controller.deleteSelected();
-        }
-    }
-
-    Shortcut {
-        sequence: "Backspace"
-        enabled: !textEditor.visible
-        onActivated: {
-            controller.deleteSelected();
-        }
-    }
-
-    Shortcut {
-        sequence: StandardKey.Copy
-        enabled: !textEditor.visible
-        onActivated: {
-            controller.copySelected();
-        }
-    }
-
-    Shortcut {
-        sequence: StandardKey.Paste
-        enabled: !textEditor.visible
-        onActivated: {
-            controller.pasteFromClipboard(canvasWindow.lastMousePos.x, canvasWindow.lastMousePos.y);
-        }
-    }
-    // Modal unmodified-key and action shortcuts. A table beats 22 near-identical
-    // Shortcut blocks; `needs` narrows the guard where a shortcut only applies to one
-    // shape type. Instantiator rather than Repeater: Shortcut is not an Item.
+    // Every overlay hotkey comes from OverlayController's table (ids, defaults,
+    // overrides and handlers). Instantiator rather than Repeater: Shortcut is not an Item.
     Instantiator {
-        model: [
-            { key: "tool_arrow",             run: () => controller.toggleTool("arrow") },
-            { key: "tool_rectangle",         run: () => controller.toggleTool("rectangle") },
-            { key: "tool_freehand",          run: () => controller.toggleTool("freehand") },
-            { key: "tool_ellipse",           run: () => controller.toggleTool("ellipse") },
-            { key: "tool_line",              run: () => controller.toggleTool("line") },
-            { key: "tool_text",              run: () => controller.toggleTool("text") },
-            { key: "color_cycle",            run: () => controller.cycleColor() },
-            { key: "color_1",                run: () => controller.selectPresetColor(0) },
-            { key: "color_2",                run: () => controller.selectPresetColor(1) },
-            { key: "color_3",                run: () => controller.selectPresetColor(2) },
-            { key: "color_4",                run: () => controller.selectPresetColor(3) },
-            { key: "color_5",                run: () => controller.selectPresetColor(4) },
-            { key: "color_6",                run: () => controller.selectPresetColor(5) },
-            { key: "action_grow",            run: () => controller.growSelected() },
-            { key: "action_shrink",          run: () => controller.shrinkSelected() },
-            { key: "action_select",          run: () => controller.enterSelectMode() },
-            { key: "action_cycle_roughness", run: () => controller.cycleRoughness() },
-            { key: "action_undo",            run: () => controller.undo() },
-            { key: "action_redo",            run: () => controller.redo() },
-            { key: "action_clear",           run: () => controller.clear() },
-            { key: "action_toggle_shapes",   run: () => {
-                canvasWindow.shapesHidden = !canvasWindow.shapesHidden;
-                // Keep Delete, nudge and resize from acting on shapes nobody can see.
-                if (canvasWindow.shapesHidden) controller.setSelectedIndex(-1);
-            } },
-            { key: "action_increase_border_radius", needs: "rectangle", run: () => controller.increaseBorderRadius() },
-            { key: "action_decrease_border_radius", needs: "rectangle", run: () => controller.decreaseBorderRadius() }
-        ]
+        id: shortcutInstantiator
+        objectName: "shortcutInstantiator"
+        model: controller.localShortcuts
         delegate: Shortcut {
             required property var modelData
-            sequence: controller.localShortcutSequences[modelData.key]
-            enabled: canvasWindow.shortcutGuard
-                     && (!modelData.needs || controller.selection.type === modelData.needs)
-            onActivated: modelData.run()
-        }
-    }
-
-    // Arrow-key nudge: move selected shape(s) by 1px, or 10px with Shift.
-    Instantiator {
-        model: [
-            { seq: "Left",        dx:  -1, dy:   0 },
-            { seq: "Right",       dx:   1, dy:   0 },
-            { seq: "Up",          dx:   0, dy:  -1 },
-            { seq: "Down",        dx:   0, dy:   1 },
-            { seq: "Shift+Left",  dx: -10, dy:   0 },
-            { seq: "Shift+Right", dx:  10, dy:   0 },
-            { seq: "Shift+Up",    dx:   0, dy: -10 },
-            { seq: "Shift+Down",  dx:   0, dy:  10 }
-        ]
-        delegate: Shortcut {
-            required property var modelData
-            sequence: modelData.seq
-            enabled: canvasWindow.shortcutGuard && controller.selectedIndex !== -1
-            onActivated: controller.nudgeSelected(modelData.dx, modelData.dy)
+            sequences: modelData.sequences
+            context: modelData.appWide ? Qt.ApplicationShortcut : Qt.WindowShortcut
+            enabled: modelData.needs === "always"
+                     || (canvasWindow.shortcutGuard
+                         && (modelData.needs === ""
+                             || (modelData.needs === "selection" && controller.hasSelection)
+                             || controller.selection.type === modelData.needs))
+            onActivated: controller.triggerShortcut(modelData.id, canvasWindow.lastMousePos)
         }
     }
 

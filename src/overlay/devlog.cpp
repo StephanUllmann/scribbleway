@@ -85,3 +85,9 @@ void DevLog::logScreens(const char *why)
                                 << "scale" << s->devicePixelRatio();
     }
 }
+
+void DevLog::mark()
+{
+    static int count = 0;
+    qCInfo(lcDev).noquote() << "--- MARK" << ++count << "---";
+}

@@ -81,6 +81,67 @@ QVariant fitStyle(const StyleKey &k, QVariant value)
     value.convert(k.initial.metaType());
     return value;
 }
+
+// The one table of every hotkey: global (KGlobalAccel in main.cpp) and overlay-local
+// (QML Shortcut Instantiator in main.qml). Adding a hotkey is one row here; ids, defaults,
+// overrides and handlers cannot drift out of step.
+using Scope = HotkeySpec::Scope;
+const HotkeySpec kHotkeys[] = {
+    // Global (GlobalDev is registered only under --dev so a normal install claims one key)
+    {.id = "action_activate_select_mode", .defaultSeq = "Meta+Shift+X",
+     .run = [](auto &c, auto) { c.toggleMode(); },
+     .scope = Scope::Global, .label = "Enter Selection Mode"},
+    {.id = "action_dev_mark", .defaultSeq = "Meta+Shift+M",
+     .run = [](auto &, auto) { DevLog::mark(); },
+     .scope = Scope::GlobalDev, .label = "Mark the Dev Log"},
+
+    // Cancel (app-wide so Escape works whether the overlay or the Tray Popup holds focus)
+    {.id = "action_cancel", .defaultSeq = "Escape",
+     .run = [](auto &c, auto) { c.enterPassthroughMode(); },
+     .scope = Scope::Application, .needs = "always"},
+
+    // Drawing tools
+    {.id = "tool_arrow",     .defaultSeq = "A", .run = [](auto &c, auto) { c.toggleTool(QStringLiteral("arrow")); }},
+    {.id = "tool_rectangle", .defaultSeq = "R", .run = [](auto &c, auto) { c.toggleTool(QStringLiteral("rectangle")); }},
+    {.id = "tool_freehand",  .defaultSeq = "F", .run = [](auto &c, auto) { c.toggleTool(QStringLiteral("freehand")); }},
+    {.id = "tool_ellipse",   .defaultSeq = "E", .run = [](auto &c, auto) { c.toggleTool(QStringLiteral("ellipse")); }},
+    {.id = "tool_line",      .defaultSeq = "L", .run = [](auto &c, auto) { c.toggleTool(QStringLiteral("line")); }},
+    {.id = "tool_text",      .defaultSeq = "T", .run = [](auto &c, auto) { c.toggleTool(QStringLiteral("text")); }},
+
+    // Palette
+    {.id = "color_cycle", .defaultSeq = "Q", .run = [](auto &c, auto) { c.cycleColor(); }},
+    {.id = "color_1",     .defaultSeq = "1", .run = [](auto &c, auto) { c.selectPresetColor(0); }},
+    {.id = "color_2",     .defaultSeq = "2", .run = [](auto &c, auto) { c.selectPresetColor(1); }},
+    {.id = "color_3",     .defaultSeq = "3", .run = [](auto &c, auto) { c.selectPresetColor(2); }},
+    {.id = "color_4",     .defaultSeq = "4", .run = [](auto &c, auto) { c.selectPresetColor(3); }},
+    {.id = "color_5",     .defaultSeq = "5", .run = [](auto &c, auto) { c.selectPresetColor(4); }},
+    {.id = "color_6",     .defaultSeq = "6", .run = [](auto &c, auto) { c.selectPresetColor(5); }},
+
+    // Actions & editing
+    {.id = "action_select",          .defaultSeq = "X",            .run = [](auto &c, auto) { c.enterSelectMode(); }},
+    {.id = "action_grow",            .defaultSeq = "+",            .run = [](auto &c, auto) { c.growSelected(); }},
+    {.id = "action_shrink",          .defaultSeq = "-",            .run = [](auto &c, auto) { c.shrinkSelected(); }},
+    {.id = "action_cycle_roughness", .defaultSeq = "S",            .run = [](auto &c, auto) { c.cycleRoughness(); }},
+    {.id = "action_undo",            .defaultSeq = "Ctrl+Z",       .run = [](auto &c, auto) { c.undo(); }},
+    {.id = "action_redo",            .defaultSeq = "Ctrl+Shift+Z", .run = [](auto &c, auto) { c.redo(); }},
+    {.id = "action_clear",           .defaultSeq = "Ctrl+Delete",  .run = [](auto &c, auto) { c.clear(); }},
+    {.id = "action_toggle_shapes",   .defaultSeq = "Y",            .run = [](auto &c, auto) { c.toggleShapesHidden(); }},
+    {.id = "action_increase_border_radius", .defaultSeq = "ü",     .run = [](auto &c, auto) { c.increaseBorderRadius(); }, .needs = "rectangle"},
+    {.id = "action_decrease_border_radius", .defaultSeq = "ä",     .run = [](auto &c, auto) { c.decreaseBorderRadius(); }, .needs = "rectangle"},
+    {.id = "action_delete",          .defaultSeq = "Delete",       .run = [](auto &c, auto) { c.deleteSelected(); }, .altSeq = "Backspace"},
+    {.id = "action_copy",            .defaultSeq = nullptr,        .run = [](auto &c, auto) { c.copySelected(); }, .standardKey = QKeySequence::Copy},
+    {.id = "action_paste",           .defaultSeq = nullptr,        .run = [](auto &c, QPointF pos) { c.pasteFromClipboard(pos.x(), pos.y()); }, .standardKey = QKeySequence::Paste},
+
+    // Arrow-key nudge: move selected Shape(s) by 1px, or 10px with Shift.
+    {.id = "action_nudge_left",       .defaultSeq = "Left",        .run = [](auto &c, auto) { c.nudgeSelected(-1, 0); },   .needs = "selection"},
+    {.id = "action_nudge_right",      .defaultSeq = "Right",       .run = [](auto &c, auto) { c.nudgeSelected(1, 0); },    .needs = "selection"},
+    {.id = "action_nudge_up",         .defaultSeq = "Up",          .run = [](auto &c, auto) { c.nudgeSelected(0, -1); },   .needs = "selection"},
+    {.id = "action_nudge_down",       .defaultSeq = "Down",        .run = [](auto &c, auto) { c.nudgeSelected(0, 1); },    .needs = "selection"},
+    {.id = "action_nudge_left_fast",  .defaultSeq = "Shift+Left",  .run = [](auto &c, auto) { c.nudgeSelected(-10, 0); },  .needs = "selection"},
+    {.id = "action_nudge_right_fast", .defaultSeq = "Shift+Right", .run = [](auto &c, auto) { c.nudgeSelected(10, 0); },   .needs = "selection"},
+    {.id = "action_nudge_up_fast",    .defaultSeq = "Shift+Up",    .run = [](auto &c, auto) { c.nudgeSelected(0, -10); },  .needs = "selection"},
+    {.id = "action_nudge_down_fast",  .defaultSeq = "Shift+Down",  .run = [](auto &c, auto) { c.nudgeSelected(0, 10); },   .needs = "selection"},
+};
 } // namespace
 
 OverlayController::OverlayController(QObject *parent)
@@ -95,24 +156,44 @@ OverlayController::OverlayController(QObject *parent)
     m_draftModel.setParent(this);
     m_draftModel.disableHistory();
     connect(&m_selection, &Selection::changed, this, &OverlayController::selectionChanged);
+    // A new or restored Shape would otherwise vanish while shapes are hidden.
+    connect(&m_shapesModel, &QAbstractItemModel::rowsInserted, this, [this] { setShapesHidden(false); });
+    connect(&m_shapesModel, &QAbstractItemModel::modelReset, this, [this] {
+        if (m_shapesModel.rowCount() > 0) setShapesHidden(false);
+    });
 
     // Hotkeys are read here only; there is no UI for rebinding them, but hand-edited
     // entries in ~/.config/scribbleway/shortcuts.conf still apply.
-    static constexpr std::pair<const char *, const char *> kLocalShortcuts[] = {
-        {"tool_arrow", "A"}, {"tool_rectangle", "R"}, {"tool_freehand", "F"},
-        {"tool_ellipse", "E"}, {"tool_line", "L"}, {"tool_text", "T"},
-        {"color_cycle", "Q"}, {"color_1", "1"}, {"color_2", "2"}, {"color_3", "3"},
-        {"color_4", "4"}, {"color_5", "5"}, {"color_6", "6"},
-        {"action_grow", "+"}, {"action_shrink", "-"}, {"action_select", "X"},
-        {"action_cycle_roughness", "S"}, {"action_undo", "Ctrl+Z"},
-        {"action_redo", "Ctrl+Shift+Z"}, {"action_clear", "Ctrl+Delete"},
-        {"action_toggle_shapes", "Y"},
-        {"action_increase_border_radius", "ü"}, {"action_decrease_border_radius", "ä"},
-    };
     QSettings settings(QStringLiteral("scribbleway"), QStringLiteral("shortcuts"));
-    for (const auto &[id, sequence] : kLocalShortcuts) {
-        m_localShortcutSequences.insert(QLatin1String(id),
-            settings.value(QStringLiteral("local/") + QLatin1String(id), QString::fromUtf8(sequence)).toString());
+    for (const HotkeySpec &h : kHotkeys) {
+        if (h.scope == Scope::Global || h.scope == Scope::GlobalDev) continue;
+
+        const QString id = QString::fromLatin1(h.id);
+        const QString settingsKey = QStringLiteral("local/") + id;
+        QVariantList sequences;
+        QString displaySeq;
+        if (settings.contains(settingsKey)) {
+            displaySeq = settings.value(settingsKey).toString();
+            if (!displaySeq.isEmpty()) sequences.append(displaySeq);
+        } else if (h.standardKey != QKeySequence::UnknownKey) {
+            for (const QKeySequence &ks : QKeySequence::keyBindings(h.standardKey)) {
+                const QString text = ks.toString(QKeySequence::PortableText);
+                if (!text.isEmpty()) sequences.append(text);
+            }
+            if (!sequences.isEmpty()) displaySeq = sequences.first().toString();
+        } else {
+            displaySeq = QString::fromUtf8(h.defaultSeq);
+            if (!displaySeq.isEmpty()) sequences.append(displaySeq);
+            if (h.altSeq) sequences.append(QString::fromUtf8(h.altSeq));
+        }
+
+        m_localShortcutSequences.insert(id, displaySeq);
+        m_localShortcuts.append(QVariantMap{
+            {QStringLiteral("id"), id},
+            {QStringLiteral("sequences"), sequences},
+            {QStringLiteral("needs"), h.needs ? QString::fromLatin1(h.needs) : QString()},
+            {QStringLiteral("appWide"), h.scope == Scope::Application},
+        });
     }
 
     // The mode changes in several places; one listener logs them all.
@@ -185,16 +266,10 @@ void OverlayController::setActiveTool(const QString &tool)
 
         // Update mode based on tool state
         if (!tool.isEmpty()) {
-            if (m_currentMode != QStringLiteral("draw")) {
-                m_currentMode = QStringLiteral("draw");
-                Q_EMIT modeChanged(m_currentMode);
-            }
+            setMode(QStringLiteral("draw"));
             m_selection.clear();
-        } else {
-            if (m_currentMode == QStringLiteral("draw")) {
-                m_currentMode = QStringLiteral("passthrough");
-                Q_EMIT modeChanged(m_currentMode);
-            }
+        } else if (m_currentMode == QStringLiteral("draw")) {
+            setMode(QStringLiteral("passthrough"));
         }
     }
 }
@@ -577,23 +652,37 @@ void OverlayController::endEdit()
     m_shapesModel.endEdit();
 }
 
+void OverlayController::setMode(const QString &mode)
+{
+    if (m_currentMode == mode) return;
+    // Reopening the overlay always starts with the Shapes visible.
+    const bool reopening = m_currentMode == QStringLiteral("passthrough");
+    m_currentMode = mode;
+    if (reopening) setShapesHidden(false);
+    Q_EMIT modeChanged(m_currentMode);
+}
+
 void OverlayController::enterSelectMode()
 {
     Q_EMIT enterSelectModeRequested();
     setActiveTool(QStringLiteral(""));
-    if (m_currentMode != QStringLiteral("select")) {
-        m_currentMode = QStringLiteral("select");
-        Q_EMIT modeChanged(m_currentMode);
-    }
+    setMode(QStringLiteral("select"));
 }
 
 void OverlayController::enterPassthroughMode()
 {
     Q_EMIT enterPassthroughModeRequested();
     setActiveTool(QStringLiteral(""));
-    if (m_currentMode != QStringLiteral("passthrough")) {
-        m_currentMode = QStringLiteral("passthrough");
-        Q_EMIT modeChanged(m_currentMode);
+    setMode(QStringLiteral("passthrough"));
+}
+
+void OverlayController::toggleMode()
+{
+    qInfo() << "toggle requested, current mode:" << m_currentMode;
+    if (m_currentMode == QStringLiteral("passthrough")) {
+        enterSelectMode();
+    } else {
+        enterPassthroughMode();
     }
 }
 
@@ -695,19 +784,58 @@ void OverlayController::notifySelectionChanged()
 
 void OverlayController::ensureSelectMode()
 {
-    if (m_currentMode != QStringLiteral("select")) {
-        m_currentMode = QStringLiteral("select");
-        Q_EMIT modeChanged(m_currentMode);
-    }
+    setMode(QStringLiteral("select"));
     if (!m_activeTool.isEmpty()) {
         m_activeTool = QStringLiteral("");
         Q_EMIT activeToolChanged(m_activeTool);
     }
 }
 
+std::span<const HotkeySpec> OverlayController::hotkeys()
+{
+    return kHotkeys;
+}
+
+QVariantList OverlayController::localShortcuts() const
+{
+    return m_localShortcuts;
+}
+
 QVariantMap OverlayController::localShortcutSequences() const
 {
     return m_localShortcutSequences;
+}
+
+bool OverlayController::shapesHidden() const
+{
+    return m_shapesHidden;
+}
+
+void OverlayController::setShapesHidden(bool hidden)
+{
+    if (m_shapesHidden == hidden) return;
+    m_shapesHidden = hidden;
+    qCInfo(lcDev).noquote() << "shapes" << (m_shapesHidden ? "hidden" : "shown");
+    // Keep Delete, nudge and resize from acting on Shapes nobody can see.
+    if (m_shapesHidden) setSelectedIndex(-1);
+    Q_EMIT shapesHiddenChanged();
+}
+
+void OverlayController::toggleShapesHidden()
+{
+    setShapesHidden(!m_shapesHidden);
+}
+
+bool OverlayController::triggerShortcut(const QString &id, const QPointF &cursor)
+{
+    for (const HotkeySpec &h : kHotkeys) {
+        if (id == QLatin1String(h.id)) {
+            if (!h.run) return false;
+            h.run(*this, cursor);
+            return true;
+        }
+    }
+    return false;
 }
 
 void OverlayController::selectPresetColor(int index)

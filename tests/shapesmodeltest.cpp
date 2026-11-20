@@ -21,6 +21,8 @@
 #include <QFile>
 #include <QRegularExpression>
 #include <QSet>
+#include <QSettings>
+#include <QScopeGuard>
 #include <QStandardPaths>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -116,6 +118,8 @@ private Q_SLOTS:
     void testResizeHandleCursors();
     void testResizeShowsSizeLabel();
     void testShapeGeometry();
+    void testHotkeyTableComplete();
+    void testHotkeysInQml();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -3370,4 +3374,198 @@ void ShapesModelTest::testDrawingShowsTheDraft()
         QCOMPARE(c.draftModel()->rowCount(), 0);
     }
     QCOMPARE(c.shapesModel()->rowCount(), 5);
+}
+
+// Every hotkey lives in one table with a unique id, a non-null handler, and a default
+// sequence; local ones flow into localShortcuts/localShortcutSequences with config overrides.
+void ShapesModelTest::testHotkeyTableComplete()
+{
+    const auto table = OverlayController::hotkeys();
+    QVERIFY(!table.empty());
+
+    OverlayController c;
+    const QVariantList localList = c.localShortcuts();
+    const QVariantMap localSeqs = c.localShortcutSequences();
+
+    QSet<QString> seenIds;
+    QHash<QString, QVariantMap> byId;
+    for (const QVariant &v : localList) {
+        const QVariantMap m = v.toMap();
+        byId.insert(m.value(u"id"_s).toString(), m);
+    }
+
+    int localCount = 0;
+    for (const HotkeySpec &h : table) {
+        QVERIFY(h.id && *h.id);
+        const QString id = QString::fromLatin1(h.id);
+        QVERIFY2(!seenIds.contains(id), qPrintable(u"Duplicate hotkey id: "_s + id));
+        seenIds.insert(id);
+        QVERIFY2(h.run != nullptr, qPrintable(u"Missing handler for hotkey: "_s + id));
+
+        const bool hasDefault = (h.defaultSeq && *h.defaultSeq) || h.standardKey != QKeySequence::UnknownKey;
+        QVERIFY2(hasDefault, qPrintable(u"Missing default sequence for hotkey: "_s + id));
+
+        if (h.scope == HotkeySpec::Scope::Global || h.scope == HotkeySpec::Scope::GlobalDev) {
+            QVERIFY2(h.label && *h.label, qPrintable(u"Missing label for global hotkey: "_s + id));
+            QVERIFY(!byId.contains(id));
+        } else {
+            ++localCount;
+            QVERIFY2(byId.contains(id), qPrintable(u"Local hotkey missing from localShortcuts: "_s + id));
+            QVERIFY2(!byId.value(id).value(u"sequences"_s).toList().isEmpty(),
+                     qPrintable(u"Local hotkey has empty default sequences: "_s + id));
+            QVERIFY2(localSeqs.contains(id), qPrintable(u"Local hotkey missing from localShortcutSequences: "_s + id));
+        }
+    }
+    QCOMPARE(localList.size(), localCount);
+
+    // Unknown id fails cleanly; known ids dispatch through the table.
+    QVERIFY(!c.triggerShortcut(u"no_such_hotkey"_s));
+    QVERIFY(c.triggerShortcut(u"tool_rectangle"_s));
+    QCOMPARE(c.activeTool(), u"rectangle"_s);
+    QVERIFY(c.triggerShortcut(u"action_activate_select_mode"_s));
+    QCOMPARE(c.currentMode(), u"passthrough"_s);
+    QVERIFY(c.triggerShortcut(u"action_activate_select_mode"_s));
+    QCOMPARE(c.currentMode(), u"select"_s);
+
+    // shapesHidden lives on the controller: toggling hides and clears Selection, adding a
+    // Shape or reopening from passthrough unhides.
+    c.addShape(box(10, 10));
+    QCOMPARE(c.selectedIndex(), 0);
+    QVERIFY(c.triggerShortcut(u"action_toggle_shapes"_s));
+    QVERIFY(c.shapesHidden());
+    QCOMPARE(c.selectedIndex(), -1);
+    c.addShape(box(20, 20));
+    QVERIFY(!c.shapesHidden());
+    QVERIFY(c.triggerShortcut(u"action_toggle_shapes"_s));
+    QVERIFY(c.shapesHidden());
+    c.enterPassthroughMode();
+    QVERIFY(c.shapesHidden());
+    c.enterSelectMode();
+    QVERIFY(!c.shapesHidden());
+    // Undo bringing Shapes back (a model reset) unhides them too.
+    QVERIFY(c.triggerShortcut(u"action_toggle_shapes"_s));
+    c.clear();
+    QVERIFY(c.shapesHidden());
+    c.undo();
+    QCOMPARE(c.shapesModel()->rowCount(), 2);
+    QVERIFY(!c.shapesHidden());
+
+    // Hand-edited overrides in shortcuts.conf apply, including clearing a binding to "".
+    QTemporaryDir configDir;
+    QVERIFY(configDir.isValid());
+    QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, configDir.path());
+    auto cleanup = qScopeGuard([] {
+        QSettings s(u"scribbleway"_s, u"shortcuts"_s);
+        s.clear();
+        s.sync();
+    });
+    {
+        QSettings s(u"scribbleway"_s, u"shortcuts"_s);
+        s.setValue(u"local/tool_arrow"_s, u"W"_s);
+        s.setValue(u"local/tool_line"_s, QString());
+        s.sync();
+    }
+    OverlayController overridden;
+    QCOMPARE(overridden.localShortcutSequences().value(u"tool_arrow"_s).toString(), u"W"_s);
+    QCOMPARE(overridden.localShortcutSequences().value(u"tool_line"_s).toString(), QString());
+    QVariantMap arrowRow, lineRow;
+    for (const QVariant &v : overridden.localShortcuts()) {
+        const QVariantMap m = v.toMap();
+        if (m.value(u"id"_s) == u"tool_arrow"_s) arrowRow = m;
+        if (m.value(u"id"_s) == u"tool_line"_s) lineRow = m;
+    }
+    QCOMPARE(arrowRow.value(u"sequences"_s).toList(), QVariantList{u"W"_s});
+    QVERIFY(lineRow.value(u"sequences"_s).toList().isEmpty());
+}
+
+// QML instantiates one Shortcut per local table row and dispatches real keystrokes through it,
+// including Escape from both the overlay (with or without the text editor) and the Tray Popup.
+void ShapesModelTest::testHotkeysInQml()
+{
+    OverlayController c;
+    RecordingSurface surface;
+    OverlayWindow overlayWin(&surface);
+    TrayPopup popup(&surface, &overlayWin);
+
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty(u"controller"_s, &c);
+    engine.rootContext()->setContextProperty(u"overlayWindow"_s, &overlayWin);
+    engine.rootContext()->setContextProperty(u"trayPopup"_s, &popup);
+
+    QQmlComponent mainComp(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
+    QScopedPointer<QObject> mainRoot(mainComp.create());
+    QVERIFY2(mainRoot, qPrintable(mainComp.errorString()));
+    auto *canvasWindow = qobject_cast<QQuickWindow *>(mainRoot.data());
+    QVERIFY(canvasWindow);
+    overlayWin.attach(canvasWindow);
+    canvasWindow->resize(800, 600);
+    QVERIFY(QTest::qWaitForWindowExposed(canvasWindow));
+
+    QQmlComponent popupComp(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/TrayPopup.qml")));
+    QScopedPointer<QObject> popupRoot(popupComp.create());
+    QVERIFY2(popupRoot, qPrintable(popupComp.errorString()));
+    auto *popupWindow = qobject_cast<QQuickWindow *>(popupRoot.data());
+    QVERIFY(popupWindow);
+    popup.attach(popupWindow);
+
+    // One Shortcut instantiated per local row in the table.
+    QObject *instantiator = mainRoot->findChild<QObject *>(u"shortcutInstantiator"_s);
+    QVERIFY(instantiator);
+    QCOMPARE(instantiator->property("count").toInt(), c.localShortcuts().size());
+
+    // Passthrough blocks modal hotkeys.
+    canvasWindow->requestActivate();
+    QVERIFY(QTest::qWaitForWindowActive(canvasWindow));
+    QCOMPARE(c.currentMode(), u"passthrough"_s);
+    QTest::keyClick(canvasWindow, Qt::Key_R);
+    QCOMPARE(c.currentMode(), u"passthrough"_s);
+
+    // Select mode: tool shortcut toggles tool, arrow keys nudge only when selected.
+    c.enterSelectMode();
+    QTest::keyClick(canvasWindow, Qt::Key_R);
+    QCOMPARE(c.activeTool(), u"rectangle"_s);
+    QTest::keyClick(canvasWindow, Qt::Key_R);
+    QCOMPARE(c.currentMode(), u"select"_s);
+
+    c.addShape(box(100.0, 100.0));
+    QCOMPARE(c.selectedIndex(), 0);
+    QTest::keyClick(canvasWindow, Qt::Key_Right);
+    QCOMPARE(c.getShape(0).value(u"x"_s).toDouble(), 101.0);
+    QTest::keyClick(canvasWindow, Qt::Key_Down, Qt::ShiftModifier);
+    QCOMPARE(c.getShape(0).value(u"y"_s).toDouble(), 110.0);
+
+    // Copy/Paste and Delete/Backspace go through the same table.
+    QTest::keyClick(canvasWindow, Qt::Key_C, Qt::ControlModifier);
+    QTest::keyClick(canvasWindow, Qt::Key_V, Qt::ControlModifier);
+    QCOMPARE(c.shapesModel()->rowCount(), 2);
+    QTest::keyClick(canvasWindow, Qt::Key_Delete);
+    QCOMPARE(c.shapesModel()->rowCount(), 1);
+    c.selectShape(0, false);
+    QTest::keyClick(canvasWindow, Qt::Key_Backspace);
+    QCOMPARE(c.shapesModel()->rowCount(), 0);
+
+    // Y toggles shapesHidden.
+    QTest::keyClick(canvasWindow, Qt::Key_Y);
+    QVERIFY(c.shapesHidden());
+    QTest::keyClick(canvasWindow, Qt::Key_Y);
+    QVERIFY(!c.shapesHidden());
+
+    // Escape from the text editor commits text and exits to passthrough.
+    c.addShape({{u"type"_s, u"text"_s}, {u"x"_s, 50.0}, {u"y"_s, 50.0},
+                {u"width"_s, 100.0}, {u"height"_s, 40.0}, {u"text"_s, u"hello"_s}});
+    QMetaObject::invokeMethod(canvasWindow, "startTextEditing", Q_ARG(QVariant, 0));
+    QTest::keyClick(canvasWindow, Qt::Key_Escape);
+    QCOMPARE(c.currentMode(), u"passthrough"_s);
+    QCOMPARE(c.getShape(0).value(u"text"_s).toString(), u"hello"_s);
+
+    // Escape from the Tray Popup hits the same single app-wide Escape shortcut.
+    c.enterSelectMode();
+    popup.toggle();
+    QVERIFY(popup.isOpen());
+    QVERIFY(QTest::qWaitForWindowExposed(popupWindow));
+    popupWindow->requestActivate();
+    QVERIFY(QTest::qWaitForWindowActive(popupWindow));
+    QTest::keyClick(popupWindow, Qt::Key_Escape);
+    QVERIFY(!popup.isOpen());
+    QCOMPARE(c.currentMode(), u"passthrough"_s);
 }

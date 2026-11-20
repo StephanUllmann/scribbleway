@@ -20,20 +20,10 @@ Window {
     color: sysPalette.window
 
     property bool pickerIsFill: false
+    onVisibleChanged: if (!visible) picker.visible = false
 
     SystemPalette {
         id: sysPalette
-    }
-
-    // Escape reaches whichever of the two windows holds the keyboard, so it is handled
-    // on both sides. Closing goes through trayPopup, which owns this window's visibility.
-    Shortcut {
-        sequence: "Escape"
-        onActivated: {
-            picker.visible = false
-            trayPopup.close()
-            controller.enterPassthroughMode()
-        }
     }
 
     RowLayout {

@@ -19,4 +19,7 @@ void prune(QDir dir, const QDate &today, int keepDays = 7);
 // Logs the screen count, the primary screen, and each screen's geometry and scale.
 void logScreens(const char *why);
 
+// Writes a numbered marker line so a bug report can say "after mark 3".
+void mark();
+
 }

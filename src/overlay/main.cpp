@@ -75,57 +75,38 @@ int main(int argc, char *argv[])
                                 << "session" << qEnvironmentVariable("XDG_SESSION_TYPE");
         DevLog::logScreens("startup");
     }
-    // Numbered so a bug report can say "after mark 3".
-    int markCount = 0;
-    auto mark = [&markCount]() { qCInfo(lcDev).noquote() << "--- MARK" << ++markCount << "---"; };
-
     OverlayController controller;
 
-    // Setup global actions and connect to KGlobalAccel
-    auto setupGlobalAction = [&app](const QString &objName, const QString &text, 
-                                 const QList<QKeySequence> &defaultShortcuts) {
-        QAction *action = new QAction(&app);
-        action->setObjectName(objName);
-        action->setText(text);
-        
-        KGlobalAccel::self()->setDefaultShortcut(action, defaultShortcuts);
-        KGlobalAccel::self()->setShortcut(action, defaultShortcuts);
-        
-        return action;
-    };
+    // Register global hotkeys from the same table as the overlay-local ones.
+    for (const HotkeySpec &h : OverlayController::hotkeys()) {
+        const bool isGlobal = h.scope == HotkeySpec::Scope::Global
+            || (devMode && h.scope == HotkeySpec::Scope::GlobalDev);
+        if (!isGlobal) continue;
 
-    QAction *actionActivateSelect = setupGlobalAction(QStringLiteral("action_activate_select_mode"), QStringLiteral("Enter Selection Mode"), 
-                                                      {QKeySequence(QStringLiteral("Meta+Shift+X"))});
-
-    auto toggleMode = [&controller]() {
-        qInfo() << "toggle requested, current mode:" << controller.currentMode();
-        if (controller.currentMode() == QStringLiteral("passthrough")) {
-            controller.enterSelectMode();
-        } else {
-            controller.enterPassthroughMode();
-        }
-    };
-    QObject::connect(actionActivateSelect, &QAction::triggered, &controller, toggleMode);
-
-    // Only registered in dev mode, so a normal install doesn't claim another global key.
-    if (devMode) {
-        QAction *actionMark = setupGlobalAction(QStringLiteral("action_dev_mark"), QStringLiteral("Mark the Dev Log"),
-                                                {QKeySequence(QStringLiteral("Meta+Shift+M"))});
-        QObject::connect(actionMark, &QAction::triggered, &app, mark);
+        auto *action = new QAction(&app);
+        action->setObjectName(QString::fromLatin1(h.id));
+        action->setText(QString::fromUtf8(h.label));
+        const QList<QKeySequence> seqs = {QKeySequence(QString::fromUtf8(h.defaultSeq))};
+        KGlobalAccel::self()->setDefaultShortcut(action, seqs);
+        KGlobalAccel::self()->setShortcut(action, seqs);
+        const QString id = QString::fromLatin1(h.id);
+        QObject::connect(action, &QAction::triggered, &controller, [&controller, id]() {
+            controller.triggerShortcut(id);
+        });
     }
 
     // KGlobalAccel is inert outside Plasma, so `scribbleway-overlay --toggle` re-uses the
     // single-instance socket as the entry point other compositors can bind:
     //   bind = SUPER SHIFT, X, exec, scribbleway-overlay --toggle
-    QObject::connect(instanceGuard.server(), &QLocalServer::newConnection, &app, [&instanceGuard, toggleMode, mark]() {
+    QObject::connect(instanceGuard.server(), &QLocalServer::newConnection, &app, [&instanceGuard, &controller]() {
         QLocalSocket *client = instanceGuard.server()->nextPendingConnection();
         if (!client) return;
-        QObject::connect(client, &QLocalSocket::readyRead, client, [client, toggleMode, mark]() {
+        QObject::connect(client, &QLocalSocket::readyRead, client, [client, &controller]() {
             const QByteArray request = client->readAll();
             if (request.startsWith("toggle")) {
-                toggleMode();
+                controller.toggleMode();
             } else if (request.startsWith("mark")) {
-                mark();
+                DevLog::mark();
             }
         });
         QObject::connect(client, &QLocalSocket::disconnected, client, &QLocalSocket::deleteLater);

@@ -3,13 +3,31 @@
 #include <QObject>
 #include <QVariantList>
 #include <QVariantMap>
+#include <QKeySequence>
 #include <QQuickWindow>
 #include <QRect>
 #include <QHash>
 #include <QSet>
 #include <limits>
+#include <span>
 #include "shapesmodel.h"
 #include "selection.h"
+
+class OverlayController;
+
+// One row of the single hotkey table: id, default binding(s), scope, precondition, and handler.
+struct HotkeySpec {
+    enum class Scope { Window, Application, Global, GlobalDev };
+
+    const char *id;
+    const char *defaultSeq;                           // nullptr when standardKey != UnknownKey
+    void (*run)(OverlayController &, QPointF);
+    Scope scope = Scope::Window;
+    const char *needs = nullptr;                      // nullptr, "always", "selection", or a Shape type
+    QKeySequence::StandardKey standardKey = QKeySequence::UnknownKey;
+    const char *altSeq = nullptr;                     // optional second default sequence
+    const char *label = nullptr;                      // KGlobalAccel action text (global hotkeys)
+};
 
 struct BindingHit {
     QString targetId;
@@ -32,7 +50,9 @@ class OverlayController : public QObject
     // QML writes it through updateProperties(), the one path that also updates the selection.
     Q_PROPERTY(QVariantMap style READ style NOTIFY styleChanged)
     Q_PROPERTY(bool hasMultiSelection READ hasMultiSelection NOTIFY selectionChanged)
+    Q_PROPERTY(QVariantList localShortcuts READ localShortcuts CONSTANT)
     Q_PROPERTY(QVariantMap localShortcutSequences READ localShortcutSequences CONSTANT)
+    Q_PROPERTY(bool shapesHidden READ shapesHidden NOTIFY shapesHiddenChanged)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
     Q_PROPERTY(QVariantMap selection READ getSelectionState NOTIFY selectionChanged)
     Q_PROPERTY(QStringList presetColors READ presetColors CONSTANT)
@@ -65,7 +85,13 @@ public:
     ShapesModel* draftModel();
     // Shows `shape` as the Draft; an empty map removes it.
     Q_INVOKABLE void setDraftShape(const QVariantMap &shape);
+    static std::span<const HotkeySpec> hotkeys();
+    QVariantList localShortcuts() const;
     QVariantMap localShortcutSequences() const;
+    bool shapesHidden() const;
+    Q_INVOKABLE bool triggerShortcut(const QString &id, const QPointF &cursor = QPointF(-1.0, -1.0));
+    Q_INVOKABLE void toggleShapesHidden();
+    void toggleMode();
 
     Q_INVOKABLE int indexForId(const QString &id) const;
     Q_INVOKABLE QVariantMap findSnapInfo(double px, double py, int excludeIndex = -1) const;
@@ -126,12 +152,15 @@ Q_SIGNALS:
     
     void selectionChanged();
     void modeChanged(const QString &mode);
+    void shapesHiddenChanged();
 
     // Command signals to QML
     void enterSelectModeRequested();
     void enterPassthroughModeRequested();
 
 private:
+    void setMode(const QString &mode);
+    void setShapesHidden(bool hidden);
     void notifySelectionChanged();
     // Drops one shape from the selection; the first selected row left takes over as primary.
     void deselect(int index);
@@ -148,7 +177,9 @@ private:
     void moveShapes(const QHash<int, QVariantMap> &starts, double dx, double dy);
     QVariantMap makeAttachedTextBinding(const QVariantMap &shape) const;
 
+    QVariantList m_localShortcuts;
     QVariantMap m_localShortcutSequences;
+    bool m_shapesHidden = false;
 
     QQuickWindow *m_window = nullptr;
     Selection m_selection; // declared first: m_shapesModel reads it until it is destroyed
