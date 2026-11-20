@@ -12,6 +12,10 @@ _Avoid_: Drawing object, canvas element
 The set of Shapes the user has picked, held by id outside the Shapes themselves, so it never enters the undo history or the clipboard. One selected Shape is the **primary**: the last one picked, which the Tray Popup shows and raise/lower move.
 _Avoid_: Selected flag, current shape
 
+**Draft**:
+The Shape the user is drawing, from the first drag until release adds it to the canvas or it is abandoned. It is drawn by the same delegates as every other Shape, never enters the undo history, and is never selected.
+_Avoid_: Preview, ghost shape
+
 **Clipboard**:
 The system clipboard interface used for sharing serialized vector shapes within Scribbleway or with external applications.
 _Avoid_: Pasteboard

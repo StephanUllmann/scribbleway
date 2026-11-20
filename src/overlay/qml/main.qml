@@ -34,7 +34,8 @@ Window {
     property point drawStartPoint: Qt.point(0, 0)
     property var activePoints: []
     
-    // Live preview properties
+    // The gesture being drawn; draftShape() turns it into a Shape.
+    property int drawSeed: 1
     property real previewX: 0
     property real previewY: 0
     property real previewW: 0
@@ -157,23 +158,44 @@ Window {
     function abortShape() {
         if (!isDrawing) return;
         isDrawing = false;
+        controller.setDraftShape({});
         activePoints = [];
         previewW = 0;
         previewH = 0;
+    }
+
+    // The Shape as it would be added right now. The Draft and finalizeShape() both come
+    // from here, so what the user sees while dragging is what lands on release.
+    function draftShape() {
+        let shape = Object.assign(controller.styleForNewShape(activeDrawTool), {
+            "type": activeDrawTool,
+            "locked": false,
+            "seed": drawSeed
+        });
+        if (activeDrawTool === "freehand") {
+            shape["points"] = activePoints;
+        } else if (activeDrawTool === "line" || activeDrawTool === "arrow") {
+            // For lines/arrows, previewW and previewH are the delta from the start point.
+            shape["fromX"] = drawStartPoint.x;
+            shape["fromY"] = drawStartPoint.y;
+            shape["toX"] = drawStartPoint.x + previewW;
+            shape["toY"] = drawStartPoint.y + previewH;
+        } else {
+            shape["x"] = previewX;
+            shape["y"] = previewY;
+            shape["width"] = previewW;
+            shape["height"] = previewH;
+        }
+        return shape;
     }
 
     // Finalize shape and write to model
     function finalizeShape() {
         if (!isDrawing) return;
         isDrawing = false;
+        controller.setDraftShape({});
 
-
-
-        let shape = Object.assign(controller.styleForNewShape(activeDrawTool), {
-            "type": activeDrawTool,
-            "locked": false,
-            "seed": Math.floor(Math.random() * 1000000) + 1
-        });
+        let shape = draftShape();
 
         if (activeDrawTool === "freehand") {
             // Only add if we have at least 2 points
@@ -183,13 +205,7 @@ Window {
             }
         } else if (activeDrawTool === "line" || activeDrawTool === "arrow") {
             // Only add if line has length
-            let dx = previewW;
-            let dy = previewH;
-            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-                shape["fromX"] = drawStartPoint.x;
-                shape["fromY"] = drawStartPoint.y;
-                shape["toX"] = drawStartPoint.x + dx;
-                shape["toY"] = drawStartPoint.y + dy;
+            if (Math.abs(previewW) > 2 || Math.abs(previewH) > 2) {
                 // One edit group, so the arrow and its attachments undo in one step.
                 controller.beginEdit();
                 controller.addShape(shape);
@@ -209,10 +225,6 @@ Window {
         } else {
             // Rectangle or Ellipse
             if (previewW > 4 && previewH > 4) {
-                shape["x"] = previewX;
-                shape["y"] = previewY;
-                shape["width"] = previewW;
-                shape["height"] = previewH;
                 controller.addShape(shape);
             }
         }
@@ -261,6 +273,18 @@ Window {
         }
     }
 
+    function shapeSource(type) {
+        switch (type.toLowerCase()) {
+            case "rectangle": return "shapes/RectangleShape.qml";
+            case "ellipse": return "shapes/EllipseShape.qml";
+            case "line": return "shapes/LineShape.qml";
+            case "arrow": return "shapes/ArrowShape.qml";
+            case "freehand": return "shapes/FreehandShape.qml";
+            case "text": return "shapes/TextShape.qml";
+        }
+        return "";
+    }
+
     // Shapes Repeater (Renders all shapes)
     Repeater {
         id: shapeRepeater
@@ -271,17 +295,7 @@ Window {
             id: loader
             anchors.fill: parent
             visible: !canvasWindow.shapesHidden
-            source: {
-                switch(model.type.toLowerCase()) {
-                    case "rectangle": return "shapes/RectangleShape.qml";
-                    case "ellipse": return "shapes/EllipseShape.qml";
-                    case "line": return "shapes/LineShape.qml";
-                    case "arrow": return "shapes/ArrowShape.qml";
-                    case "freehand": return "shapes/FreehandShape.qml";
-                    case "text": return "shapes/TextShape.qml";
-                }
-                return "";
-            }
+            source: canvasWindow.shapeSource(model.type)
             onLoaded: {
                 if (item) {
                     // A binding: rows shift on delete, raise and lower without a new delegate.
@@ -289,6 +303,19 @@ Window {
                 }
                 canvasWindow.requestInputRegionUpdate();
             }
+        }
+    }
+
+    // The Draft, drawn by the same delegates as the committed Shapes. It takes no input:
+    // the draw layer above owns the gesture.
+    Repeater {
+        model: controller.draftModel
+        delegate: Loader {
+            anchors.fill: parent
+            enabled: false
+            source: canvasWindow.shapeSource(model.type)
+            // Shows the live size label, the same one a resize shows.
+            onLoaded: item.resizing = true
         }
     }
 
@@ -305,6 +332,7 @@ Window {
         onPressed: (mouse) => {
             canvasWindow.lastMousePos = Qt.point(mouse.x, mouse.y);
             isDrawing = true;
+            drawSeed = Math.floor(Math.random() * 1000000) + 1;
             drawStartPoint = Qt.point(mouse.x, mouse.y);
             snapTargetIndex = -1;
             
@@ -328,7 +356,6 @@ Window {
                 let pts = activePoints;
                 pts.push(Qt.point(mouse.x, mouse.y));
                 activePoints = pts;
-                freehandPreviewPath.path = activePoints;
             } else {
                 // For lines/arrows, width and height represent delta x/y
                 if (activeDrawTool === "line" || activeDrawTool === "arrow") {
@@ -360,167 +387,15 @@ Window {
                     previewH = Math.abs(mouse.y - drawStartPoint.y);
                 }
             }
+            // A text box opens its editor on release; it has nothing to show before that.
+            if (activeDrawTool !== "text") {
+                controller.setDraftShape(draftShape());
+            }
         }
 
         onReleased: {
             snapTargetIndex = -1;
             finalizeShape();
-        }
-    }
-
-    // --- LIVE PREVIEW SHAPES ---
-    
-    // Freehand Live Preview
-    Shape {
-        preferredRendererType: Shape.CurveRenderer
-        anchors.fill: parent
-        visible: isDrawing && activeDrawTool === "freehand"
-        opacity: controller.style.opacity
-        
-        ShapePath {
-            strokeColor: controller.style.color
-            strokeWidth: controller.style.strokeWidth
-            fillColor: "transparent"
-            capStyle: ShapePath.RoundCap
-            joinStyle: ShapePath.RoundJoin
-            
-            PathPolyline {
-                id: freehandPreviewPath
-                path: []
-            }
-        }
-    }
-
-    // Rectangle Live Preview
-    Rectangle {
-        visible: isDrawing && activeDrawTool === "rectangle"
-        x: previewX
-        y: previewY
-        width: previewW
-        height: previewH
-        opacity: controller.style.opacity
-        border.color: controller.style.color
-        border.width: controller.style.strokeWidth
-        color: {
-            let fc = controller.style.fillColor;
-            let fo = controller.style.fillOpacity;
-            if (!fc || fc === "transparent" || fo <= 0)
-                return "transparent";
-            let c = Qt.color(fc);
-            return Qt.rgba(c.r, c.g, c.b, fo);
-        }
-        radius: controller.style.borderRadius
-    }
-
-    // Ellipse Live Preview
-    Shape {
-        preferredRendererType: Shape.CurveRenderer
-        anchors.fill: parent
-        visible: isDrawing && activeDrawTool === "ellipse"
-        opacity: controller.style.opacity
-
-        ShapePath {
-            strokeColor: controller.style.color
-            strokeWidth: controller.style.strokeWidth
-            fillColor: {
-                let fc = controller.style.fillColor;
-                let fo = controller.style.fillOpacity;
-                if (!fc || fc === "transparent" || fo <= 0)
-                    return "transparent";
-                let c = Qt.color(fc);
-                return Qt.rgba(c.r, c.g, c.b, fo);
-            }
-
-            startX: previewX + previewW / 2
-            startY: previewY
-
-            PathArc {
-                x: previewX + previewW / 2
-                y: previewY + previewH
-                radiusX: previewW / 2
-                radiusY: previewH / 2
-                useLargeArc: false
-                direction: PathArc.Clockwise
-            }
-
-            PathArc {
-                x: previewX + previewW / 2
-                y: previewY
-                radiusX: previewW / 2
-                radiusY: previewH / 2
-                useLargeArc: false
-                direction: PathArc.Clockwise
-            }
-        }
-    }
-
-    // Line Live Preview
-    Shape {
-        preferredRendererType: Shape.CurveRenderer
-        anchors.fill: parent
-        visible: isDrawing && activeDrawTool === "line"
-        opacity: controller.style.opacity
-
-        ShapePath {
-            strokeColor: controller.style.color
-            strokeWidth: controller.style.strokeWidth
-            fillColor: "transparent"
-
-            startX: drawStartPoint.x
-            startY: drawStartPoint.y
-            PathLine {
-                x: drawStartPoint.x + previewW
-                y: drawStartPoint.y + previewH
-            }
-        }
-    }
-
-    // Arrow Live Preview
-    Shape {
-        id: arrowPreviewShape
-        anchors.fill: parent
-        visible: isDrawing && activeDrawTool === "arrow"
-        opacity: controller.style.opacity
-        preferredRendererType: Shape.CurveRenderer
-
-        // Arrow trigonometry calculations
-        property real angle: Math.atan2(previewH, previewW)
-        property real len: 10 + controller.style.strokeWidth * 1.5
-        property real halfAng: Math.PI / 6
-        property real tx: drawStartPoint.x + previewW
-        property real ty: drawStartPoint.y + previewH
-
-        // Calculate midpoint at the bottom/base of the arrowhead
-        property real lineLength: Math.sqrt(Math.pow(previewW, 2) + Math.pow(previewH, 2))
-        property real stemLength: Math.max(0, lineLength - len * Math.cos(halfAng))
-        property real baseX: drawStartPoint.x + stemLength * Math.cos(angle)
-        property real baseY: drawStartPoint.y + stemLength * Math.sin(angle)
-
-        ShapePath {
-            strokeColor: controller.style.color
-            strokeWidth: controller.style.strokeWidth
-            fillColor: "transparent"
-
-            startX: drawStartPoint.x
-            startY: drawStartPoint.y
-            PathLine { x: arrowPreviewShape.baseX; y: arrowPreviewShape.baseY }
-        }
-
-        ShapePath {
-            strokeColor: "transparent"
-            fillColor: controller.style.color
-
-            startX: arrowPreviewShape.tx
-            startY: arrowPreviewShape.ty
-            PathLine {
-                x: arrowPreviewShape.tx - arrowPreviewShape.len * Math.cos(arrowPreviewShape.angle - arrowPreviewShape.halfAng)
-                y: arrowPreviewShape.ty - arrowPreviewShape.len * Math.sin(arrowPreviewShape.angle - arrowPreviewShape.halfAng)
-            }
-            PathLine {
-                x: arrowPreviewShape.tx - arrowPreviewShape.len * Math.cos(arrowPreviewShape.angle + arrowPreviewShape.halfAng)
-                y: arrowPreviewShape.ty - arrowPreviewShape.len * Math.sin(arrowPreviewShape.angle + arrowPreviewShape.halfAng)
-            }
-            PathLine { x: arrowPreviewShape.tx; y: arrowPreviewShape.ty }
         }
     }
 
@@ -536,22 +411,6 @@ Window {
         border.color: "white"
         border.width: 1.5
         z: 999
-    }
-
-    // Live size label: line/arrow length sits just off the midpoint on the line's normal;
-    // rectangle/ellipse "W × H" sits centred under the bottom edge.
-    SizeLabel {
-        id: lengthLabel
-        property bool isLine: activeDrawTool === "line" || activeDrawTool === "arrow"
-        property bool isBox: activeDrawTool === "rectangle" || activeDrawTool === "ellipse"
-        property real len: Math.sqrt(previewW * previewW + previewH * previewH)
-        visible: isDrawing && len > 0 && (isLine || isBox)
-        x: isLine ? drawStartPoint.x + previewW / 2 - previewH / len * 18 - width / 2
-                  : previewX + previewW / 2 - width / 2
-        y: isLine ? drawStartPoint.y + previewH / 2 + previewW / len * 18 - height / 2
-                  : previewY + previewH + 8
-        text: isLine ? Math.round(len) + " px"
-                     : Math.round(previewW) + " × " + Math.round(previewH) + " px"
     }
 
     // --- TOOL CURSOR BADGE (follows pointer while a draw tool is active) ---

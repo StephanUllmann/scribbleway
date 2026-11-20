@@ -92,6 +92,8 @@ OverlayController::OverlayController(QObject *parent)
     }
     m_shapesModel.setParent(this);
     m_shapesModel.setSelection(&m_selection);
+    m_draftModel.setParent(this);
+    m_draftModel.disableHistory();
     connect(&m_selection, &Selection::changed, this, &OverlayController::selectionChanged);
 
     // Hotkeys are read here only; there is no UI for rebinding them, but hand-edited
@@ -138,6 +140,23 @@ void OverlayController::setWindow(QQuickWindow *window)
 ShapesModel* OverlayController::shapesModel()
 {
     return &m_shapesModel;
+}
+
+ShapesModel* OverlayController::draftModel()
+{
+    return &m_draftModel;
+}
+
+void OverlayController::setDraftShape(const QVariantMap &shape)
+{
+    if (shape.isEmpty()) {
+        m_draftModel.clear();
+    } else if (m_draftModel.rowCount() == 0) {
+        m_draftModel.addShape(shape);
+    } else {
+        // Updated in place, so the delegate survives every mouse move.
+        m_draftModel.updateShape(0, shape);
+    }
 }
 
 int OverlayController::selectedIndex() const

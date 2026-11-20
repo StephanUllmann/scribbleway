@@ -63,6 +63,8 @@ public:
     static QVariantList withoutAttachedTextBinding(const QVariantMap &shape);
     // The selected role reads from `selection`, which must outlive the model.
     void setSelection(const Selection *selection);
+    // For a model nobody undoes, such as the draft: mutations then take no snapshots.
+    void disableHistory() { m_keepsHistory = false; }
 
     void addShape(const QVariantMap &shape);
     void updateShape(int index, const QVariantMap &properties);
@@ -83,6 +85,7 @@ private:
     QList<QList<QVariantMap>> m_history;
     QList<QList<QVariantMap>> m_redo;
     bool m_isApplyingUndo = false;
+    bool m_keepsHistory = true;
     int m_inEditTransaction = 0;
     bool m_editSnapshotTaken = false;
 };

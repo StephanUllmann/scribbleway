@@ -52,6 +52,7 @@ private Q_SLOTS:
     void testDevLogPruneKeepsAWeek();
     void testOverlayHoleFollowsOverlayResize();
     void testOverlayStartsClickThrough();
+    void testDrawingShowsTheDraft();
     void testOverlayKeyboardAndLayer();
     void testOverlayRemapReappliesLayer();
     void testTrayPopupToggle();
@@ -3323,4 +3324,50 @@ void ShapesModelTest::testShapeGeometry()
     QCOMPARE(changed.size(), 1);
     QVERIFY(changed.at(0).at(2).value<QList<int>>().contains(ShapesModel::AttachedTextRectRole));
     QCOMPARE(model.data(first, ShapesModel::AttachedTextRectRole).toRectF(), QRectF(22, 32, 176, 26));
+}
+
+// While dragging, the Shape delegates draw the Draft, and the Draft is what lands.
+void ShapesModelTest::testDrawingShowsTheDraft()
+{
+    OverlayController c;
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty(u"controller"_s, &c);
+    exposeWindows(engine);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
+    QScopedPointer<QObject> root(component.create());
+    QVERIFY2(root, qPrintable(component.errorString()));
+    auto *window = qobject_cast<QQuickWindow *>(root.data());
+    QVERIFY(window);
+    window->resize(800, 600);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    c.setActiveTool(u"rectangle"_s);
+
+    QTest::mousePress(window, Qt::LeftButton, {}, QPoint(100, 100));
+    QTest::mouseMove(window, QPoint(300, 200));
+    QCOMPARE(c.draftModel()->rowCount(), 1);
+    QCOMPARE(c.shapesModel()->rowCount(), 0);
+    QQuickItem *label = findText(window->contentItem(), u"200 × 100 px"_s);
+    QVERIFY(label);
+    QVERIFY(label->isVisible());
+    const QVariant seed = c.draftModel()->data(c.draftModel()->index(0), ShapesModel::SeedRole);
+
+    QTest::mouseRelease(window, Qt::LeftButton, {}, QPoint(300, 200));
+    QCOMPARE(c.draftModel()->rowCount(), 0);
+    QCOMPARE(c.shapesModel()->rowCount(), 1);
+    QCOMPARE(c.getShape(0).value(u"seed"_s), seed);
+    QCOMPARE(c.getShape(0).value(u"width"_s).toDouble(), 200.0);
+
+    // Every type's delegate takes the Draft without a QML error.
+    QTest::failOnWarning(QRegularExpression(u"TypeError|ReferenceError|Unable to assign"_s));
+    for (const QString &tool : {u"ellipse"_s, u"line"_s, u"arrow"_s, u"freehand"_s}) {
+        c.setActiveTool(tool);
+        QTest::mousePress(window, Qt::LeftButton, {}, QPoint(400, 300));
+        QTest::mouseMove(window, QPoint(450, 320));
+        QTest::mouseMove(window, QPoint(500, 350));
+        QCOMPARE(c.draftModel()->rowCount(), 1);
+        QTest::mouseRelease(window, Qt::LeftButton, {}, QPoint(500, 350));
+        QCOMPARE(c.draftModel()->rowCount(), 0);
+    }
+    QCOMPARE(c.shapesModel()->rowCount(), 5);
 }

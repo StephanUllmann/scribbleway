@@ -23,6 +23,8 @@ class OverlayController : public QObject
     Q_OBJECT
     Q_PROPERTY(QQuickWindow* window READ window WRITE setWindow NOTIFY windowChanged)
     Q_PROPERTY(ShapesModel* shapesModel READ shapesModel CONSTANT)
+    // The Draft: the Shape being drawn, before release adds it. Zero or one row.
+    Q_PROPERTY(ShapesModel* draftModel READ draftModel CONSTANT)
     Q_PROPERTY(int selectedIndex READ selectedIndex NOTIFY selectionChanged)
     Q_PROPERTY(QString activeTool READ activeTool WRITE setActiveTool NOTIFY activeToolChanged)
     Q_PROPERTY(QString currentMode READ currentMode NOTIFY modeChanged)
@@ -60,6 +62,9 @@ public:
     Q_INVOKABLE QVariantMap styleForNewShape(const QString &type) const;
 
     ShapesModel* shapesModel();
+    ShapesModel* draftModel();
+    // Shows `shape` as the Draft; an empty map removes it.
+    Q_INVOKABLE void setDraftShape(const QVariantMap &shape);
     QVariantMap localShortcutSequences() const;
 
     Q_INVOKABLE int indexForId(const QString &id) const;
@@ -148,6 +153,7 @@ private:
     QQuickWindow *m_window = nullptr;
     Selection m_selection; // declared first: m_shapesModel reads it until it is destroyed
     ShapesModel m_shapesModel;
+    ShapesModel m_draftModel;
     QHash<int, QVariantMap> m_dragStartShapes;
     QList<QVariantMap> m_editStartShapes; // the whole model at beginEdit(), for the dev log
     QSet<int> m_preDragSelection;

@@ -82,7 +82,8 @@ Item {
 
     property int index: -1
     property int shapeIndex: index
-    property bool isSnapTarget: typeof canvasWindow !== "undefined" && canvasWindow.snapTargetIndex === shapeIndex
+    // The Draft has no row (-1), and -1 is also "no snap target".
+    property bool isSnapTarget: shapeIndex >= 0 && typeof canvasWindow !== "undefined" && canvasWindow.snapTargetIndex === shapeIndex
     property string mode: "rect" // "rect", "line", "none" (freehand)
     property bool isSelected: model.selected !== undefined ? model.selected : false
     property bool isLocked: model.locked !== undefined ? model.locked : false
@@ -466,7 +467,7 @@ Item {
         }
     }
 
-    // Live size while resizing, placed like the label shown while drawing (see main.qml).
+    // Live size while resizing, or while the Draft is drawn (main.qml sets resizing for it).
     SizeLabel {
         readonly property real dx: shapeToX - shapeFromX
         readonly property real dy: shapeToY - shapeFromY

@@ -198,7 +198,7 @@ void ShapesModel::saveHistorySnapshot()
 // its first real change, so a press or a selection change alone costs no undo step.
 void ShapesModel::recordHistory()
 {
-    if (m_isApplyingUndo) {
+    if (m_isApplyingUndo || !m_keepsHistory) {
         return;
     }
     if (m_inEditTransaction > 0) {
