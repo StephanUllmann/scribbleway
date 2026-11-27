@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as Controls
+import "popup"
 
 // Fixed-width colour picker meant to sit beside the menu inside the tray popup's
 // own window. Deliberately not a QtQuick.Dialogs ColorDialog: that is an xdg-desktop-
@@ -86,33 +87,21 @@ Item {
             Layout.fillWidth: true
             spacing: theme.gap
 
-            Text {
+            Label {
                 text: "Custom colour"
-                color: theme.ink
-                font.family: theme.sans
-                font.pixelSize: theme.body
                 font.weight: Font.DemiBold
                 Layout.fillWidth: true
             }
 
-            Controls.ToolButton {
-                id: closeButton
-                display: Controls.AbstractButton.IconOnly
+            IconButton {
+                flat: true
+                implicitWidth: 28
+                implicitHeight: 28
                 icon.source: "qrc:/icons/window-close.svg"
                 icon.width: 16
                 icon.height: 16
-                icon.color: theme.ink
-                implicitWidth: 28
-                implicitHeight: 28
-                padding: 0
-                Accessible.name: "Close"
+                tip: "Close"
                 onClicked: root.closeRequested()
-                background: Rectangle {
-                    radius: theme.radius
-                    color: closeButton.down ? theme.pressed : closeButton.hovered ? theme.raised : "transparent"
-                    border.width: closeButton.visualFocus ? 1 : 0
-                    border.color: theme.accent
-                }
             }
         }
 

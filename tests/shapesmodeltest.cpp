@@ -76,6 +76,7 @@ private Q_SLOTS:
     void testDefaultsReachableFromQml();
     void testEveryQmlControllerCallExists();
     void testShapeListDelegateReadsModelRoles();
+    void testSpecimenWellDrawsTheNextShape();
     void testOverlayControllerSelectionProperties();
     void testSingleInstanceGuard();
     void testMoveShape();
@@ -2835,6 +2836,41 @@ void ShapesModelTest::testShapeListDelegateReadsModelRoles()
     QCOMPARE(model->data(model->index(1, 0), roles.key("locked")).toBool(), true);
 }
 
+// The Style tab's specimen well feeds one row to specimenModel and draws it with the
+// canvas's own delegates, so a style change shows there, and nothing leaks into the canvas.
+void ShapesModelTest::testSpecimenWellDrawsTheNextShape()
+{
+    OverlayController controller;
+    controller.setActiveTool(QStringLiteral("ellipse"));
+
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
+    exposeWindows(engine);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(
+        QStringLiteral(QML_SOURCE_DIR) + QStringLiteral("/FullRepresentation.qml")));
+    QScopedPointer<QObject> menu(component.create());
+    QVERIFY2(menu, qPrintable(component.errorString()));
+
+    ShapesModel *specimen = controller.specimenModel();
+    const QHash<int, QByteArray> roles = specimen->roleNames();
+    QCOMPARE(specimen->rowCount(), 1);
+    QCOMPARE(specimen->data(specimen->index(0), roles.key("type")).toString(), QStringLiteral("ellipse"));
+    QCOMPARE(controller.shapesModel()->rowCount(), 0);
+
+    auto *well = menu->findChild<QQuickItem *>(QStringLiteral("specimenWell"));
+    QVERIFY(well);
+    bool drawn = false;
+    for (QQuickItem *child : well->childItems()) {
+        if (child->property("source").toUrl().fileName() == QStringLiteral("EllipseShape.qml")) {
+            drawn = child->property("item").value<QObject *>() != nullptr;
+        }
+    }
+    QVERIFY2(drawn, "the specimen well did not load the ellipse delegate");
+
+    controller.updateProperties({{QStringLiteral("strokeWidth"), 9}});
+    QCOMPARE(specimen->data(specimen->index(0), roles.key("strokeWidth")).toInt(), 9);
+}
+
 // The real guard for the class of bug above: walk every `controller.foo(...)` /
 // `backend.foo(...)` call in the QML and confirm foo is actually in the metaobject's
 // method table. QML resolves these at run time, so a missing one is a silent TypeError
@@ -2858,6 +2894,7 @@ void ShapesModelTest::testEveryQmlControllerCallExists()
     const QStringList files = {
         QStringLiteral("main.qml"), QStringLiteral("FullRepresentation.qml"),
         QStringLiteral("TrayPopup.qml"), QStringLiteral("ColorPickerPanel.qml"),
+        QStringLiteral("popup/SpecimenWell.qml"), QStringLiteral("popup/EditSlider.qml"),
     };
     const QRegularExpression call(
         QStringLiteral("\\b(controller|backend|overlayWindow|trayPopup)\\.([A-Za-z_][A-Za-z0-9_]*)\\s*\\("));

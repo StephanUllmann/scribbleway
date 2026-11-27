@@ -260,27 +260,13 @@ Window {
         }
     }
 
-    function shapeSource(type) {
-        switch (type.toLowerCase()) {
-            case "rectangle": return "shapes/RectangleShape.qml";
-            case "ellipse": return "shapes/EllipseShape.qml";
-            case "line": return "shapes/LineShape.qml";
-            case "arrow": return "shapes/ArrowShape.qml";
-            case "freehand": return "shapes/FreehandShape.qml";
-            case "text": return "shapes/TextShape.qml";
-        }
-        return "";
-    }
-
     // Shapes Repeater (Renders all shapes)
     Repeater {
         id: shapeRepeater
         model: controller.shapesModel
-        delegate: Loader {
-            id: loader
-            anchors.fill: parent
+        delegate: ShapeLoader {
+            type: model.type
             visible: !controller.shapesHidden
-            source: canvasWindow.shapeSource(model.type)
             onLoaded: {
                 if (item) {
                     // A binding: rows shift on delete, raise and lower without a new delegate.
@@ -295,10 +281,9 @@ Window {
     // the draw layer above owns the gesture.
     Repeater {
         model: controller.draftModel
-        delegate: Loader {
-            anchors.fill: parent
+        delegate: ShapeLoader {
+            type: model.type
             enabled: false
-            source: canvasWindow.shapeSource(model.type)
             // Shows the live size label, the same one a resize shows.
             onLoaded: item.resizing = true
         }
