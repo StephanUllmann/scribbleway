@@ -46,13 +46,13 @@ qt_add_qml_module(scribbleway-overlay
         qml/FullRepresentation.qml
         qml/TrayPopup.qml
         qml/ColorPickerPanel.qml
+        qml/Theme.qml
 )
 
 qt_add_resources(scribbleway-overlay "icons"
     PREFIX "/icons"
     BASE icons
     FILES
-        icons/color-picker.svg
         icons/dev-mode.svg
         icons/draw-freehand.svg
         icons/draw-rectangle.svg
@@ -69,6 +69,8 @@ qt_add_resources(scribbleway-overlay "icons"
         icons/go-up.svg
         icons/object-locked.svg
         icons/object-unlocked.svg
+        icons/window-close.svg
+        icons/list-add.svg
 )
 
 target_link_libraries(scribbleway-overlay PRIVATE

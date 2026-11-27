@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Controls as Controls
+import QtQuick.Controls.Basic as Controls
 
 // Fixed-width colour picker meant to sit beside the menu inside the tray popup's
 // own window. Deliberately not a QtQuick.Dialogs ColorDialog: that is an xdg-desktop-
@@ -26,11 +26,8 @@ Item {
     implicitWidth: 208
     implicitHeight: layout.implicitHeight
 
-    QtObject {
+    Theme {
         id: theme
-        readonly property int gridUnit: 18
-        readonly property int smallSpacing: 4
-        readonly property color highlightColor: root.palette.highlight
     }
 
     // HSV is the authoritative state, not selectedColor: hue survives a trip through
@@ -83,23 +80,39 @@ Item {
     ColumnLayout {
         id: layout
         anchors.fill: parent
-        spacing: theme.smallSpacing
+        spacing: theme.gap
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: theme.smallSpacing
+            spacing: theme.gap
 
-            Controls.Label {
-                text: "Custom Color"
-                font.bold: true
-                font.pixelSize: 11
-                color: theme.highlightColor
+            Text {
+                text: "Custom colour"
+                color: theme.ink
+                font.family: theme.sans
+                font.pixelSize: theme.body
+                font.weight: Font.DemiBold
                 Layout.fillWidth: true
             }
 
             Controls.ToolButton {
-                text: "×"
+                id: closeButton
+                display: Controls.AbstractButton.IconOnly
+                icon.source: "qrc:/icons/window-close.svg"
+                icon.width: 16
+                icon.height: 16
+                icon.color: theme.ink
+                implicitWidth: 28
+                implicitHeight: 28
+                padding: 0
+                Accessible.name: "Close"
                 onClicked: root.closeRequested()
+                background: Rectangle {
+                    radius: theme.radius
+                    color: closeButton.down ? theme.pressed : closeButton.hovered ? theme.raised : "transparent"
+                    border.width: closeButton.visualFocus ? 1 : 0
+                    border.color: theme.accent
+                }
             }
         }
 
@@ -170,7 +183,7 @@ Item {
             id: hueStrip
             objectName: "hueStrip"
             Layout.fillWidth: true
-            Layout.topMargin: theme.smallSpacing
+            Layout.topMargin: 4
             Layout.preferredHeight: 16
             radius: 4
             gradient: Gradient {
@@ -216,22 +229,35 @@ Item {
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: theme.smallSpacing
+            Layout.topMargin: 4
+            spacing: theme.gap
 
             Rectangle {
-                Layout.preferredWidth: theme.gridUnit * 1.5
-                Layout.preferredHeight: theme.gridUnit * 1.5
-                radius: 4
+                Layout.preferredWidth: 30
+                Layout.preferredHeight: 30
+                radius: 5
                 color: root.selectedColor
                 border.width: 1
-                border.color: "gray"
+                border.color: theme.raised
             }
 
             Controls.TextField {
                 id: hexField
                 objectName: "hexField"
                 Layout.fillWidth: true
+                implicitHeight: 30
+                font.family: theme.mono
+                font.pixelSize: theme.body
+                color: theme.ink
+                selectionColor: theme.accent
+                selectedTextColor: theme.accentInk
                 text: root.selectedColor.toString()
+                background: Rectangle {
+                    radius: theme.radius
+                    color: theme.surface
+                    border.width: 1
+                    border.color: hexField.activeFocus ? theme.accent : theme.raised
+                }
                 validator: RegularExpressionValidator {
                     regularExpression: /^#?[0-9A-Fa-f]{6}$/
                 }
