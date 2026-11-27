@@ -70,7 +70,7 @@ void TrayPopup::hide(const char *reason)
 }
 
 // Every way the popup appears or disappears ends here, including the compositor closing
-// the surface or Qt closing it as a Qt.Popup window, so the popup is never believed open
+// the surface, so the popup is never believed open
 // (keeping its hole and withholding the keyboard) after it is gone.
 void TrayPopup::onVisibleChanged(bool visible)
 {

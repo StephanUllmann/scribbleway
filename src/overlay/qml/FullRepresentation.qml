@@ -1,31 +1,21 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Controls as Controls
+// Basic, not the platform style: org.kde.desktop paints whole controls through QStyle, so
+// their parts cannot be restyled, and the popup keeps one look on every platform.
+import QtQuick.Controls.Basic as Controls
+import "popup"
 
 Item {
     id: fullRoot
 
-    implicitWidth: theme.gridUnit * 24
-    implicitHeight: theme.gridUnit * 30
+    implicitWidth: 432
+    implicitHeight: 550
     Layout.minimumWidth: 400
     Layout.minimumHeight: 520
     Layout.preferredWidth: 432
     Layout.preferredHeight: 550
 
-    QtObject {
-        id: theme
-        readonly property int gridUnit: 18
-        readonly property int smallSpacing: 4
-        readonly property int largeSpacing: 8
-        readonly property int iconSmall: 16
-        readonly property int iconMedium: 24
-        readonly property int iconLarge: 32
-        readonly property color highlightColor: palette.highlight
-        readonly property color disabledTextColor: Qt.alpha(palette.text, 0.5)
-        readonly property color backgroundColor: palette.base
-        readonly property color hoverColor: palette.midlight
-        readonly property color warningColor: "#f39c12"
-    }
+    Theme { id: theme }
 
     readonly property var backend: controller
 
@@ -43,11 +33,6 @@ Item {
         backend.updateProperties(props)
     }
 
-    // A slider drag is one undo step, however many values it passes through.
-    component EditSlider: Controls.Slider {
-        onPressedChanged: pressed ? controller.beginEdit() : controller.endEdit()
-    }
-
     readonly property string activeType: (backend.hasSelection ? backend.selection.type : backend.activeTool).toLowerCase()
     readonly property bool isFillableActive: activeType === "rectangle" || activeType === "ellipse"
     readonly property bool isTextActive: activeType === "text"
@@ -61,586 +46,602 @@ Item {
         set(isFill ? "fillColor" : "color", c.toString())
     }
 
-    Controls.ScrollView {
-        anchors.fill: parent
+    readonly property var tools: [
+        { id: "freehand", name: "Freehand" },
+        { id: "arrow", name: "Arrow" },
+        { id: "rectangle", name: "Rectangle" },
+        { id: "ellipse", name: "Ellipse" },
+        { id: "line", name: "Line" },
+        { id: "text", name: "Text" },
+    ]
+    readonly property var roughnessNames: ["Neat", "Artist", "Cartoon"]
+    readonly property var fontFamilies: ["sans-serif", "serif", "monospace", "Comic Sans MS"]
+
+    function iconFor(type) {
+        switch (type.toLowerCase()) {
+            case "rectangle": return "qrc:/icons/draw-rectangle.svg"
+            case "ellipse": return "qrc:/icons/draw-ellipse.svg"
+            case "arrow": return "qrc:/icons/draw-arrow.svg"
+            case "line": return "qrc:/icons/draw-line.svg"
+            case "text": return "qrc:/icons/draw-text.svg"
+            default: return "qrc:/icons/draw-freehand.svg"
+        }
+    }
+
+    function capitalized(s) {
+        return s.charAt(0).toUpperCase() + s.slice(1)
+    }
+
+    // The key the user has bound to a hotkey id, so the popup teaches the real binding.
+    function hotkey(id) {
+        return backend.localShortcutSequences[id] || ""
+    }
+
+    component SectionHeading: Label {
+        Layout.topMargin: 10
+        Layout.bottomMargin: 2
+        color: theme.ink
+        font.pixelSize: theme.body
+        font.weight: Font.DemiBold
+    }
+
+    component Page: Controls.ScrollView {
         contentWidth: availableWidth
+    }
 
-        ColumnLayout {
-            width: parent.width
-            spacing: theme.smallSpacing
+    // --- Layout ---
 
-            // Header
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: theme.smallSpacing
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
 
-                Text {
-                    text: "Scribbleway"
-                    font.pixelSize: 16
-                    font.bold: true
-                    color: palette.text
-                    Layout.fillWidth: true
-                }
+        // Mode, history
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.margins: theme.pad
+            Layout.bottomMargin: theme.gap
+            spacing: 6
 
-                // Shown when the app runs with --dev. `devMode` is a context property
-                // set by main.cpp; tests that load this file alone leave it undefined.
-                Image {
-                    objectName: "devModeIcon"
-                    visible: typeof devMode !== "undefined" && devMode
-                    source: "qrc:/icons/dev-mode.svg"
-                    sourceSize: Qt.size(theme.iconSmall, theme.iconSmall)
-                    HoverHandler { id: devModeHover }
-                    Controls.ToolTip.visible: devModeHover.hovered
-                    Controls.ToolTip.text: "Dev mode: logging to ~/.local/state/scribbleway/logs"
-                }
-            }
-
-            // Running View
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: theme.smallSpacing
-
-                // Mode Toggle Row
+            Rectangle {
+                implicitWidth: modeRow.implicitWidth + 4
+                implicitHeight: 30
+                radius: theme.radius
+                color: theme.surface
                 RowLayout {
-                    Layout.fillWidth: true
-                    spacing: theme.smallSpacing
-
-                    Controls.Button {
-                        icon.source: "qrc:/icons/draw-freehand.svg"
+                    id: modeRow
+                    anchors.fill: parent
+                    anchors.margins: 2
+                    spacing: 2
+                    SegmentButton {
                         text: "Draw"
                         checked: backend.currentMode === "draw"
-                        Layout.fillWidth: true
                         onClicked: {
                             if (backend.currentMode !== "draw") {
                                 backend.setActiveTool("freehand")
                             }
                         }
                     }
-
-                    Controls.Button {
-                        icon.source: "qrc:/icons/edit-select.svg"
+                    SegmentButton {
                         objectName: "selectModeButton"
                         text: "Select"
                         checked: backend.currentMode === "select"
-                        Layout.fillWidth: true
                         onClicked: backend.enterSelectMode()
                     }
-
-                    Controls.Button {
-                        icon.source: "qrc:/icons/edit-undo.svg"
-                        text: "Undo"
-                        Layout.fillWidth: true
-                        onClicked: { backend.undo() }
-                    }
-
-                    Controls.Button {
-                        icon.source: "qrc:/icons/edit-redo.svg"
-                        text: "Redo"
-                        Layout.fillWidth: true
-                        onClicked: { backend.redo() }
-                    }
-
-                    Controls.Button {
-                        icon.source: "qrc:/icons/edit-clear.svg"
-                        text: "Clear All"
-                        Layout.fillWidth: true
-                        onClicked: { backend.clear() }
-                    }
                 }
+            }
 
-                // Section Header
-                Controls.Label {
-                    text: backend.hasSelection ? "Edit Selection (" + backend.selection.type + ")" : "Default Properties & Tool"
-                    font.bold: true
-                    font.pixelSize: 11
-                    color: theme.highlightColor
-                }
+            Item { Layout.fillWidth: true }
 
-                // Selection Management Row
-                RowLayout {
+            // Shown when the app runs with --dev. `devMode` is a context property
+            // set by main.cpp; tests that load this file alone leave it undefined.
+            IconButton {
+                objectName: "devModeIcon"
+                visible: typeof devMode !== "undefined" && devMode
+                flat: true
+                icon.source: "qrc:/icons/dev-mode.svg"
+                icon.color: "#f0b44c"
+                tip: "Dev mode: logging to ~/.local/state/scribbleway/logs"
+            }
+            IconButton {
+                icon.source: "qrc:/icons/edit-undo.svg"
+                tip: "Undo  " + fullRoot.hotkey("action_undo")
+                onClicked: backend.undo()
+            }
+            IconButton {
+                icon.source: "qrc:/icons/edit-redo.svg"
+                tip: "Redo  " + fullRoot.hotkey("action_redo")
+                onClicked: backend.redo()
+            }
+        }
+
+        // Tools, each marked with its hotkey
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: theme.pad
+            Layout.rightMargin: theme.pad
+            spacing: 4
+
+            Repeater {
+                model: fullRoot.tools
+                Controls.ToolButton {
+                    id: toolCell
+                    required property var modelData
+                    readonly property string key: fullRoot.hotkey("tool_" + modelData.id)
                     Layout.fillWidth: true
-                    visible: backend.hasSelection
-                    spacing: theme.smallSpacing
-
-                    Controls.Button {
-                        icon.source: "qrc:/icons/edit-delete.svg"
-                        text: "Delete"
-                        Layout.fillWidth: true
-                        onClicked: { backend.deleteSelected() }
+                    implicitHeight: 38
+                    padding: 0
+                    display: Controls.AbstractButton.IconOnly
+                    checked: backend.activeTool.toLowerCase() === modelData.id
+                    icon.source: fullRoot.iconFor(modelData.id)
+                    icon.width: 20
+                    icon.height: 20
+                    icon.color: checked ? theme.accentInk : theme.ink
+                    onClicked: backend.setActiveTool(modelData.id)
+                    background: Rectangle {
+                        radius: theme.radius
+                        color: toolCell.checked ? theme.accent
+                             : toolCell.down ? theme.pressed
+                             : toolCell.hovered ? theme.raised : theme.surface
+                        border.width: toolCell.visualFocus ? 2 : 0
+                        border.color: toolCell.checked ? theme.ink : theme.accent
                     }
-
-                    Controls.Button {
-                        icon.source: "qrc:/icons/go-up.svg"
-                        text: "Raise"
-                        onClicked: { backend.raiseSelected() }
+                    Label {
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.rightMargin: 5
+                        anchors.topMargin: 3
+                        text: toolCell.key
+                        font.family: theme.mono
+                        font.pixelSize: theme.small
+                        font.weight: Font.DemiBold
+                        color: toolCell.checked ? theme.accentInk : theme.mute
                     }
-
-                    Controls.Button {
-                        icon.source: "qrc:/icons/go-down.svg"
-                        text: "Lower"
-                        onClicked: { backend.lowerSelected() }
-                    }
+                    Accessible.name: modelData.name
+                    Controls.ToolTip.visible: hovered
+                    Controls.ToolTip.text: modelData.name + (key !== "" ? "  " + key : "")
+                    Controls.ToolTip.delay: 600
                 }
+            }
+        }
 
-                // Active Tool & Target Screen Row
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: theme.smallSpacing
-
-                    Controls.Label {
-                        text: "Active Tool:"
-                    }
-
-                    Controls.ComboBox {
-                        // In-window dropdown: a Popup.Window one is a separate Wayland
-                        // surface, and the tray popup dismisses itself on focus loss.
-                        Component.onCompleted: popup.popupType = Controls.Popup.Item
-                        Layout.fillWidth: true
-                        model: ["Freehand", "Arrow", "Rectangle", "Ellipse", "Line", "Text"]
-                        currentIndex: {
-                            let tool = backend.activeTool.toLowerCase()
-                            if (tool === "arrow") return 1
-                            if (tool === "rectangle") return 2
-                            if (tool === "ellipse") return 3
-                            if (tool === "line") return 4
-                            if (tool === "text") return 5
-                            return 0
-                        }
-                        onActivated: (index) => {
-                            let tools = ["freehand", "arrow", "rectangle", "ellipse", "line", "text"]
-                            backend.setActiveTool(tools[index])
-                        }
-                    }
-
-                    Controls.Label {
-                        text: "Target Screen:"
-                    }
-
-                    Controls.ComboBox {
-                        // In-window dropdown: a Popup.Window one is a separate Wayland
-                        // surface, and the tray popup dismisses itself on focus loss.
-                        Component.onCompleted: popup.popupType = Controls.Popup.Item
-                        Layout.fillWidth: true
-                        model: overlayWindow.screenLabels
-                        currentIndex: {
-                            let idx = overlayWindow.screenNames.indexOf(overlayWindow.targetScreen)
-                            return idx >= 0 ? idx : 0
-                        }
-                        onActivated: (index) => overlayWindow.setTargetScreen(overlayWindow.screenNames[index])
-                    }
+        Controls.TabBar {
+            id: tabs
+            Layout.fillWidth: true
+            Layout.topMargin: 6
+            leftPadding: theme.pad + 2
+            rightPadding: theme.pad
+            spacing: 20
+            background: Item {
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 1
+                    color: theme.line
                 }
+            }
 
-                // Color Row
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: theme.smallSpacing
-
-                    Controls.Label {
-                        text: "Color:"
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: theme.smallSpacing
-
-                        property string activeColor: fullRoot.get("color")
-
-                        Repeater {
-                            model: backend.presetColors
-
-                            Rectangle {
-                                width: theme.gridUnit * 1.5
-                                height: theme.gridUnit * 1.5
-                                radius: 4
-                                color: modelData
-                                border.width: parent.activeColor === modelData ? 2 : 1
-                                border.color: parent.activeColor === modelData ? theme.highlightColor : "gray"
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: { fullRoot.set("color", modelData) }
-                                }
-                            }
+            Repeater {
+                model: ["Style", "Shapes", "More"]
+                Controls.TabButton {
+                    id: tab
+                    required property int index
+                    required property string modelData
+                    text: modelData
+                    width: implicitWidth
+                    implicitHeight: 36
+                    leftPadding: 0
+                    rightPadding: 0
+                    contentItem: Row {
+                        spacing: 6
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: tab.text
+                            color: tab.checked || tab.hovered ? theme.ink : theme.mute
+                            font.pixelSize: theme.body
+                            font.weight: tab.checked ? Font.DemiBold : Font.Medium
                         }
-
-                        Controls.Button {
-                            icon.source: "qrc:/icons/color-picker.svg"
-                            text: "Custom"
-                            onClicked: fullRoot.customColorRequested(parent.activeColor, false)
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: tab.index === 1
+                            text: shapesListView.count
+                            color: theme.mute
+                            font.pixelSize: theme.body
+                        }
+                    }
+                    background: Item {
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: 2
+                            color: tab.checked ? theme.accent : "transparent"
+                        }
+                        Rectangle {
+                            visible: tab.visualFocus
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            radius: 4
+                            color: "transparent"
+                            border.color: theme.accent
                         }
                     }
                 }
+            }
+        }
 
-                // Width Row
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: theme.smallSpacing
+        StackLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            currentIndex: tabs.currentIndex
 
-                    Controls.Label {
-                        text: "Width:"
-                        width: theme.gridUnit * 3
-                    }
-
-                    EditSlider {
-                        Layout.fillWidth: true
-                        from: 1
-                        to: 15
-                        stepSize: 1
-                        value: fullRoot.get("strokeWidth")
-                        onMoved: { fullRoot.set("strokeWidth", value) }
-                    }
-
-                    Controls.Label {
-                        text: Math.round(fullRoot.get("strokeWidth")) + "px"
-                    }
-                }
-
-                // Opacity Row
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: theme.smallSpacing
-
-                    Controls.Label {
-                        text: "Opacity:"
-                        width: theme.gridUnit * 3
-                    }
-
-                    EditSlider {
-                        Layout.fillWidth: true
-                        from: 0.1
-                        to: 1.0
-                        stepSize: 0.05
-                        value: fullRoot.get("opacity")
-                        onMoved: { fullRoot.set("opacity", value) }
-                    }
-
-                    Controls.Label {
-                        text: Math.round(fullRoot.get("opacity") * 100) + "%"
-                    }
-                }
-
-                // Fill Row (Rectangle / Ellipse)
+            // Style: the selected Shape, or the style for the next one
+            Page {
                 ColumnLayout {
-                    Layout.fillWidth: true
-                    visible: fullRoot.isFillableActive
-                    spacing: theme.smallSpacing
+                    width: parent.width
+                    spacing: 2
 
-                    RowLayout {
+                    SpecimenWell {
+                        objectName: "specimenWell"
                         Layout.fillWidth: true
-                        spacing: theme.smallSpacing
+                        Layout.leftMargin: theme.pad
+                        Layout.rightMargin: theme.pad
+                        Layout.topMargin: theme.pad
+                        Layout.bottomMargin: 6
+                        Layout.preferredHeight: 128
+                        type: fullRoot.activeType !== "" ? fullRoot.activeType : "rectangle"
+                        roughnessNames: fullRoot.roughnessNames
+                    }
 
-                        Controls.Label {
-                            text: "Fill:"
-                            Layout.alignment: Qt.AlignVCenter
-                            width: theme.gridUnit * 3
-                        }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: theme.pad + 2
+                        Layout.rightMargin: theme.pad + 2
+                        spacing: 0
 
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: theme.smallSpacing
-
-                                property string activeFill: fullRoot.get("fillColor")
-
-                            Rectangle {
-                                width: theme.gridUnit * 1.5
-                                height: theme.gridUnit * 1.5
-                                radius: 4
-                                color: theme.backgroundColor
-                                border.width: parent.activeFill === "transparent" ? 2 : 1
-                                border.color: parent.activeFill === "transparent" ? theme.highlightColor : "gray"
-
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: parent.width - 6
-                                    height: 2
-                                    color: "red"
-                                    rotation: 45
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: { fullRoot.set("fillColor", "transparent") }
-                                }
-                            }
-
+                        FieldRow {
+                            id: strokeRow
+                            label: fullRoot.isTextActive ? "Colour" : "Stroke"
+                            readonly property string current: String(fullRoot.get("color")).toLowerCase()
                             Repeater {
                                 model: backend.presetColors
-
-                                Rectangle {
-                                    width: theme.gridUnit * 1.5
-                                    height: theme.gridUnit * 1.5
-                                    radius: 4
-                                    color: modelData
-                                    border.width: parent.activeFill === modelData ? 2 : 1
-                                    border.color: parent.activeFill === modelData ? theme.highlightColor : "gray"
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        onClicked: { fullRoot.set("fillColor", modelData) }
-                                    }
+                                Swatch {
+                                    required property int index
+                                    required property string modelData
+                                    swatchColor: modelData
+                                    selected: strokeRow.current === modelData.toLowerCase()
+                                    hotkey: fullRoot.hotkey("color_" + (index + 1))
+                                    Accessible.name: "Stroke colour " + (index + 1)
+                                    onClicked: fullRoot.set("color", modelData)
                                 }
                             }
+                            CustomSwatch {
+                                current: strokeRow.current
+                                onClicked: fullRoot.customColorRequested(current, false)
+                            }
+                        }
 
-                            Controls.Button {
-                                icon.source: "qrc:/icons/color-picker.svg"
-                                text: "Custom"
+                        FieldRow {
+                            visible: !fullRoot.isTextActive
+                            label: "Width"
+                            value: Math.round(fullRoot.get("strokeWidth")) + " px"
+                            EditSlider {
+                                from: 1
+                                to: 15
+                                stepSize: 1
+                                value: fullRoot.get("strokeWidth")
+                                onMoved: fullRoot.set("strokeWidth", value)
+                            }
+                        }
+
+                        FieldRow {
+                            label: "Opacity"
+                            value: Math.round(fullRoot.get("opacity") * 100) + "%"
+                            EditSlider {
+                                from: 0.1
+                                to: 1.0
+                                stepSize: 0.05
+                                value: fullRoot.get("opacity")
+                                onMoved: fullRoot.set("opacity", value)
+                            }
+                        }
+
+                        FieldRow {
+                            id: fillRow
+                            visible: fullRoot.isFillableActive
+                            label: "Fill"
+                            readonly property string current: String(fullRoot.get("fillColor")).toLowerCase()
+                            Swatch {
+                                none: true
+                                selected: fillRow.current === "transparent"
+                                Accessible.name: "No fill"
+                                onClicked: fullRoot.set("fillColor", "transparent")
+                            }
+                            Repeater {
+                                model: backend.presetColors
+                                Swatch {
+                                    required property int index
+                                    required property string modelData
+                                    swatchColor: modelData
+                                    selected: fillRow.current === modelData.toLowerCase()
+                                    Accessible.name: "Fill colour " + (index + 1)
+                                    onClicked: fullRoot.set("fillColor", modelData)
+                                }
+                            }
+                            CustomSwatch {
+                                current: fillRow.current
                                 onClicked: fullRoot.customColorRequested(
-                                    parent.activeFill !== "transparent" ? parent.activeFill : "#e63946", true)
+                                    current !== "transparent" ? current : "#e63946", true)
+                            }
+                        }
+
+                        FieldRow {
+                            visible: fullRoot.isFillableActive
+                            label: "Fill opacity"
+                            value: Math.round(fullRoot.get("fillOpacity") * 100) + "%"
+                            EditSlider {
+                                from: 0.0
+                                to: 1.0
+                                stepSize: 0.05
+                                value: fullRoot.get("fillOpacity")
+                                onMoved: fullRoot.set("fillOpacity", value)
+                            }
+                        }
+
+                        FieldRow {
+                            visible: !fullRoot.isTextActive
+                            label: "Roughness"
+                            ChoiceBar {
+                                options: fullRoot.roughnessNames
+                                current: Math.min(2, Math.max(0, Math.round(fullRoot.get("roughness"))))
+                                onPicked: (index) => fullRoot.set("roughness", index)
+                            }
+                        }
+
+                        FieldRow {
+                            visible: fullRoot.isTextActive
+                            label: "Font"
+                            ChoiceBar {
+                                options: ["Sans", "Serif", "Mono", "Comic"]
+                                current: Math.max(0, fullRoot.fontFamilies.indexOf(fullRoot.get("fontFamily")))
+                                onPicked: (index) => fullRoot.set("fontFamily", fullRoot.fontFamilies[index])
+                            }
+                        }
+
+                        FieldRow {
+                            visible: fullRoot.isTextActive
+                            label: "Size"
+                            value: Math.round(fullRoot.get("fontSize")) + " px"
+                            EditSlider {
+                                from: 10
+                                to: 72
+                                stepSize: 1
+                                value: fullRoot.get("fontSize")
+                                onMoved: fullRoot.set("fontSize", value)
                             }
                         }
                     }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: theme.smallSpacing
-
-                        Controls.Label {
-                            text: "Fill Op:"
-                            width: theme.gridUnit * 3
-                        }
-
-                        EditSlider {
-                            Layout.fillWidth: true
-                            from: 0.0
-                            to: 1.0
-                            stepSize: 0.05
-                            value: fullRoot.get("fillOpacity")
-                            onMoved: { fullRoot.set("fillOpacity", value) }
-                        }
-
-                        Controls.Label {
-                            text: Math.round(fullRoot.get("fillOpacity") * 100) + "%"
-                        }
-                    }
                 }
+            }
 
-                // Glow Row
-                RowLayout {
+            // Shapes: every drawn Shape, newest last
+            ColumnLayout {
+                spacing: 0
+
+                ListView {
+                    id: shapesListView
+                    objectName: "shapesListView"
                     Layout.fillWidth: true
-                    spacing: theme.smallSpacing
-
-                    Controls.Label {
-                        text: "Glow:"
-                        width: theme.gridUnit * 3
-                    }
-
-                    EditSlider {
-                        Layout.fillWidth: true
-                        from: 0
-                        to: 30
-                        stepSize: 1
-                        value: fullRoot.get("glow")
-                        onMoved: { fullRoot.set("glow", value) }
-                    }
-
-                    Controls.Label {
-                        text: Math.round(fullRoot.get("glow")) + "px"
-                    }
-                }
-
-                // Roughness / Radius / Smoothing Row
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: theme.smallSpacing
-
-                    Controls.Label {
-                        text: "Smoothing:"
-                        width: theme.gridUnit * 4
-                    }
-
-                    EditSlider {
-                        Layout.fillWidth: true
-                        from: 0
-                        to: 3
-                        stepSize: 1
-                        value: fullRoot.get("freehandSmoothing")
-                        onMoved: { fullRoot.set("freehandSmoothing", value) }
-                    }
-
-                    Controls.Label {
-                        text: {
-                            let v = Math.round(fullRoot.get("freehandSmoothing"))
-                            if (v <= 0) return "Off"
-                            if (v === 1) return "Low"
-                            if (v === 2) return "Med"
-                            return "High"
-                        }
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: theme.smallSpacing
-
-                    Controls.Label {
-                        text: "Roughness:"
-                        width: theme.gridUnit * 4
-                    }
-
-                    Controls.ComboBox {
-                        // In-window dropdown: a Popup.Window one is a separate Wayland
-                        // surface, and the tray popup dismisses itself on focus loss.
-                        Component.onCompleted: popup.popupType = Controls.Popup.Item
-                        Layout.fillWidth: true
-                        model: ["Neat (0)", "Artist (1)", "Cartoon (2)"]
-                        currentIndex: Math.min(2, Math.max(0, Math.round(fullRoot.get("roughness"))))
-                        onActivated: (index) => fullRoot.set("roughness", index)
-                    }
-
-                    Controls.Label {
-                        text: "Radius:"
-                        width: theme.gridUnit * 3
-                    }
-
-                    EditSlider {
-                        Layout.fillWidth: true
-                        from: 0
-                        to: 50
-                        stepSize: 1
-                        value: fullRoot.get("borderRadius")
-                        onMoved: { fullRoot.set("borderRadius", value) }
-                    }
-
-                    Controls.Label {
-                        text: Math.round(fullRoot.get("borderRadius")) + "px"
-                    }
-                }
-
-                // Font Section (Text tool)
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    visible: fullRoot.isTextActive
-                    spacing: theme.smallSpacing
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Controls.Label {
-                            text: "Font:"
-                            width: theme.gridUnit * 3
-                        }
-
-                        Controls.ComboBox {
-                            Component.onCompleted: popup.popupType = Controls.Popup.Item
-                            Layout.fillWidth: true
-                            model: ["sans-serif", "serif", "monospace", "Comic Sans MS"]
-                            currentIndex: {
-                                let f = fullRoot.get("fontFamily")
-                                let idx = model.indexOf(f)
-                                return idx >= 0 ? idx : 0
-                            }
-                            onActivated: { fullRoot.set("fontFamily", currentValue) }
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Controls.Label {
-                            text: "Font Size:"
-                            width: theme.gridUnit * 3
-                        }
-
-                        EditSlider {
-                            Layout.fillWidth: true
-                            from: 10
-                            to: 72
-                            stepSize: 1
-                            value: fullRoot.get("fontSize")
-                            onMoved: { fullRoot.set("fontSize", value) }
-                        }
-
-                        Controls.Label {
-                            text: Math.round(fullRoot.get("fontSize")) + "px"
-                        }
-                    }
-                }
-
-                // Shape List Manager
-                Controls.Label {
-                    text: "Drawn Shapes Manager"
-                    font.bold: true
-                    font.pixelSize: 11
-                    color: theme.highlightColor
-                }
-
-                Controls.ScrollView {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: theme.gridUnit * 6
+                    Layout.fillHeight: true
+                    Layout.margins: theme.gap
                     clip: true
+                    spacing: 2
+                    // The shapes model itself, not a parallel metadata copy of it:
+                    // it already carries type/selected/locked and signals its own changes.
+                    model: backend.shapesModel
+                    Controls.ScrollBar.vertical: Controls.ScrollBar {
+                        visible: size < 1.0
+                        contentItem: Rectangle {
+                            implicitWidth: 4
+                            radius: 2
+                            color: theme.raised
+                        }
+                    }
 
-                    ListView {
-                        id: shapesListView
-                        objectName: "shapesListView"
-                        // The shapes model itself, not a parallel metadata copy of it:
-                        // it already carries type/selected/locked and signals its own
-                        // changes.
-                        model: backend.shapesModel
+                    delegate: Controls.ItemDelegate {
+                        id: shapeRow
+                        required property int index
+                        required property string type
+                        // var, not bool: these keys are optional on a shape map, and
+                        // an absent one arrives as undefined.
+                        required property var selected
+                        required property var locked
 
-                        delegate: Controls.ItemDelegate {
-                            id: shapeRow
-                            required property int index
-                            required property string type
-                            // var, not bool: these keys are optional on a shape map, and
-                            // an absent one arrives as undefined.
-                            required property var selected
-                            required property var locked
+                        width: ListView.view.width
+                        height: 36
+                        leftPadding: 10
+                        rightPadding: 76
+                        text: fullRoot.capitalized(type) + " " + (index + 1)
+                        icon.source: fullRoot.iconFor(type)
+                        icon.width: 16
+                        icon.height: 16
+                        icon.color: theme.ink
+                        font.family: theme.sans
+                        font.pixelSize: theme.body
+                        font.weight: !!selected ? Font.DemiBold : Font.Normal
+                        palette.text: theme.ink
+                        palette.highlightedText: theme.ink
 
-                            width: shapesListView.width
-                            height: theme.gridUnit * 2
-
-                            background: Rectangle {
-                                color: !!shapeRow.selected ? theme.highlightColor
-                                                         : (shapeRow.hovered ? theme.hoverColor : "transparent")
-                                opacity: shapeRow.selected ? 0.3 : 1.0
-                                radius: 4
-                            }
-
-                            contentItem: RowLayout {
-                                spacing: theme.smallSpacing
-
-                                Image {
-                                    source: {
-                                        switch (shapeRow.type.toLowerCase()) {
-                                            case "rectangle": return "qrc:/icons/draw-rectangle.svg";
-                                            case "ellipse": return "qrc:/icons/draw-ellipse.svg";
-                                            case "arrow": return "qrc:/icons/draw-arrow.svg";
-                                            case "line": return "qrc:/icons/draw-line.svg";
-                                            case "text": return "qrc:/icons/draw-text.svg";
-                                            default: return "qrc:/icons/draw-freehand.svg";
-                                        }
-                                    }
-                                    width: theme.iconSmall
-                                    height: theme.iconSmall
-                                    fillMode: Image.PreserveAspectFit
-                                }
-
-                                Controls.Label {
-                                    text: shapeRow.type.charAt(0).toUpperCase() + shapeRow.type.slice(1)
-                                          + " " + (shapeRow.index + 1)
-                                    font.bold: !!shapeRow.selected
-                                    Layout.fillWidth: true
-                                }
-
-                                Controls.ToolButton {
-                                    icon.source: !!shapeRow.locked ? "qrc:/icons/object-locked.svg"
-                                                                 : "qrc:/icons/object-unlocked.svg"
-                                    onClicked: backend.setShapeLocked(shapeRow.index, !shapeRow.locked)
-                                }
-
-                                Controls.ToolButton {
-                                    icon.source: "qrc:/icons/edit-delete.svg"
-                                    onClicked: backend.deleteShape(shapeRow.index)
-                                }
-                            }
-
-                            onClicked: backend.selectShape(shapeRow.index)
+                        background: Rectangle {
+                            radius: 6
+                            color: !!shapeRow.selected ? theme.selectedRow
+                                 : shapeRow.hovered ? theme.surface : "transparent"
+                            border.width: shapeRow.visualFocus ? 1 : 0
+                            border.color: theme.accent
                         }
 
-                        Controls.Label {
-                            anchors.centerIn: parent
-                            text: "No annotations on screen"
-                            color: theme.disabledTextColor
-                            visible: shapesListView.count === 0
+                        Row {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 4
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 2
+                            IconButton {
+                                flat: true
+                                implicitWidth: 28
+                                implicitHeight: 28
+                                icon.width: 16
+                                icon.height: 16
+                                icon.source: !!shapeRow.locked ? "qrc:/icons/object-locked.svg"
+                                                               : "qrc:/icons/object-unlocked.svg"
+                                icon.color: !!shapeRow.locked ? theme.accent : theme.mute
+                                tip: !!shapeRow.locked ? "Unlock" : "Lock"
+                                onClicked: backend.setShapeLocked(shapeRow.index, !shapeRow.locked)
+                            }
+                            IconButton {
+                                flat: true
+                                implicitWidth: 28
+                                implicitHeight: 28
+                                icon.width: 16
+                                icon.height: 16
+                                icon.source: "qrc:/icons/edit-delete.svg"
+                                icon.color: hovered ? theme.danger : theme.mute
+                                tip: "Delete"
+                                onClicked: backend.deleteShape(shapeRow.index)
+                            }
+                        }
+
+                        onClicked: backend.selectShape(shapeRow.index)
+                    }
+
+                    Column {
+                        anchors.centerIn: parent
+                        width: parent.width - 48
+                        spacing: 4
+                        visible: shapesListView.count === 0
+                        Label {
+                            width: parent.width
+                            horizontalAlignment: Text.AlignHCenter
+                            text: "Nothing drawn yet"
+                            color: theme.ink
+                            font.pixelSize: theme.body
+                            font.weight: Font.DemiBold
+                        }
+                        Label {
+                            width: parent.width
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            text: "Pick a tool above and draw on the screen. Every shape you draw is listed here."
+                            color: theme.mute
+                            font.pixelSize: theme.body
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: theme.line
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.margins: theme.pad
+                    Label {
+                        Layout.fillWidth: true
+                        text: shapesListView.count === 1 ? "1 shape" : shapesListView.count + " shapes"
+                        color: theme.mute
+                        font.pixelSize: theme.body
+                    }
+                    TextButton {
+                        text: "Clear all"
+                        tone: theme.danger
+                        enabled: shapesListView.count > 0
+                        onClicked: backend.clear()
+                    }
+                }
+            }
+
+            // More: settings touched rarely
+            Page {
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 0
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.margins: theme.pad + 2
+                        Layout.topMargin: 2
+                        spacing: 0
+
+                        SectionHeading { text: "Effects" }
+
+                        FieldRow {
+                            label: "Glow"
+                            value: Math.round(fullRoot.get("glow")) + " px"
+                            EditSlider {
+                                from: 0
+                                to: 30
+                                stepSize: 1
+                                value: fullRoot.get("glow")
+                                onMoved: fullRoot.set("glow", value)
+                            }
+                        }
+
+                        FieldRow {
+                            label: "Corners"
+                            value: Math.round(fullRoot.get("borderRadius")) + " px"
+                            EditSlider {
+                                from: 0
+                                to: 50
+                                stepSize: 1
+                                value: fullRoot.get("borderRadius")
+                                onMoved: fullRoot.set("borderRadius", value)
+                            }
+                        }
+
+                        FieldRow {
+                            label: "Smoothing"
+                            ChoiceBar {
+                                options: ["Off", "Low", "Med", "High"]
+                                current: Math.min(3, Math.max(0, Math.round(fullRoot.get("freehandSmoothing"))))
+                                onPicked: (index) => fullRoot.set("freehandSmoothing", index)
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 6
+                            Layout.leftMargin: theme.labelWidth + 10
+                            text: "Corners apply to rectangles, smoothing to new freehand strokes."
+                            wrapMode: Text.WordWrap
+                            color: theme.mute
+                            font.pixelSize: 12
+                        }
+
+                        SectionHeading { text: "Overlay"; Layout.topMargin: 18 }
+
+                        FieldRow {
+                            label: "Screen"
+                            Controls.ComboBox {
+                                id: screenBox
+                                // In-window dropdown: a Popup.Window one is a separate Wayland
+                                // surface, and the tray popup dismisses itself on focus loss.
+                                Component.onCompleted: popup.popupType = Controls.Popup.Item
+                                Layout.fillWidth: true
+                                implicitHeight: 30
+                                font.family: theme.sans
+                                font.pixelSize: theme.body
+                                model: overlayWindow.screenLabels
+                                currentIndex: {
+                                    let idx = overlayWindow.screenNames.indexOf(overlayWindow.targetScreen)
+                                    return idx >= 0 ? idx : 0
+                                }
+                                onActivated: (index) => overlayWindow.setTargetScreen(overlayWindow.screenNames[index])
+                                background: Rectangle {
+                                    radius: theme.radius
+                                    color: screenBox.down ? theme.pressed : screenBox.hovered ? theme.raised : theme.surface
+                                    border.width: screenBox.visualFocus ? 1 : 0
+                                    border.color: theme.accent
+                                }
+                            }
                         }
                     }
                 }

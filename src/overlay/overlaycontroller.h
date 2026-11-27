@@ -17,12 +17,15 @@ class OverlayController;
 
 // One row of the single hotkey table: id, default binding(s), scope, precondition, and handler.
 struct HotkeySpec {
-    enum class Scope { Window, Application, Global, GlobalDev };
+    // Local hotkeys fire whichever of the app's windows holds the keyboard: the overlay,
+    // or the Tray Popup, which stays open while Shapes are drawn and takes the keyboard
+    // when it is clicked.
+    enum class Scope { Local, Global, GlobalDev };
 
     const char *id;
     const char *defaultSeq;                           // nullptr when standardKey != UnknownKey
     void (*run)(OverlayController &, QPointF);
-    Scope scope = Scope::Window;
+    Scope scope = Scope::Local;
     const char *needs = nullptr;                      // nullptr, "always", "selection", or a Shape type
     QKeySequence::StandardKey standardKey = QKeySequence::UnknownKey;
     const char *altSeq = nullptr;                     // optional second default sequence
@@ -43,6 +46,7 @@ class OverlayController : public QObject
     Q_PROPERTY(ShapesModel* shapesModel READ shapesModel CONSTANT)
     // The Draft: the Shape being drawn, before release adds it. Zero or one row.
     Q_PROPERTY(ShapesModel* draftModel READ draftModel CONSTANT)
+    Q_PROPERTY(ShapesModel* specimenModel READ specimenModel CONSTANT)
     Q_PROPERTY(int selectedIndex READ selectedIndex NOTIFY selectionChanged)
     Q_PROPERTY(QString activeTool READ activeTool WRITE setActiveTool NOTIFY activeToolChanged)
     Q_PROPERTY(QString currentMode READ currentMode NOTIFY modeChanged)
@@ -85,6 +89,10 @@ public:
     ShapesModel* draftModel();
     // Shows `shape` as the Draft; an empty map removes it.
     Q_INVOKABLE void setDraftShape(const QVariantMap &shape);
+    ShapesModel* specimenModel();
+    // Shows `shape` in the Tray Popup's specimen well, drawn by the canvas delegates.
+    // Like the Draft, it never enters the canvas, the undo history or the selection.
+    Q_INVOKABLE void setSpecimenShape(const QVariantMap &shape);
     static std::span<const HotkeySpec> hotkeys();
     QVariantList localShortcuts() const;
     QVariantMap localShortcutSequences() const;
@@ -185,6 +193,7 @@ private:
     Selection m_selection; // declared first: m_shapesModel reads it until it is destroyed
     ShapesModel m_shapesModel;
     ShapesModel m_draftModel;
+    ShapesModel m_specimenModel;
     QHash<int, QVariantMap> m_dragStartShapes;
     QList<QVariantMap> m_editStartShapes; // the whole model at beginEdit(), for the dev log
     QSet<int> m_preDragSelection;

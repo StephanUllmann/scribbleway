@@ -43,16 +43,28 @@ qt_add_qml_module(scribbleway-overlay
         qml/shapes/RoughPathGenerator.js
         qml/shapes/RoughStroke.qml
         qml/shapes/SizeLabel.qml
+        qml/shapes/ShapeLoader.qml
         qml/FullRepresentation.qml
         qml/TrayPopup.qml
         qml/ColorPickerPanel.qml
+        qml/Theme.qml
+        qml/popup/Label.qml
+        qml/popup/IconButton.qml
+        qml/popup/TextButton.qml
+        qml/popup/SegmentButton.qml
+        qml/popup/ChoiceBar.qml
+        qml/popup/EditSlider.qml
+        qml/popup/SwatchRing.qml
+        qml/popup/Swatch.qml
+        qml/popup/CustomSwatch.qml
+        qml/popup/FieldRow.qml
+        qml/popup/SpecimenWell.qml
 )
 
 qt_add_resources(scribbleway-overlay "icons"
     PREFIX "/icons"
     BASE icons
     FILES
-        icons/color-picker.svg
         icons/dev-mode.svg
         icons/draw-freehand.svg
         icons/draw-rectangle.svg
@@ -69,6 +81,8 @@ qt_add_resources(scribbleway-overlay "icons"
         icons/go-up.svg
         icons/object-locked.svg
         icons/object-unlocked.svg
+        icons/window-close.svg
+        icons/list-add.svg
 )
 
 target_link_libraries(scribbleway-overlay PRIVATE

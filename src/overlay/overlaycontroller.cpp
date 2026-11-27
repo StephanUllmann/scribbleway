@@ -95,10 +95,9 @@ const HotkeySpec kHotkeys[] = {
      .run = [](auto &, auto) { DevLog::mark(); },
      .scope = Scope::GlobalDev, .label = "Mark the Dev Log"},
 
-    // Cancel (app-wide so Escape works whether the overlay or the Tray Popup holds focus)
+    // Cancel
     {.id = "action_cancel", .defaultSeq = "Escape",
-     .run = [](auto &c, auto) { c.enterPassthroughMode(); },
-     .scope = Scope::Application, .needs = "always"},
+     .run = [](auto &c, auto) { c.enterPassthroughMode(); }, .needs = "always"},
 
     // Drawing tools
     {.id = "tool_arrow",     .defaultSeq = "A", .run = [](auto &c, auto) { c.toggleTool(QStringLiteral("arrow")); }},
@@ -155,6 +154,8 @@ OverlayController::OverlayController(QObject *parent)
     m_shapesModel.setSelection(&m_selection);
     m_draftModel.setParent(this);
     m_draftModel.disableHistory();
+    m_specimenModel.setParent(this);
+    m_specimenModel.disableHistory();
     connect(&m_selection, &Selection::changed, this, &OverlayController::selectionChanged);
     // A new or restored Shape would otherwise vanish while shapes are hidden.
     connect(&m_shapesModel, &QAbstractItemModel::rowsInserted, this, [this] { setShapesHidden(false); });
@@ -192,7 +193,6 @@ OverlayController::OverlayController(QObject *parent)
             {QStringLiteral("id"), id},
             {QStringLiteral("sequences"), sequences},
             {QStringLiteral("needs"), h.needs ? QString::fromLatin1(h.needs) : QString()},
-            {QStringLiteral("appWide"), h.scope == Scope::Application},
         });
     }
 
@@ -228,16 +228,32 @@ ShapesModel* OverlayController::draftModel()
     return &m_draftModel;
 }
 
-void OverlayController::setDraftShape(const QVariantMap &shape)
+// Holds `shape` as the model's only row; an empty map removes it.
+static void showOnly(ShapesModel &model, const QVariantMap &shape)
 {
     if (shape.isEmpty()) {
-        m_draftModel.clear();
-    } else if (m_draftModel.rowCount() == 0) {
-        m_draftModel.addShape(shape);
+        model.clear();
+    } else if (model.rowCount() == 0) {
+        model.addShape(shape);
     } else {
         // Updated in place, so the delegate survives every mouse move.
-        m_draftModel.updateShape(0, shape);
+        model.updateShape(0, shape);
     }
+}
+
+void OverlayController::setDraftShape(const QVariantMap &shape)
+{
+    showOnly(m_draftModel, shape);
+}
+
+ShapesModel* OverlayController::specimenModel()
+{
+    return &m_specimenModel;
+}
+
+void OverlayController::setSpecimenShape(const QVariantMap &shape)
+{
+    showOnly(m_specimenModel, shape);
 }
 
 int OverlayController::selectedIndex() const
