@@ -121,6 +121,7 @@ private Q_SLOTS:
     void testShapeGeometry();
     void testHotkeyTableComplete();
     void testHotkeysInQml();
+    void testCanvasClickClosesPopupButDrawingDoesNot();
 };
 
 void ShapesModelTest::testAddShapeUndo()
@@ -3515,6 +3516,55 @@ void ShapesModelTest::testHotkeyTableComplete()
     QVERIFY(lineRow.value(u"sequences"_s).toList().isEmpty());
 }
 
+// The Tray Popup stays open while a Shape is drawn on the canvas, so it can be restyled
+// as it is drawn, and a plain click on the canvas closes it.
+void ShapesModelTest::testCanvasClickClosesPopupButDrawingDoesNot()
+{
+    OverlayController c;
+    RecordingSurface surface;
+    OverlayWindow overlayWin(&surface);
+    TrayPopup popup(&surface, &overlayWin);
+
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty(u"controller"_s, &c);
+    engine.rootContext()->setContextProperty(u"overlayWindow"_s, &overlayWin);
+    engine.rootContext()->setContextProperty(u"trayPopup"_s, &popup);
+
+    QQmlComponent mainComp(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/main.qml")));
+    QScopedPointer<QObject> mainRoot(mainComp.create());
+    QVERIFY2(mainRoot, qPrintable(mainComp.errorString()));
+    auto *canvasWindow = qobject_cast<QQuickWindow *>(mainRoot.data());
+    QVERIFY(canvasWindow);
+    overlayWin.attach(canvasWindow);
+    canvasWindow->resize(800, 600);
+    QVERIFY(QTest::qWaitForWindowExposed(canvasWindow));
+
+    QQmlComponent popupComp(&engine, QUrl::fromLocalFile(QStringLiteral(QML_SOURCE_DIR "/TrayPopup.qml")));
+    QScopedPointer<QObject> popupRoot(popupComp.create());
+    QVERIFY2(popupRoot, qPrintable(popupComp.errorString()));
+    auto *popupWindow = qobject_cast<QQuickWindow *>(popupRoot.data());
+    QVERIFY(popupWindow);
+    popup.attach(popupWindow);
+
+    c.setActiveTool(u"rectangle"_s);
+    popup.toggle();
+    QVERIFY(QTest::qWaitForWindowExposed(popupWindow));
+    QVERIFY(popup.isOpen());
+
+    // Drawing: a press that drags past the threshold leaves the popup open.
+    QTest::mousePress(canvasWindow, Qt::LeftButton, {}, QPoint(100, 100));
+    for (int i = 1; i <= 10; ++i) {
+        QTest::mouseMove(canvasWindow, QPoint(100 + i * 10, 100 + i * 6));
+    }
+    QTest::mouseRelease(canvasWindow, Qt::LeftButton, {}, QPoint(200, 160));
+    QCOMPARE(c.shapesModel()->rowCount(), 1);
+    QVERIFY(popup.isOpen());
+
+    // A plain click closes it.
+    QTest::mouseClick(canvasWindow, Qt::LeftButton, {}, QPoint(500, 400));
+    QTRY_VERIFY(!popup.isOpen());
+}
+
 // QML instantiates one Shortcut per local table row and dispatches real keystrokes through it,
 // including Escape from both the overlay (with or without the text editor) and the Tray Popup.
 void ShapesModelTest::testHotkeysInQml()
@@ -3595,13 +3645,35 @@ void ShapesModelTest::testHotkeysInQml()
     QCOMPARE(c.currentMode(), u"passthrough"_s);
     QCOMPARE(c.getShape(0).value(u"text"_s).toString(), u"hello"_s);
 
-    // Escape from the Tray Popup hits the same single app-wide Escape shortcut.
+    // The popup stays open while Shapes are drawn, and clicking it gives it the keyboard,
+    // so every hotkey works from the popup too, and Escape closes it.
     c.enterSelectMode();
     popup.toggle();
     QVERIFY(popup.isOpen());
     QVERIFY(QTest::qWaitForWindowExposed(popupWindow));
     popupWindow->requestActivate();
     QVERIFY(QTest::qWaitForWindowActive(popupWindow));
+    QTest::keyClick(popupWindow, Qt::Key_R);
+    QCOMPARE(c.activeTool(), u"rectangle"_s);
+    QVERIFY(popup.isOpen());
+
+    // A focused text field still gets its typing: "e" and "1" are hotkeys and hex digits.
+    auto *hexField = popupRoot->findChild<QQuickItem *>(u"hexField"_s);
+    QVERIFY(hexField);
+    QQuickItem *picker = hexField;
+    while (picker && !QByteArray(picker->metaObject()->className()).startsWith("ColorPickerPanel")) {
+        picker = picker->parentItem();
+    }
+    QVERIFY(picker);
+    picker->setVisible(true);
+    hexField->setProperty("text", QString());
+    hexField->forceActiveFocus();
+    QTest::keyClick(popupWindow, 'e');
+    QTest::keyClick(popupWindow, '1');
+    QCOMPARE(hexField->property("text").toString(), u"e1"_s);
+    QCOMPARE(c.activeTool(), u"rectangle"_s);
+    picker->setVisible(false);
+
     QTest::keyClick(popupWindow, Qt::Key_Escape);
     QVERIFY(!popup.isOpen());
     QCOMPARE(c.currentMode(), u"passthrough"_s);

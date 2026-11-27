@@ -14,7 +14,9 @@ Window {
     height: 550
     minimumWidth: 400
     minimumHeight: 520
-    flags: Qt.Popup | Qt.FramelessWindowHint
+    // Not Qt.Popup: Qt closes a Popup window on input to any other window, and the popup
+    // must stay open while a Shape is drawn on the canvas. TrayPopup does all the closing.
+    flags: Qt.FramelessWindowHint
     visible: false
     color: theme.ground
 

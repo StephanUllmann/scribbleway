@@ -17,12 +17,15 @@ class OverlayController;
 
 // One row of the single hotkey table: id, default binding(s), scope, precondition, and handler.
 struct HotkeySpec {
-    enum class Scope { Window, Application, Global, GlobalDev };
+    // Local hotkeys fire whichever of the app's windows holds the keyboard: the overlay,
+    // or the Tray Popup, which stays open while Shapes are drawn and takes the keyboard
+    // when it is clicked.
+    enum class Scope { Local, Global, GlobalDev };
 
     const char *id;
     const char *defaultSeq;                           // nullptr when standardKey != UnknownKey
     void (*run)(OverlayController &, QPointF);
-    Scope scope = Scope::Window;
+    Scope scope = Scope::Local;
     const char *needs = nullptr;                      // nullptr, "always", "selection", or a Shape type
     QKeySequence::StandardKey standardKey = QKeySequence::UnknownKey;
     const char *altSeq = nullptr;                     // optional second default sequence

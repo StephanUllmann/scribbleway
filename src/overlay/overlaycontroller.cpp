@@ -95,10 +95,9 @@ const HotkeySpec kHotkeys[] = {
      .run = [](auto &, auto) { DevLog::mark(); },
      .scope = Scope::GlobalDev, .label = "Mark the Dev Log"},
 
-    // Cancel (app-wide so Escape works whether the overlay or the Tray Popup holds focus)
+    // Cancel
     {.id = "action_cancel", .defaultSeq = "Escape",
-     .run = [](auto &c, auto) { c.enterPassthroughMode(); },
-     .scope = Scope::Application, .needs = "always"},
+     .run = [](auto &c, auto) { c.enterPassthroughMode(); }, .needs = "always"},
 
     // Drawing tools
     {.id = "tool_arrow",     .defaultSeq = "A", .run = [](auto &c, auto) { c.toggleTool(QStringLiteral("arrow")); }},
@@ -194,7 +193,6 @@ OverlayController::OverlayController(QObject *parent)
             {QStringLiteral("id"), id},
             {QStringLiteral("sequences"), sequences},
             {QStringLiteral("needs"), h.needs ? QString::fromLatin1(h.needs) : QString()},
-            {QStringLiteral("appWide"), h.scope == Scope::Application},
         });
     }
 

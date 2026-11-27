@@ -578,18 +578,25 @@ Window {
         canvasWindow.requestInputRegionUpdate();
     }
 
-    // A press anywhere the overlay can receive one is by construction outside the popup:
-    // the popup's rect is carved out of the overlay's input region. A passive
-    // PointHandler sees it without competing with the draw/select MouseAreas for the
-    // grab, which beats bolting the same call onto all six press handlers.
+    // A click anywhere the overlay can receive one is by construction outside the popup:
+    // the popup's rect is carved out of the overlay's input region. Only a click closes
+    // it: a press that drags (drawing, moving, resizing) leaves it open, so a Shape can
+    // be restyled while it is drawn. A passive PointHandler sees every press without
+    // competing with the draw/select MouseAreas; a TapHandler here took the press away
+    // from them, so nothing could be drawn while the popup was open.
     Item {
         anchors.fill: parent
         z: 1000
 
         PointHandler {
+            property bool dragged: false
             enabled: trayPopup.open
             acceptedButtons: Qt.AllButtons
-            onActiveChanged: if (active) trayPopup.close()
+            onTranslationChanged: if (translation.length() >= Qt.styleHints.startDragDistance) dragged = true
+            onActiveChanged: {
+                if (active) dragged = false
+                else if (!dragged) trayPopup.close()
+            }
         }
     }
 
@@ -602,7 +609,9 @@ Window {
         delegate: Shortcut {
             required property var modelData
             sequences: modelData.sequences
-            context: modelData.appWide ? Qt.ApplicationShortcut : Qt.WindowShortcut
+            // App-wide, so they work while the Tray Popup holds the keyboard. A focused
+            // text field still gets its typing: it claims those keys before any Shortcut.
+            context: Qt.ApplicationShortcut
             enabled: modelData.needs === "always"
                      || (canvasWindow.shortcutGuard
                          && (modelData.needs === ""
